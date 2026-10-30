@@ -14,6 +14,7 @@ interface ResetPasswordProps {
 }
 
 interface ResetPasswordForm {
+    [key: string]: string;
     token: string;
     email: string;
     password: string;

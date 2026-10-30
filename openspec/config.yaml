@@ -1,0 +1,122 @@
+schema: spec-driven
+
+# Contexto de proyecto. Máx. 10 líneas.
+context: |
+  Producto: punto de venta multi-tienda. Venezuela por defecto, extensible a otros países de Latinoamérica en una 2ª fase.
+  Stack: Laravel 12.70.2 (PHP ^8.2) + Inertia v2 + React 19 + TypeScript 5.7 + Tailwind CSS v4 (Radix UI, shadcn-style) + Vite 6.
+  Datos: PostgreSQL 17 (Docker) + Redis 7 (caché y cola). Eloquent; `decimal(25,4)` y JSONB nativos.
+  Tests: Pest 3.8 (`./vendor/bin/pest`). Suites `tests/Unit` y `tests/Feature`. Sin runner de frontend ni E2E.
+  Dominio: ventas POS, compras, stock FIFO por lotes, crédito de cliente, cuotas, transferencias entre almacenes, tarjetas
+    de regalo, cotizaciones, pedidos, devoluciones, caja, facturación electrónica, impresión LAN/servidor, SMS/WhatsApp y sincronización offline→online.
+  Regla de oro: el motor fiscal, de impuestos, de numeración y de formatos es DATOS, no código.
+    Regla de control: cambiar de país = insertar filas; un `if ($country === 'VE')` en el dominio es un defecto.
+  Referencia funcional del legacy (solo lectura): `D:\htdocs\pos_moderno\Documentacion\mapa-funcional.md`.
+
+# Veredicto de TDD estricto.
+# Derivado por sdd-init el 2026-10-30.
+# Criterio: existe un comando de test explícito a nivel de workspace (`./vendor/bin/pest`, declarado en
+# `.github/workflows/tests.yml`) que cubre el 100% del conjunto de proyectos en scope (un solo proyecto: `.`).
+# PRECONDICIÓN: el bundle de frontend debe existir (`public/build/manifest.json`). Ver `testing.preconditions`.
+strict_tdd: true
+
+# Comandos de test a nivel de workspace. NO son una concatenación de comandos por proyecto:
+# es un único comando declarado por el workspace que ejecuta el conjunto completo desde la raíz.
+commands:
+  test: "./vendor/bin/pest"
+  test_alternative: "php artisan test"
+  build: "npm run build"
+  build_dev: "npm run dev"
+  lint_php: "vendor/bin/pint"
+  lint_js: "npm run lint"
+  format_js: "npm run format"
+  format_check_js: "npm run format:check"
+
+projects:
+  - path: "."
+    stack: "Laravel 12.70.2 (PHP ^8.2) + Inertia v2 + React 19 + TypeScript 5.7 + Tailwind CSS v4 + Vite 6"
+    data: "PostgreSQL 17 + Redis 7"
+    test_command: "./vendor/bin/pest"
+    test_framework: "Pest 3.8"
+    unit_suite: "tests/Unit"
+    feature_suite: "tests/Feature"
+    coverage_command: null
+    linter: "vendor/bin/pint (PHP) · npm run lint (ESLint 9)"
+    type_checker: null
+    formatter: "vendor/bin/pint (PHP) · npm run format (Prettier 3)"
+
+testing:
+  detected: "2026-10-30"
+  runner: "Pest 3.8 + pestphp/pest-plugin-laravel 3.2"
+  strict_tdd_mode: "enabled"
+  strict_tdd_reason: >-
+    Conjunto de proyectos no vacío (un único proyecto en la raíz del workspace) cubierto por un comando de test
+    explícito a nivel de workspace: `./vendor/bin/pest`, declarado en `.github/workflows/tests.yml` y ejecutable
+    desde la raíz. No hay marcador ni config previo que fije `strict_tdd`.
+  test_command: "./vendor/bin/pest"
+  preconditions:
+    - id: "vite-manifest"
+      requirement: "`public/build/manifest.json` debe existir antes de ejecutar la suite."
+      reason: >-
+        Las pruebas Feature que renderizan páginas fallan con `ViteManifestNotFoundException` (HTTP 500) si el
+        bundle no está compilado. El job `tests` de CI lo resuelve con `npm ci` + `npm run build` antes de
+        `./vendor/bin/pest`.
+      setup_command: "npm ci && npm run build"
+    - id: "php-extensions"
+      requirement: "`pdo_pgsql`, `pgsql`, `intl`, `sodium` habilitadas en `php.ini`."
+      reason: "PostgreSQL es el motor de producción y `intl`/`sodium` los usa Laravel para cookies y formatos."
+      setup_command: "Verificar en C:\\xampp\\php\\php.ini"
+  layers:
+    unit: { available: true, tool: "Pest (tests/Unit)" }
+    integration: { available: true, tool: "Pest + RefreshDatabase (tests/Feature)" }
+    e2e: { available: false, tool: null }
+    frontend_unit: { available: false, tool: null }
+  coverage:
+    available: false
+    command: null
+    reason: >-
+      No hay script de coverage en `package.json` ni flag de coverage en CI. `phpunit.xml` declara `<source>`
+      sobre `app/`, pero local no hay driver (xdebug/pcov no cargados); CI instala `xdebug`.
+  quality:
+    linter: { available: true, command: "vendor/bin/pint" }
+    linter_js: { available: true, command: "npm run lint" }
+    type_checker: { available: false, command: null }
+    type_checker_note: >-
+      `tsconfig.json` tiene `"strict": true`, pero no existe script `typecheck` ni `tsc --noEmit` en CI.
+      El type-checking NO está aplicado en la puerta de calidad. Gap conocido.
+    formatter: { available: true, command: "npm run format" }
+
+rules:
+  proposal:
+    - "Incluir plan de rollback para cambios riesgosos (esquema, numeración fiscal, stock)."
+    - "Declarar explícitamente el alcance del cambio y qué queda fuera (§8.6 del mapa funcional)."
+    - "Si el cambio toca el motor fiscal, de impuestos o de numeración, justificar por qué NO se introduce un `if` por país."
+  specs:
+    - "Usar escenarios Given/When/Then."
+    - "Usar palabras clave RFC 2119 (MUST, SHALL, SHOULD, MAY)."
+    - "Nombrar en cada test la regla de negocio que fija (§10.6 del mapa funcional: el test es la documentación)."
+  design:
+    - "Incluir diagramas de secuencia para los flujos transaccionales (checkout, FIFO, reserva fiscal)."
+    - "Documentar las decisiones de arquitectura con su motivo (ADR candidato en `docs/adr/`)."
+    - "Toda operación de escritura se diseña como unidad atómica con bloqueo de fila (`SELECT ... FOR UPDATE`)."
+    - "El correlación fiscal se reserva con `UPDATE ... RETURNING` o `SELECT ... FOR UPDATE`; nunca con `rowCount()`."
+  tasks:
+    - "Agrupar por fase, con numeración jerárquica."
+    - "Cada tarea debe ser completable en una sesión."
+    - "Incluir la tarea de test que fija la regla de negocio junto a la de implementación."
+  apply:
+    guidelines:
+      - "Seguir los patrones existentes del proyecto (Inertia page + Form Request + Policy + Pest)."
+      - "Dominio primero, interfaz después: la lógica de negocio vive en un núcleo testeable, independiente de HTTP y de la UI."
+      - "Verificar que `public/build/manifest.json` existe antes de dar por verde una suite."
+    tdd: true
+    test_command: "./vendor/bin/pest"
+  verify:
+    test_command: "./vendor/bin/pest"
+    build_command: "npm run build"
+    coverage_threshold: 0
+    notes:
+      - "La suite debe estar en verde sin fallos preexistentes; el baseline actual exige `npm ci && npm run build`."
+      - "Sin driver de coverage en local, la verificación de cobertura no es un gate."
+  archive:
+    - "Advertir antes de fusionar deltas destructivos."
+    - "El archivo es un rastro de auditoría: nunca eliminar ni modificar cambios archivados."

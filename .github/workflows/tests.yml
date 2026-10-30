@@ -14,6 +14,21 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: pos_moderno_v2_test
+          POSTGRES_USER: pos
+          POSTGRES_PASSWORD: pos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pos -d pos_moderno_v2_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,9 +52,6 @@ jobs:
       - name: Build Assets
         run: npm run build
 
-      - name: Create SQLite Database
-        run: touch database/database.sqlite
-
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
@@ -51,3 +63,9 @@ jobs:
 
       - name: Tests
         run: ./vendor/bin/pest
+
+      - name: Type Check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint:check
