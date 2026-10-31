@@ -11,7 +11,7 @@
 | Pasada | **2 de 2** — esta pasada **cierra** el diseño de `fase0-fundaciones` |
 | Secciones | §A–§C fijadas en la pasada 1 · **§D, §E y §F** añadidas en esta pasada |
 | Cobertura | **44 / 44 requisitos con diseño** (§F.1) · **0 requisitos sin diseño** |
-| Conflictos | **C1 y C5 RESUELTOS** por decisión del usuario · C2, C3, C4, C6 y C7 resueltos en el diseño · **C8, C9 y C10 nuevos**, documentados con propuesta y **no resueltos** |
+| Conflictos | **C1, C5, C9 y C10 RESUELTOS** (C1 y C5 por decisión del usuario; C9 y C10 aplicados en `sdd-tasks`) · C2, C3, C4, C6 y C7 resueltos en el diseño · **C8 nuevo**, documentado con propuesta y **no resuelto** |
 | Preguntas abiertas | 6, cada una con **recomendación** y motivo; ninguna bloquea `sdd-tasks` |
 | Siguiente fase | `sdd-tasks` |
 
@@ -119,14 +119,14 @@ Orden = dependencias de FK. Los nombres siguen la convención Laravel (`YYYY_MM_
 | Bloque | Tablas | Origen |
 |---|---|---|
 | Conservadas (lineage 1:1) | **55** | `exploration.md` §3.2 |
-| Destinos de fusión (17 legacy → **24** tablas destino: 22 de nombre nuevo + 2 ya conservadas) | 24 | `exploration.md` §3.2 |
+| Destinos de fusión (17 legacy → **24** tablas destino: 22 de nombre nuevo + 2 ya conservadas) | **22** nuevas (las 2 ya conservadas van dentro de las 55) | `exploration.md` §3.2 |
 | Nuevas de otra procedencia (capa de país/fiscal 19 · plataforma/operativa 13) | 32 | M01–M27 |
-| **Total negocio** | **109** | +7 de infraestructura Laravel = 116 tablas |
+| **Total negocio** | **109** = 55 + 22 + 19 + 13 | +7 de infraestructura Laravel = 116 tablas |
 
 Las 73 del legacy cuadran exacto: **55 + 17 + 1 = 73**.
 Desglose de las **54 nuevas**: 22 nacidas de la fusión (nombres nuevos: `sales`, `sale_items`, `sale_totals`, `sale_item_lot_consumptions`, `purchases`, `purchase_items`, `purchase_totals`, `inventory_lots`, `ledger_entries`, `quotations*`, `orders*`, `tax_categories`, `tax_rates`, `currencies`, `fiscal_documents`, `settings`, `store_settings`, `print_targets`) · 19 de la capa de país/fiscal · 13 de plataforma/operativa.
 
-> ⚠ **Aritmética de la tabla (C10):** la columna de la tabla anterior suma 111 (55 + 24 + 32) porque las **2 tablas "ya conservadas"** de la fila de fusión están contadas también dentro de las 55. El total correcto es `55 + 22 + 19 + 13 = 109`. La tabla se deja tal cual hasta que se aplique el delta propuesto en *Conflictos detectados → C10*; no afecta a los dos invariantes que sí son exactos: **73 = 55 + 17 + 1** (legacy) y **109 = 55 + 54** (destino).
+> ⚠ **Aritmética de la tabla (C10 — aplicada):** la columna de la tabla anterior sumaba 111 (55 + 24 + 32) porque las **2 tablas "ya conservadas"** de la fila de fusión estaban contadas también dentro de las 55. La fila de fusión cuenta ahora **sólo las 22 de nombre nuevo**, y el total se declara con su aritmética explícita: `55 + 22 + 19 + 13 = 109`. No cambian los dos invariantes que sí son exactos: **73 = 55 + 17 + 1** (legacy) y **109 = 55 + 54** (destino).
 
 ---
 
@@ -810,6 +810,34 @@ El esquema MUST construirse sólo por migraciones: 55 tablas conservadas, 17 fus
 
 **Cambio único:** `27 nuevas` → `54 nuevas (109 tablas de negocio)`. La disposición del legacy (**73 = 55 + 17 + 1**) **no** cambia; la regla de fondo (FKs reales, `numeric(25,4)`, sin blobs, sin flags, sin contadores) se cumple íntegra.
 
+**Delta — `esquema-dominio` §"Atomicidad de toda escritura" (C9).** Se registra aquí, con el mismo criterio que el delta de C1: **no** se reescribe `openspec/changes/fase0-fundaciones/specs/esquema-dominio/spec.md` (el store versiona la spec; el delta se aplica en `sdd-archive`), de modo que el conteo de requisitos de las 10 capacidades **no cambia** (sigue siendo 44).
+
+```markdown
+## MODIFIED Requirements
+
+### Requirement: Atomicidad de toda escritura
+
+Toda operación de escritura MUST ejecutarse como una unidad atómica con bloqueo de fila sobre los registros de inventario que modifica. El bloqueo MUST obtenerse con `SELECT … FOR UPDATE` **o** con `UPDATE … RETURNING`, que toma el bloqueo de fila en la misma sentencia que devuelve el valor reservado. El sistema MUST NOT dejar escrituras parciales tras un fallo intermedio.
+
+**Trazabilidad:** S1, S3, S6 · Criterios C1, C4 · openspec/config.yaml → rules.design
+
+#### Scenario: Escritura parcial revertida
+
+- GIVEN una operación que escribe cabecera, líneas e inventario
+- WHEN la escritura de la línea falla
+- THEN ninguna cabecera ni cambio de stock queda persistido
+- AND Regla fijada: toda escritura es una unidad atómica con bloqueo de fila
+
+#### Scenario: Reserva atómica de correlativo
+
+- GIVEN una reserva de número fiscal dentro de la transacción de emisión
+- WHEN la reserva se ejecuta
+- THEN el número reservado se obtiene en la misma sentencia que toma el bloqueo de fila
+- AND Regla fijada: el bloqueo de fila es la unidad atómica, con `SELECT … FOR UPDATE` o `UPDATE … RETURNING`
+```
+
+**Cambio único:** se admiten los dos mecanismos de bloqueo de fila que ya acepta `openspec/config.yaml → rules.design`; la reserva fiscal sigue usando **`UPDATE … RETURNING`** (D1) porque devuelve el valor reservado en la misma sentencia. La regla de fondo (escritura atómica, sin parciales) se cumple íntegra.
+
 **Nota de nomenclatura (C2) — sin delta.** `fiscal_series.series_role` es el nombre canónico, con valores `document` | `control` | `retention_receipt`, y `assigned_by` ∈ `issuer` | `authority` | `printer` | `psp` distingue la autoridad. `series_kind` (propuesto por la investigación) queda como **alias documentado**, no como columna: **no** se crea ninguna columna `series_kind`.
 
 **Ampliaciones de `documentos-fiscales` (C7) — sin delta en esta pasada.** La spec está en **647/650** palabras. Las ampliaciones derivadas (actor intermedio, control, comprobante de retención) **no** se añaden al fichero: quedan registradas aquí como delta pendiente para la fase que lo solicite.
@@ -829,10 +857,10 @@ El esquema MUST construirse sólo por migraciones: 55 tablas conservadas, 17 fus
 
 | # | Observación | Impacto | Propuesta |
 |---|---|---|---|
-| O1 | El `proposal.md` (S1) arrastra el mismo número: "55 conservadas, 17 fusionadas, 1 eliminada, **27 nuevas**". | Inconsistencia entre artefactos del mismo change. | Corregir S1 en el mismo change, junto con el delta de §F.2. **No aplicado en esta pasada** (no formaba parte del encargo). |
+| O1 | El `proposal.md` (S1) arrastra el mismo número: "55 conservadas, 17 fusionadas, 1 eliminada, **27 nuevas**". | Inconsistencia entre artefactos del mismo change. | **APLICADO en `sdd-tasks`:** S1 de `proposal.md` corregido a "**54 nuevas** → 109 tablas de negocio", junto con el delta de §F.2. |
 | O2 | `calidad-continua` §"CI…" exige `typecheck` en el gate: **ya está** en `.github/workflows/tests.yml:67-68`. El hueco real es `vendor/bin/pint --test` y el check explícito del manifiesto de Vite. | La fila de "Ficheros afectados" de la pasada 1 describe un cambio ya hecho a medias. | Ver **C8**. |
 | O3 | P9 (saldos de apertura) es **dependencia operativa**, no de código: el esquema y el comando de bloqueo están diseñados (§A.1 M19, §Migración / rollout), pero el dato lo certifica una persona. | Bloquea el arranque, no la fase de tareas. | Ver §Preguntas abiertas (P9). |
-| O4 | La §A.3 enumera 22 + 19 + 13 = 54, pero la columna de su tabla suma 111 (55 + 24 + 32) porque las 2 tablas "ya conservadas" de la fila de fusión están contadas dos veces. El total correcto es `55 + 22 + 19 + 13 = 109`. | Un revisor que sume la columna encuentra una contradicción. | Ver **C10**. |
+| O4 | La §A.3 enumera 22 + 19 + 13 = 54, pero la columna de su tabla sumaba 111 (55 + 24 + 32) porque las 2 tablas "ya conservadas" de la fila de fusión estaban contadas dos veces. El total correcto es `55 + 22 + 19 + 13 = 109`. | Un revisor que sume la columna encuentra una contradicción. | **APLICADO en `sdd-tasks`:** la fila de fusión cuenta ahora sólo las **22** de nombre nuevo y el total declara su aritmética. Ver **C10**. |
 
 
 ## Requisitos sin diseño
@@ -859,8 +887,8 @@ El esquema MUST construirse sólo por migraciones: 55 tablas conservadas, 17 fus
 | **C6** | **`quantity_in_stock` cacheado vs. "MUST derivarse"**. | El requisito lo permite *si* hay test de invariante; el diagrama B.2 exige la invariante. | **RESUELTO (D5 + D6).** `inventory_lots.available` es **GENERATED** (exacta por definición); `product_stores.quantity_in_stock` es caché **con test de invariante** (test #25, §E.5). |
 | **C7** | **`documentos-fiscales` está al límite de palabras** (647/650 según el brief) y la capa fiscal añadiría requisitos nuevos (control, actor intermedio, retención). | Una spec nueva o un delta podría desbordar el presupuesto. | **RESUELTO sin tocar la spec.** No se añade **ningún** requisito dentro de `documentos-fiscales`. Las ampliaciones quedan como **delta pendiente** registrado en §F.2, para la fase que lo solicite. |
 | **C8** | **El hueco de `typecheck` en CI ya no existe.** La pasada 1 (§Ficheros afectados) y `exploration.md` §11.1 R10 dan por hecho que `npm run typecheck` **no** está en el gate; `.github/workflows/tests.yml:67-68` **ya lo ejecuta**. El hueco real es otro: falta `vendor/bin/pint --test` y el fallo por manifiesto de Vite ausente es un HTTP 500, no un error de precondición. | La tarea de CI tal como está descrita en la pasada 1 sería un no-op en su parte principal. | **NUEVO — no resuelto.** Propuesta: corregir la fila de `.github/workflows/tests.yml` en *Ficheros afectado* para que describa el estado real y concrete el trabajo pendiente: (a) añadir `vendor/bin/pint --test` al gate; (b) añadir un paso que verifique `public/build/manifest.json` **antes** de la suite y falle con un error de precondición explícito; (c) fijar el orden `build → pint → lint:check → typecheck → pest`. Sin cambiar requisitos. Detalle en §E.4. |
-| **C9** | **La spec `esquema-dominio` exige bloqueo de fila "(`SELECT … FOR UPDATE`)"**, pero la reserva fiscal se hace con `UPDATE … RETURNING` (D1, §B.3). `openspec/config.yaml → rules.design` admite **las dos** ("`UPDATE … RETURNING` **o** `SELECT … FOR UPDATE`"); el texto de la spec sólo menciona la segunda. | Un implementador que siga la spec al pie de la letra rompería la reserva atómica, o un revisor encontraría una divergencia entre spec y diseño. | **NUEVO — no resuelto.** Propuesta: delta menor de `esquema-dominio` §"Atomicidad de toda escritura" que acepte `UPDATE … RETURNING` como mecanismo equivalente de bloqueo de fila (el `UPDATE` toma el lock de la fila en la misma sentencia). **No se aplica en esta pasada**: tocar la spec excede el encargo, que reservaba el delta de §F.2 para C1. El diseño y la spec son coherentes en la práctica; lo que falta es el texto. |
-| **C10** | **La §A.3 suma 111 en la columna y declara 109 en el total**: las 2 tablas "ya conservadas" de la fila de fusión (17 legacy → 24 destinos) están contadas también dentro de las 55. La aritmética correcta es `55 + 22 + 19 + 13 = 109`. | Un revisor que sume la columna encuentra una contradicción en el documento que fija el conteo de tablas. | **NUEVO — no resuelto.** Propuesta: cambiar la fila "Destinos de fusión" a `24 (**22** nuevas + 2 ya conservadas)` y anotar la aritmética del total como `55 + 22 + 19 + 13 = 109`; los dos invariantes exactos (73 = 55 + 17 + 1 y 109 = 55 + 54) **no** cambian. Nota de aviso añadida en §A.3. |
+| **C9** | **La spec `esquema-dominio` exige bloqueo de fila "(`SELECT … FOR UPDATE`)"**, pero la reserva fiscal se hace con `UPDATE … RETURNING` (D1, §B.3). `openspec/config.yaml → rules.design` admite **las dos** ("`UPDATE … RETURNING` **o** `SELECT … FOR UPDATE`"); el texto de la spec sólo menciona la segunda. | Un implementador que siga la spec al pie de la letra rompería la reserva atómica, o un revisor encontraría una divergencia entre spec y diseño. | **RESUELTO (delta registrado en §F.2).** Delta menor de `esquema-dominio` §"Atomicidad de toda escritura" que acepta `UPDATE … RETURNING` como mecanismo equivalente de bloqueo de fila (el `UPDATE` toma el lock de la fila en la misma sentencia). **No se reescribe la spec**: el delta se aplica en `sdd-archive`; el conteo de requisitos no cambia (44). La spec `numeracion-fiscal` ya exigía `UPDATE … RETURNING` y no requiere cambio. |
+| **C10** | **La §A.3 suma 111 en la columna y declara 109 en el total**: las 2 tablas "ya conservadas" de la fila de fusión (17 legacy → 24 destinos) están contadas también dentro de las 55. La aritmética correcta es `55 + 22 + 19 + 13 = 109`. | Un revisor que sume la columna encuentra una contradicción en el documento que fija el conteo de tablas. | **RESUELTO (aplicado en `sdd-tasks`).** La fila "Destinos de fusión" cuenta ahora **22** (las 2 ya conservadas van dentro de las 55) y el total declara su aritmética `55 + 22 + 19 + 13 = 109`. Los dos invariantes exactos (73 = 55 + 17 + 1 y 109 = 55 + 54) **no** cambian. |
 
 ## Preguntas abiertas
 

@@ -12,7 +12,7 @@ Esta fase no migra 73 tablas: diseña el esquema destino **con la capa de país/
 
 | # | Entregable | Criterio de aceptación |
 |---|---|---|
-| S1 | Esquema destino por migraciones (55 conservadas, 17 fusionadas, 1 eliminada, 27 nuevas) | FKs reales, `numeric(25,4)`, sin blobs PHP, sin flags contables, sin contadores derivados |
+| S1 | Esquema destino por migraciones (55 conservadas, 17 fusionadas, 1 eliminada, **54 nuevas** → 109 tablas de negocio) | FKs reales, `numeric(25,4)`, sin blobs PHP, sin flags contables, sin contadores derivados |
 | S2 | Capa de país/fiscal | `countries`, `fiscal_profiles`, `tax_categories`/`tax_rates`, `currencies`, `number_formats`, `fiscal_profile_document_types`, `fiscal_providers` |
 | S3 | Numeración fiscal atómica | **Dos** series (documento del emisor + Nº de Control de la imprenta) con **dos** reservas independientes; tests T1–T3 en PostgreSQL |
 | S4 | Documento fiscal y anexos | `fiscal_documents` + `_taxes` (multinivel) + `_parties` + `_links` + `_events` (append-only) + `_control_assignments` + contingencia + comprobante de retención `AAAAMMSSSSSSSS` |
