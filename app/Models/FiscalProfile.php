@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Domain\Fiscal\Enums\RoundingRule;
 use App\Domain\Fiscal\Enums\SignerModel;
+use App\Domain\Tax\TaxContext;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -91,5 +93,31 @@ class FiscalProfile extends Model
     public function providers(): HasMany
     {
         return $this->hasMany(FiscalProvider::class);
+    }
+
+    public function categories(): HasMany
+    {
+        return $this->hasMany(TaxCategory::class);
+    }
+
+    /**
+     * Contexto fiscal resuelto desde las filas del perfil (design §C.2, C4).
+     *
+     * El prefijo obligatorio del correlativo y la frase del contribuyente
+     * formal se LEEN del catálogo de claves; el dominio sólo los compara.
+     * `$exemptionMarker` es el marcador del tipo de documento.
+     */
+    public function taxContext(Currency $currency, ?string $exemptionMarker = null): TaxContext
+    {
+        $fields = $this->fields->keyBy('key');
+
+        return new TaxContext(
+            roundingRule: RoundingRule::tryFrom((string) $this->rounding_rule) ?? RoundingRule::Line,
+            taxInclusiveDefault: (bool) $this->tax_inclusive_default,
+            currencyDecimals: (int) $currency->decimals,
+            exemptionMarker: $exemptionMarker,
+            formalContributorPhrase: $fields->get('formal_contributor_phrase')?->value,
+            seriesPrefixRequiredToken: $fields->get('series_prefix_required_token')?->value,
+        );
     }
 }

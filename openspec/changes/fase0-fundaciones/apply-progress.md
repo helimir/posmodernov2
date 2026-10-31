@@ -1,6 +1,6 @@
 # Apply progress — fase0-fundaciones
 
-**Change**: `fase0-fundaciones` · **Unidades aplicadas**: PR1-ciimientos-a · PR2-ciimientos-b · PR3-pais-fiscal-a · PR4-pais-fiscal-b · **PR5-pais-fiscal-c (esta)**
+**Change**: `fase0-fundaciones` · **Unidades aplicadas**: PR1-ciimientos-a · PR2-ciimientos-b · PR3-pais-fiscal-a · PR4-pais-fiscal-b · PR5-pais-fiscal-c · **PR6-pais-fiscal-d (esta)**
 **Mode**: Strict TDD (`strict_tdd: true`, runner `./vendor/bin/pest` sobre PostgreSQL 17 `pos_moderno_v2_test`)
 **Chain strategy**: `stacked-to-main` · **Presupuesto**: 800 líneas por PR
 
@@ -26,18 +26,18 @@
 | 0.2.1-T | ✅ | `tests/Feature/Domain/NumberFormatAsDataTest.php` |
 | 0.2.2 Migration M02 | ✅ | perfil fiscal + 5 satélites + `fiscal_providers` (decisión de PR3, aplicada en PR4) |
 | 0.2.2-T | ✅ | `tests/Feature/Domain/FiscalProfileLayerTest.php` (PR4) |
-| 0.2.3 Migration M03 | ⏳ | llega con el **PR6** (`tax_categories` (5) + `tax_rates` (vigencia, evidencia, fuente, redondeo)) |
-| 0.2.3-T | ⏳ | llega con el **PR6** (`tests/Feature/Domain/TaxCategoryCatalogueTest.php`) |
+| 0.2.3 Migration M03 | ✅ | `tax_categories` (5) + `tax_rates` (vigencia, evidencia, fuente, redondeo) — **PR6** |
+| 0.2.3-T | ✅ | `tests/Feature/Domain/TaxCategoryCatalogueTest.php` — **PR6** |
 | 0.2.4 Contrato del actor intermedio | ✅ | `ElectronicInvoiceProvider` + **9** value objects — **PR5** |
 | 0.2.4-T | ✅ | `tests/Feature/Domain/ElectronicInvoiceProviderContractTest.php` — **PR5** |
 | 0.2.5 Enums genéricos del dominio fiscal | ✅ | `ProviderKind`/`SignerModel`/`EnvironmentRole`/`TaxMethod`/`RoundingRule`; **sustituyen** a las constantes de PR4 — **PR5** |
 | 0.2.5-T | ✅ | `tests/Feature/Domain/FiscalDomainEnumsTest.php` — **PR5** |
-| 0.2.6 Modelos de la capa (12) | ⏳ | `TaxCategory` y `TaxRate` llegan con M03 en el **PR6**: la tarea sigue abierta |
-| 0.2.6-T | ✅ **parcial** | `tests/Feature/Domain/ModelCastsTest.php` cubre los **10** modelos de PR3/PR4; los **12** llegan con el **PR6** |
-| 0.2.7 `TaxContext` | ⏳ | `app/Domain/Tax/TaxContext.php` + `FiscalProfile::taxContext()` llegan con el **PR6** |
-| 0.2.7-T | ⏳ | llega con el **PR6** (`tests/Feature/Domain/TaxContextTest.php`) |
+| 0.2.6 Modelos de la capa (12) | ✅ **cerrada** | los **12** modelos existen: 10 de PR3/PR4 + `TaxCategory` y `TaxRate` (M03) — **PR6** |
+| 0.2.6-T | ✅ **definitivo** | `tests/Feature/Domain/ModelCastsTest.php` cubre los **12** modelos — **PR6** |
+| 0.2.7 `TaxContext` | ✅ | `app/Domain/Tax/TaxContext.php` + `FiscalProfile::taxContext()` — **PR6** |
+| 0.2.7-T | ✅ | `tests/Feature/Domain/TaxContextTest.php` — **PR6** |
 
-**23 de 152 tareas del change marcadas** (14 de Fase 0.1 + 9 de Fase 0.2). **La Fase 0.2 sigue abierta**: 0.2.3 (M03), el cierre de 0.2.6 (los dos modelos que faltan) y 0.2.7 (`TaxContext`) llegan con el **PR6**.
+**28 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados.
 
 ## TDD Cycle Evidence
 
@@ -55,8 +55,11 @@
 | 0.2.6-T (PR3/PR4) | ❌ `Class "App\Models\FiscalProfile" not found` | ✅ los 10 modelos de país/perfil → 1 passed (81 assertions) | casts: se declaran los tipos con significado (FK, booleanos, fechas, conjuntos cerrados) |
 | Conjuntos cerrados | ❌ `InvalidArgumentException` no se lanzaba | ✅ validación en `saving` de `FiscalProfile`/`FiscalProfileEnvironment`/`FiscalProvider` **contra los enums genéricos** → 1 passed (6 assertions) | — |
 | C4 (token de serie) | ❌ `Class "App\Models\FiscalProfileField" not found` | ✅ catálogo `fiscal_profile_fields` con `key`/`value` → 1 passed (5 assertions) | — |
+| **0.2.3-T** | ❌ `Class "App\Models\TaxCategory" not found` | ✅ M03 + `TaxCategory`/`TaxRate` → 1 passed (8 assertions) | la aserción del esquema (`tax_categories` sin `percentage`, `tax_rates` con `percentage`) hace verificable la aceptación sin esperar a M08 |
 | **0.2.4-T** | ❌ `Class "App\Domain\Fiscal\Contracts\ElectronicInvoiceProvider` not found` | ✅ contrato + 9 value objects → 1 passed (16 assertions) | el test cubre los **tres** pasos en orden y el canal sin control (`null`) con el MISMO proveedor |
 | **0.2.5-T** | ❌ `Class "App\Domain\Fiscal\Enums\ProviderKind" not found` | ✅ 5 enums + sustitución de las constantes → 1 passed (12 assertions) | el escáner de literales **no es vacuo**: un fixture con un código de país prueba que DETECTA |
+| **0.2.6-T (cierre)** | ❌ `Exception "InvalidArgumentException" not thrown` (regla de redondeo inválida) | ✅ validación en cascada de `TaxRate.rounding_rule` → 1 passed (108 assertions) | `ModelCastsTest` pasa a ser **definitivo** con los 12 modelos |
+| **0.2.7-T** | ❌ `BadMethodCallException: Call to undefined method App\Models\FiscalProfile::taxContext()` | ✅ `TaxContext` + `FiscalProfile::taxContext()` → 1 passed (11 assertions) | el test comprueba además que el fichero del dominio **no** contiene el literal del token |
 
 ## Work Unit Evidence (PR2-ciimientos-b)
 
@@ -178,7 +181,7 @@
 1. **1.052 líneas (1.203 con los artefactos SDD): la work unit se parte en dos PRs, sin `size:exception`.** El presupuesto por PR es de 800 y la work unit lo excede en 252 (código y tests) o 403 (con `tasks.md` y `apply-progress.md`). **No se ha recortado código para encajar**: el contenido es el mínimo que exige el alcance más lo que el forecast no contabilizó (la sustitución en cascada de las constantes de PR4, la extensión del test de conjuntos cerrados, el escáner de literales con su fixture y los docblocks del dominio). El corte es por **dependencias reales**, no por presupuesto: **PR5 = 0.2.4 + 0.2.5** (contrato + value objects + enums, sin tabla ni modelo nuevo) y **PR6 = 0.2.3 + 0.2.6 + 0.2.7** (M03 + los dos modelos que faltan + `TaxContext`), que es donde vive `TaxRate`, que ya usa `RoundingRule`.
 2. **Riesgo para PR17 (`NoCountryLiteralsTest`)**: el escáner de este PR **extrae literales de cadena** y descarta comentarios antes de comparar. Un escáner que haga `str_contains($código, 'serie')` produciría un **falso positivo** con `series_prefix_required_token` (clave de `fiscal_profile_fields` y, en el PR6, propiedad de `TaxContext`). El escáner de PR17 debe comparar **literales**, no subcadenas, y necesita un **fixture con un literal prohibido** que demuestre que **detecta** (aquí: `tests/Fixtures/CountryLiteralFixture.php`).
 
-## Fuera de esta unidad (no implementado)
+## Fuera de esta unidad (no implementado) — PR5-pais-fiscal-c
 
 - El **catálogo fiscal** (M03: `tax_categories` + `tax_rates`) y los dos modelos que faltan: 0.2.3 y el cierre de 0.2.6, en el **PR6**.
 - El **contexto fiscal** (`TaxContext` + `FiscalProfile::taxContext()`): 0.2.7, en el **PR6**.
@@ -187,6 +190,61 @@
 - El **adaptador real** de un canal: bloqueado por el Manual Técnico (research O1/O4/O6).
 - El **seed** del perfil y del catálogo de impuestos (5 categorías + tasas con `evidence_status`): PR16 (`FiscalProfileSeeder`).
 
-## Siguiente unidad
+## Siguiente unidad tras PR5-pais-fiscal-c
 
 **PR6-pais-fiscal-d** (`feat/fase0-06-pais-fiscal-d`): M03 (`tax_categories` + `tax_rates`) + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()`/`categories()`, con el cierre de 0.2.6 y 0.2.7. Predecesor: PR5-pais-fiscal-c.
+
+## Work Unit Evidence (PR6-pais-fiscal-d)
+
+> Work unit **2c-b**: el **catálogo fiscal** (0.2.3 + el cierre de 0.2.6) y el **contexto fiscal** (0.2.7). Segunda mitad del corte de "pais/fiscal c"; la primera es `PR5-pais-fiscal-c` (0.2.4 + 0.2.5).
+
+| Evidencia | Valor |
+|---|---|
+| Test focalizado | `php vendor/bin/pest --filter="catalogo_de_categorias"` → **1 passed (8 assertions)** · `--filter="conjuntos_cerrados"` → **1 passed (8)** · `--filter="modelos_de_la_capa"` → **1 passed (108)** · `--filter="prefijo_de_serie"` → **2 passed (16)**; suite completa `./vendor/bin/pest` → **43 passed (380 assertions)** (baseline del PR5: 41 passed / 331 assertions) |
+| Harness de runtime | `php artisan migrate:fresh --seed --force` → **12 migraciones en verde** (base×3 + M01–M07 + M25–M26) · `tinker` → 5 categorías con `iva_retenido` como única de retención, 1 tasa `pending_confirmation` leída como `16.000000`, token leído `serie` con `requiresSeriesPrefix('serie-001')=true` y `('001')=false`, método `Exclusive` y redondeo `Line` resueltos desde las filas, y una `rounding_rule` inválida **rechazada** por el dominio |
+| Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran M03, `TaxContext`, los 2 modelos y los 2 ficheros de test nuevos. **No toca** M01/M02 (base de la cadena) ni M04–M07, M25–M26, y **no toca** el contrato ni los enums del PR5 |
+| Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `public/build/manifest.json` presente |
+| Tamaño | **559 líneas** (533 adiciones + 26 borrados): **461** de código y tests + **98** de artefactos SDD (`tasks.md` + `apply-progress.md`) — **dentro** del techo de 800 |
+
+## Ficheros de esta unidad (PR6-pais-fiscal-d)
+
+| Fichero | Acción | Qué hace |
+|---|---|---|
+| `database/migrations/2026_11_01_000003_create_tax_categories_and_rates_table.php` | Creado | M03: `tax_categories` (5 categorías con `is_withholding`) + `tax_rates` (vigencia, `evidence_status`, `source_ref`, `rounding_rule`) |
+| `app/Domain/Tax/TaxContext.php` | Creado | Contenedor de datos resueltos antes de la llamada + `taxMethod()` derivado y `requiresSeriesPrefix()` (C4) |
+| `app/Models/TaxCategory.php` · `app/Models/TaxRate.php` | Creado | Los 2 modelos que faltaban; `TaxRate` expone su `evidence_status` y valida su `rounding_rule` contra `RoundingRule` |
+| `app/Models/FiscalProfile.php` | Modificado | Gana `categories()` y `taxContext()`: el modelo lee el catálogo de claves y construye el contexto |
+| `tests/Feature/Domain/TaxCategoryCatalogueTest.php` | Creado | 0.2.3-T: el producto apunta a una categoría fiscal, no a un porcentaje |
+| `tests/Feature/Domain/TaxContextTest.php` | Creado | 0.2.7-T: el token normativo obligatorio es un dato, no un literal del dominio |
+| `tests/Feature/Domain/ModelCastsTest.php` | Modificado | 0.2.6-T pasa a ser **definitivo**: los 12 modelos de la capa |
+| `tests/Feature/Domain/FiscalProfileLayerTest.php` | Modificado | El test de conjuntos cerrados cubre ahora `rounding_rule` contra `RoundingRule` |
+
+## Decisiones de esta unidad (PR6-pais-fiscal-d)
+
+1. **`tax_categories` es un catálogo POR PERFIL** (`fiscal_profile_id`), como en exploration §4.2 y como pide la spec («el perfil venezolano MUST sembrarse con sus tipos de documento, **categorías de IVA** y vocabulario»). Las 5 categorías son por tanto `gravable`, `exento`, `no_gravado`, `exonerado` e `iva_retenido` —**sólo** `iva_retenido` lleva `is_withholding = true`.
+2. **`tax_rates` NO tiene columna `method`.** El método del impuesto lo decide `fiscal_profiles.tax_inclusive_default` (design §C.2, aceptación de 0.4.5): dos fuentes de verdad violarían el requisito «una sola fuente de verdad por dato». El enum `TaxMethod` vive en el dominio y `TaxContext::taxMethod()` lo deriva del booleano del perfil.
+3. **`TaxContext` no depende de ningún modelo.** Es un contenedor puro de 6 datos; la lectura de las filas vive en `FiscalProfile::taxContext()` (el modelo lee `fiscal_profile_fields` por clave). Así el motor de impuestos (0.6.1) sigue siendo puro (D9) y el dominio no conoce ni el esquema ni las claves del catálogo.
+4. **`requiresSeriesPrefix()` compara contra el valor leído** (C4): `str_contains($prefix, $this->seriesPrefixRequiredToken)`. El test comprueba además que `app/Domain/Tax/TaxContext.php` **no contiene** el literal del token.
+5. **La regla de redondeo por defecto es `line`** cuando el perfil no la declara. Es una **decisión de producto** (P4: la providencia no menciona el redondeo), no un requisito normativo, y es revisable por fila.
+6. **`TaxRate` valida su `rounding_rule` contra `RoundingRule`** (enum del PR5): el valor nulo significa "hereda la regla del perfil fiscal" y cualquier otro valor se rechaza.
+
+## Desviaciones del diseño y FKs diferidas (PR6-pais-fiscal-d)
+
+1. **La work unit "pais/fiscal c" se parte en dos PRs, sin `size:exception`** (ver §Desviaciones de PR5, punto 1). El corte lo dictan las **dependencias reales**: `TaxRate` usa el enum `RoundingRule` (PR5) y sus propias tablas (M03, aquí), y `FiscalProfile::taxContext()` usa `TaxContext` (aquí) — de ahí que el contrato + enums sean la primera mitad y el catálogo + contexto la segunda. Ninguna tabla ni clase queda pendiente en ninguna de las dos mitades.
+2. **Códigos de las categorías**: `tasks.md` fija `gravable`/`exento`/`no_gravado`/`exonerado`/`iva_retenido`; exploration §4.2 usaba el prefijo `iva_` (`iva_gravable`…). Se sigue el plan (es el artefacto que fija la tarea); **el seeder de PR16 debe sembrar estos mismos códigos**.
+3. **La clave del catálogo para la frase del contribuyente formal** es `formal_contributor_phrase` (en `fiscal_profile_fields`). El diseño la situaba en una columna de `fiscal_profiles` que M02 no creó; al no haber migración disponible, vive en el catálogo de claves. El seeder de PR16 debe sembrar esa clave.
+4. **El modo de redondeo (`half-up`) no tiene columna.** `RoundingRule` cubre el ALCANCE (`line`/`total`); el modo ("half-up" por defecto) no tiene sede en M02/M03 y lo necesita 0.6.2. Queda como fila de `fiscal_profile_fields` (o columna nueva) — decisión de la unidad de motor de impuestos.
+5. **FKs diferidas por no existir todavía**: `products.tax_category_id → tax_categories.id` → **M08** (work unit 4a, PR9: `products` no existe todavía) · `stores.country_id → countries.id` → **M27** (decisión de PR1) · `fiscal_documents.authority_reference` (el valor de la referencia) → **M22** (PR8) · `fiscal_series.fiscal_profile_id` / `fiscal_providers` → **M21** (PR7). **Ninguna** FK a una tabla de M08/M21/M22 se declara en esta unidad.
+6. **`applies_to` no es un conjunto cerrado validado**: `'sale'|'purchase'|'both'` queda como dato libre de la fila; no hay enum para él en el alcance de 0.2.5 y `direction` ya cubre el eje compra/venta en `fiscal_profile_document_types`.
+
+## Fuera de esta unidad (no implementado) — PR6-pais-fiscal-d
+
+- El **documento propio de retención** (numeración `AAAAMMSSSSSSSS`, período de imposición, referencia al original): la **categoría** `iva_retenido` existe; el documento llega con M21/M22 (PR7–PR8).
+- El **motor de impuestos** (`TaxCalculator`, `TaxLineInput`, `TaxDocumentInput`, `TaxDocumentResult`): 0.6.1 (PR12).
+- El **motor de emisión** (`FiscalIssuanceService`, que orquesta `submit()` → `assignControl()` → `issue()`): 0.3.4 (PR8). El contrato ya existe desde el PR5.
+- El **adaptador real** de un canal: bloqueado por el Manual Técnico (research O1/O4/O6).
+- El **seed** del perfil y del catálogo de impuestos (5 categorías + tasas con `evidence_status`): PR16 (`FiscalProfileSeeder`).
+
+## Siguiente unidad
+
+**PR7-numeracion-a** (`feat/fase0-07-numeracion-a`): M21 (`fiscal_series` + `fiscal_document_reservations`) + `NumberSeries`, con la reserva atómica `UPDATE … RETURNING`. Predecesor: PR6-pais-fiscal-d.
