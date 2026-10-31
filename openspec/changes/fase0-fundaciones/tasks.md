@@ -70,7 +70,36 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 9 | 0.9 | 55 | 0 | 0 | 405 | 740 | 130 | **1.330** | excede 800 (+530) |
 | | | | | | | | | **Total** | **~8.735** | 6 de 9 exceden 800 |
 
-### Corte final: 16 PRs (`stacked-to-main`)
+### Corte final: 17 PRs (`stacked-to-main`)
+
+> **Estado real de la cadena** (actualizado 2026-10-31). La work unit "pais/fiscal a" resultó medir **1.004 líneas**, 204 por encima del techo, así que se **re-sliced** en dos: la work unit "pais/fiscal a" original pasó a ser **PR3 (M01)** y **PR4 (M02 + 7 modelos)**. De ahí 16 PRs pasan a **17**. El re-slice quedó registrado en el ledger con `sdd-attempt reset` y su motivo.
+
+| # | Rama | Work unit | Contenido | Líneas est. | GitHub | Estado |
+|---|---|---|---|---|---|---|
+| 1 | `feat/fase0-01-ciimientos-a` | 1a | M04–M07 + `composer.json` + `pgsql_b` + 3 interruptores + 8 modelos base | 1.022 (797 revisables, `size:exception`) | PR #2 · issue #1 | **fusionado** `65b529d` |
+| 2 | `feat/fase0-02-ciimientos-b` | 1b | M25–M26 + 6 modelos (i18n, outbox SMS, auditoría) | 491 | PR #4 · issue #3 | **fusionado** `a5e5100` |
+| 3 | `feat/fase0-03-pais-fiscal-a` | 2a (M01) | M01 + `Country`/`Currency`/`NumberFormat` | 241 | PR #6 · issue #5 | **fusionado** `8b9c553` |
+| 4 | `feat/fase0-04-pais-fiscal-b` | 2b (M02) | M02 + `fiscal_providers` + 7 modelos de perfil fiscal | 767 | PR #8 · issue #7 | **fusionado** `ba28322` |
+| 5 | `feat/fase0-05-pais-fiscal-c` | 2c | M03 + `TaxCategory`/`TaxRate` + contrato del proveedor + VO + enums + `TaxContext` | ~700 | — | pendiente |
+| 6 | `feat/fase0-06-numeracion-a` | 3a | M21 + series/reservas + `NumberSeries` | 238 | — | pendiente |
+| 7 | `feat/fase0-07-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render + **T1–T3** | 630 | — | pendiente |
+| 8 | `feat/fase0-08-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
+| 9 | `feat/fase0-09-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
+| 10 | `feat/fase0-10-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
+| 11 | `feat/fase0-11-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | 757 | — | pendiente |
+| 12 | `feat/fase0-12-contabilidad-caja` | 7 | M18–M20 + `LedgerWriter` + `business_date` + saldos | 792 | — | pendiente |
+| 13 | `feat/fase0-13-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | 565 | — | pendiente |
+| 14 | `feat/fase0-14-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | 464 | — | pendiente |
+| 15 | `feat/fase0-15-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | — | pendiente |
+| 16 | `feat/fase0-16-suite` | 9b | `NoCountryLiteralsTest` + tests canónicos | 550 | — | pendiente |
+| 17 | `feat/fase0-17-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | 340 | — | pendiente |
+
+**Reglas operativas de la cadena** (verificadas en la práctica):
+
+- Cada PR se abre contra `main` **después** de que el anterior esté fusionado; si no, su diff arrastra el anterior (la skill `chained-pr` lo llama *base bug*). La implementación se hace sobre la rama del PR previo y se **rebasa sobre `main` tras la fusión**.
+- El ledger de intentos (`gentle-ai sdd-attempt`) exige: *merge before begin or after finish* — nunca rebasar con un intento abierto.
+- Cada PR lleva su issue con `status:approved` y `Closes #N`, y **exactamente una** etiqueta `type:*`.
+- El nombre de rama casa `^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)\/…`.
 
 | PR | Rama | Unidad | Contenido | Líneas | Test focalizado | Harness | Rollback |
 |---|---|---|---|---|---|---|---|
@@ -91,19 +120,21 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | PR15 | `feature/fase0-15-suite` | 9b | `NoCountryLiteralsTest` + 4 canónicos de 0.9.11 | 550 | `./vendor/bin/pest` | suite completa verde | Sin impacto en runtime |
 | PR16 | `feature/fase0-16-ci-docs` | 9c | workflow CI + `README.md` + 7 meta-tests | 340 | `./vendor/bin/pest` | push a `main` con PostgreSQL 17 en CI | Sin impacto en runtime |
 
-**PRs finales = 16.** Mínimo **12** si se aceptaran enteras las unidades frágiles (U3 845, U5 772, U6 757, U7 792).
+**PRs finales = 17** (16 en el corte original + 1 por el re-slice de la work unit "pais/fiscal a", que medía 1.004 líneas). Mínimo **13** si se aceptaran enteras las unidades frágiles (U3 845, U5 772, U6 757, U7 792).
+
+> La tabla anterior es la **medición original por work unit** (9 unidades). El corte en 17 PRs y el estado real de cada uno están en **§Cadena de entrega → Estado real de la cadena**.
 
 ### Diagrama de dependencias
 
 ```
 PR1 ─┬─► PR2
-     ├─► PR3 ─► PR4
-     └─► PR5 ─► PR6
-PR7 ─┬─► PR8
-     ├─► PR9  ─┬─► PR10 ─► PR11
+     ├─► PR3 ─► PR4 ─► PR5
+     └─► PR6 ─► PR7
+PR8 ─┬─► PR9
+     ├─► PR10 ─┬─► PR11 ─► PR12
      │         │
-     └─► PR12 ─► PR13
-PR14 ─► PR15 ─► PR16
+     └─► PR13 ─► PR14
+PR15 ─► PR16 ─► PR17
                     📍 = PR en curso
 ```
 
