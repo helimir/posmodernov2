@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** Business audit trail. Its table (`audit_logs`) is created by M26, in the PR that lands the i18n and outbox tables. */
+/** Business audit trail. Its table (`audit_logs`) is created by M26. */
 class AuditLog extends Model
 {
     use HasFactory;
@@ -20,7 +20,10 @@ class AuditLog extends Model
         return [
             'user_id' => 'integer',
             'store_id' => 'integer',
+            'action' => 'string',
+            'entity_type' => 'string',
             'entity_id' => 'integer',
+            'ip_address' => 'string',
             'context' => 'array',
         ];
     }
