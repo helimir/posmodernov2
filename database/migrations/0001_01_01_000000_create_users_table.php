@@ -13,18 +13,26 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+            // La FK a `roles.id` la añade M06: `roles` se crea en M05, que
+            // corre después de esta migración.
+            $table->foreignId('group_id')->nullable()->index();
             $table->string('name');
+            $table->string('username')->nullable()->unique();
             $table->string('email')->unique();
+            $table->string('mobile', 20)->nullable();
+            $table->date('dob')->nullable();
+            $table->string('sex', 10)->nullable();
             $table->timestamp('email_verified_at')->nullable();
+            // La contraseña se guarda con hash (argon2id/bcrypt), nunca MD5
+            // ni en claro como en el legacy.
             $table->string('password');
+            $table->unsignedTinyInteger('login_try')->default(0);
+            $table->timestamp('last_login')->nullable();
+            $table->string('ip', 40)->nullable();
+            $table->text('address')->nullable();
+            $table->string('user_image', 250)->nullable();
             $table->rememberToken();
             $table->timestamps();
-        });
-
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
-            $table->string('token');
-            $table->timestamp('created_at')->nullable();
         });
 
         Schema::create('sessions', function (Blueprint $table) {
@@ -43,7 +51,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
     }
 };
