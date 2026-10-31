@@ -70,9 +70,9 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 9 | 0.9 | 55 | 0 | 0 | 405 | 740 | 130 | **1.330** | excede 800 (+530) |
 | | | | | | | | | **Total** | **~8.735** | 6 de 9 exceden 800 |
 
-### Corte final: 17 PRs (`stacked-to-main`)
+### Corte final: 18 PRs (`stacked-to-main`)
 
-> **Estado real de la cadena** (actualizado 2026-10-31). La work unit "pais/fiscal a" resultó medir **1.004 líneas**, 204 por encima del techo, así que se **re-sliced** en dos: la work unit "pais/fiscal a" original pasó a ser **PR3 (M01)** y **PR4 (M02 + 7 modelos)**. De ahí 16 PRs pasan a **17**. El re-slice quedó registrado en el ledger con `sdd-attempt reset` y su motivo.
+> **Estado real de la cadena** (actualizado 2026-10-31). La work unit "pais/fiscal a" resultó medir **1.004 líneas**, 204 por encima del techo, así que se **re-sliced** en dos: la work unit "pais/fiscal a" original pasó a ser **PR3 (M01)** y **PR4 (M02 + 7 modelos)**. De ahí 16 PRs pasan a **17**. El re-slice quedó registrado en el ledger con `sdd-attempt reset` y su motivo. La work unit "pais/fiscal c" resultó medir **1.052 líneas** de código y tests (**1.203** con `tasks.md` y `apply-progress.md`), 252 por encima del techo: **no** se concede `size:exception` y se **parte** en dos — **PR5 (0.2.4 + 0.2.5: contrato del actor intermedio + value objects + enums genéricos)** y **PR6 (0.2.3 + 0.2.6 + 0.2.7: M03 + modelos `TaxCategory`/`TaxRate` + `TaxContext`)**. De ahí 17 PRs pasan a **18**.
 
 | # | Rama | Work unit | Contenido | Líneas est. | GitHub | Estado |
 |---|---|---|---|---|---|---|
@@ -80,19 +80,20 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 2 | `feat/fase0-02-ciimientos-b` | 1b | M25–M26 + 6 modelos (i18n, outbox SMS, auditoría) | 491 | PR #4 · issue #3 | **fusionado** `a5e5100` |
 | 3 | `feat/fase0-03-pais-fiscal-a` | 2a (M01) | M01 + `Country`/`Currency`/`NumberFormat` | 241 | PR #6 · issue #5 | **fusionado** `8b9c553` |
 | 4 | `feat/fase0-04-pais-fiscal-b` | 2b (M02) | M02 + `fiscal_providers` + 7 modelos de perfil fiscal | 767 | PR #8 · issue #7 | **fusionado** `ba28322` |
-| 5 | `feat/fase0-05-pais-fiscal-c` | 2c | M03 + `TaxCategory`/`TaxRate` + contrato del proveedor + VO + enums + `TaxContext` | ~700 | — | pendiente |
-| 6 | `feat/fase0-06-numeracion-a` | 3a | M21 + series/reservas + `NumberSeries` | 238 | — | pendiente |
-| 7 | `feat/fase0-07-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render + **T1–T3** | 630 | — | pendiente |
-| 8 | `feat/fase0-08-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
-| 9 | `feat/fase0-09-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
-| 10 | `feat/fase0-10-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
-| 11 | `feat/fase0-11-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | 757 | — | pendiente |
-| 12 | `feat/fase0-12-contabilidad-caja` | 7 | M18–M20 + `LedgerWriter` + `business_date` + saldos | 792 | — | pendiente |
-| 13 | `feat/fase0-13-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | 565 | — | pendiente |
-| 14 | `feat/fase0-14-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | 464 | — | pendiente |
-| 15 | `feat/fase0-15-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | — | pendiente |
-| 16 | `feat/fase0-16-suite` | 9b | `NoCountryLiteralsTest` + tests canónicos | 550 | — | pendiente |
-| 17 | `feat/fase0-17-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | 340 | — | pendiente |
+| 5 | `feat/fase0-05-pais-fiscal-c` | 2c-a (0.2.4 + 0.2.5) | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genéricos + sustitución de las constantes de PR4 | **773** | — | en curso |
+| 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b (0.2.3 + 0.2.6 + 0.2.7) | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **~555** | — | pendiente |
+| 7 | `feat/fase0-07-numeracion-a` | 3a | M21 + series/reservas + `NumberSeries` | 238 | — | pendiente |
+| 8 | `feat/fase0-08-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render + **T1–T3** | 630 | — | pendiente |
+| 9 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
+| 10 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
+| 11 | `feat/fase0-11-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
+| 12 | `feat/fase0-12-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | 757 | — | pendiente |
+| 13 | `feat/fase0-13-contabilidad-caja` | 7 | M18–M20 + `LedgerWriter` + `business_date` + saldos | 792 | — | pendiente |
+| 14 | `feat/fase0-14-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | 565 | — | pendiente |
+| 15 | `feat/fase0-15-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | 464 | — | pendiente |
+| 16 | `feat/fase0-16-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | — | pendiente |
+| 17 | `feat/fase0-17-suite` | 9b | `NoCountryLiteralsTest` + tests canónicos | 550 | — | pendiente |
+| 18 | `feat/fase0-18-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | 340 | — | pendiente |
 
 **Reglas operativas de la cadena** (verificadas en la práctica):
 
@@ -120,7 +121,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | PR15 | `feature/fase0-15-suite` | 9b | `NoCountryLiteralsTest` + 4 canónicos de 0.9.11 | 550 | `./vendor/bin/pest` | suite completa verde | Sin impacto en runtime |
 | PR16 | `feature/fase0-16-ci-docs` | 9c | workflow CI + `README.md` + 7 meta-tests | 340 | `./vendor/bin/pest` | push a `main` con PostgreSQL 17 en CI | Sin impacto en runtime |
 
-**PRs finales = 17** (16 en el corte original + 1 por el re-slice de la work unit "pais/fiscal a", que medía 1.004 líneas). Mínimo **13** si se aceptaran enteras las unidades frágiles (U3 845, U5 772, U6 757, U7 792).
+**PRs finales = 18** (16 en el corte original + 1 por el re-slice de la work unit "pais/fiscal a", que medía 1.004 líneas, + 1 por el re-slice de la work unit "pais/fiscal c", que medía 1.052 líneas). Mínimo **13** si se aceptaran enteras las unidades frágiles (U3 845, U5 772, U6 757, U7 792).
 
 > La tabla anterior es la **medición original por work unit** (9 unidades). El corte en 17 PRs y el estado real de cada uno están en **§Cadena de entrega → Estado real de la cadena**.
 
@@ -128,14 +129,14 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 
 ```
 PR1 ─┬─► PR2
-     ├─► PR3 ─► PR4 ─► PR5
-     └─► PR6 ─► PR7
-PR8 ─┬─► PR9
-     ├─► PR10 ─┬─► PR11 ─► PR12
-     │         │
-     └─► PR13 ─► PR14
-PR15 ─► PR16 ─► PR17
+     ├─► PR3 ─► PR4 ─► PR5 ─► PR6
                     📍 = PR en curso
+     └─► PR7 ─► PR8
+PR9 ─┬─► PR10
+     ├─► PR11 ─┬─► PR12 ─► PR13
+     │         │
+     └─► PR14 ─► PR15
+PR16 ─► PR17 ─► PR18
 ```
 
 ### Chain Context por PR
@@ -196,12 +197,12 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 - [x] **0.2.2-T** Test: `test_la_referencia_de_verificacion_se_guarda_como_valor_y_esquema_y_no_como_columna_uuid` — regla que fija: *la referencia de cada país es un par valor + esquema*.
 - [ ] **0.2.3** Migración **M03** `2026_11_01_000003_create_tax_categories_and_rates_table.php`: `tax_categories` (5 categorías: `gravable`, `exento`, `no_gravado`, `exonerado`, `iva_retenido`, con `is_withholding`) y `tax_rates` (vigencia, `evidence_status`, `source_ref`, `rounding_rule`). Dep: 0.2.1. Aceptación: `products.tax_category_id` referencia la **categoría**, nunca un porcentaje.
 - [ ] **0.2.3-T** Test: `test_el_catalogo_de_categorias_distingue_las_cinco_categorias_de_iva` — regla que fija: *el producto apunta a una categoría fiscal, no a un porcentaje*.
-- [ ] **0.2.4** Contrato del actor intermedio: crear `app/Domain/Fiscal/Contracts/ElectronicInvoiceProvider.php` con `submit()` · `assignControl()` · `issue()` · `cancel()` · `queryStatus()` · `deliver()` y los value objects `FiscalDocumentDraft`, `SubmissionReceipt`, `ControlAssignment`, `FiscalDocumentData`, `CancellationReason`, `ProviderStatus`, `DeliveryRecipient`, `DeliveryReceipt`. Dep: 0.2.2. Aceptación: `submit()` → `assignControl()` → `issue()` son **tres** pasos; `assignControl()` devuelve `?ControlAssignment` (canal portal no asigna control).
-- [ ] **0.2.4-T** Test: `test_el_contrato_del_proveedor_separa_emitir_asignar_control_y_consolidar` — regla que fija: *el emisor no emite solo; hay un actor intermedio*.
-- [ ] **0.2.5** Enums genéricos del dominio fiscal en `app/Domain/Fiscal/Enums/`: `ProviderKind` (3), `SignerModel` (4), `EnvironmentRole` (2), `TaxMethod`, `RoundingRule`. **Sin ningún código de país.** Dep: 0.2.4. Aceptación: grep de `app/Domain/` sin `VE`, `USD`, `Bs`, `seniat`, `RIF`.
-- [ ] **0.2.5-T** Test: `test_los_enums_del_dominio_fiscal_no_contienen_ningun_codigo_de_pais` — regla que fija: *el dominio ramifica sobre enums genéricos leídos de filas, nunca sobre un país*.
+- [x] **0.2.4** Contrato del actor intermedio: crear `app/Domain/Fiscal/Contracts/ElectronicInvoiceProvider.php` con `submit()` · `assignControl()` · `issue()` · `cancel()` · `queryStatus()` · `deliver()` y los value objects `FiscalDocumentDraft`, `SubmissionReceipt`, `ControlAssignment`, `FiscalDocumentData`, `CancellationReason`, `CancellationReceipt`, `ProviderStatus`, `DeliveryRecipient`, `DeliveryReceipt`. Dep: 0.2.2. Aceptación: `submit()` → `assignControl()` → `issue()` son **tres** pasos; `assignControl()` devuelve `?ControlAssignment` (canal portal no asigna control). · **PR5**: **nueve** value objects — el diseño §C.1 firma `cancel(): CancellationReceipt` y el plan enumeraba ocho.
+- [x] **0.2.4-T** Test: `test_el_contrato_del_proveedor_separa_emitir_asignar_control_y_consolidar` — regla que fija: *el emisor no emite solo; hay un actor intermedio*.
+- [x] **0.2.5** Enums genéricos del dominio fiscal en `app/Domain/Fiscal/Enums/`: `ProviderKind` (3), `SignerModel` (4), `EnvironmentRole` (2), `TaxMethod`, `RoundingRule`. **Sin ningún código de país.** Dep: 0.2.4. Aceptación: grep de `app/Domain/` sin `VE`, `USD`, `Bs`, `seniat`, `RIF`. · **PR5**: las constantes `FiscalProfile::SIGNER_MODELS`, `FiscalProfileEnvironment::ROLES` y `FiscalProvider::KINDS` se **sustituyen** por los enums, sin cambio de esquema: los enums aceptan exactamente los mismos valores, de modo que las filas ya sembradas siguen siendo válidas.
+- [x] **0.2.5-T** Test: `test_los_enums_del_dominio_fiscal_no_contienen_ningun_codigo_de_pais` — regla que fija: *el dominio ramifica sobre enums genéricos leídos de filas, nunca sobre un país*.
 - [ ] **0.2.6** Modelos de la capa: `app/Models/Country.php`, `Currency.php`, `NumberFormat.php`, `FiscalProfile.php`, `FiscalProfileDocumentType.php`, `FiscalProfileEnvironment.php`, `FiscalProfileField.php`, `FiscalTaxScheme.php`, `FiscalStatusVocabulary.php`, `TaxCategory.php`, `TaxRate.php`, `FiscalProvider.php`. Dep: 0.2.1–0.2.3. Aceptación: casts de `evidence_status`/`source_ref`/`rounding_rule`; `TaxRate` expone su `evidence_status`.
-- [x] **0.2.6-T** Test: `test_cada_tasa_sembrada_expone_su_estado_de_evidencia_y_su_fuente` — regla que fija: *un dato no verificado se marca como pendiente, no se afirma*. · **PR3 (parcial)**: `tests/Feature/Domain/ModelCastsTest.php` cubre los casts y las relaciones de los **10 modelos** de esta work unit (`Country`, `Currency`, `NumberFormat`, `FiscalProfile`, `FiscalProfileDocumentType`, `FiscalProfileEnvironment`, `FiscalProfileField`, `FiscalTaxScheme`, `FiscalStatusVocabulary`, `FiscalProvider`). El test completo de los **12** modelos (`TaxCategory` y `TaxRate`) llega con M03 en el PR siguiente: **la tarea 0.2.6 sigue abierta**.
+- [x] **0.2.6-T** Test: `test_cada_tasa_sembrada_expone_su_estado_de_evidencia_y_su_fuente` — regla que fija: *un dato no verificado se marca como pendiente, no se afirma*. · **PR3 (parcial)**: `tests/Feature/Domain/ModelCastsTest.php` cubría los casts y las relaciones de los **10 modelos** de aquella work unit (`Country`, `Currency`, `NumberFormat`, `FiscalProfile`, `FiscalProfileDocumentType`, `FiscalProfileEnvironment`, `FiscalProfileField`, `FiscalTaxScheme`, `FiscalStatusVocabulary`, `FiscalProvider`). El test completo de los **12** modelos (`TaxCategory` y `TaxRate`) llega con M03 en el PR6: **la tarea 0.2.6 sigue abierta**.
 - [ ] **0.2.7** `app/Domain/Tax/TaxContext.php`: contenedor de datos resueltos **antes** de la llamada (`roundingRule`, `taxInclusiveDefault`, `currencyDecimals`, `exemptionMarker`, `formalContributorPhrase`, `seriesPrefixRequiredToken`) — C4: el prefijo "serie" se **compara contra el valor leído**, nunca como literal. Dep: 0.2.5. Aceptación: el contexto se construye desde filas; no hay literales normativos en el dominio.
 - [ ] **0.2.7-T** Test: `test_el_prefijo_de_serie_se_toma_del_perfil_y_no_del_codigo` — regla que fija: *el token normativo obligatorio es un dato, no un literal del dominio*.
 

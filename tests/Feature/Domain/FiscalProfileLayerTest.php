@@ -5,6 +5,7 @@ use App\Models\Currency;
 use App\Models\FiscalProfile;
 use App\Models\FiscalProfileEnvironment;
 use App\Models\FiscalProfileField;
+use App\Models\FiscalProvider;
 use App\Models\FiscalStatusVocabulary;
 use Illuminate\Support\Facades\Schema;
 
@@ -86,8 +87,9 @@ test('test_la_referencia_de_verificacion_se_guarda_como_valor_y_esquema_y_no_com
 });
 
 /**
- * 0.2.6-T (parte) — los conjuntos cerrados de la capa fiscal se validan en el
- * dominio, no en un enum de PHP (los enums genéricos son de 0.2.5, PR siguiente).
+ * 0.2.2-T (parte) — los conjuntos cerrados de la capa fiscal se validan en el
+ * dominio contra los enums genéricos (`SignerModel`, `EnvironmentRole`,
+ * `ProviderKind`).
  */
 test('test_los_conjuntos_cerrados_del_perfil_fiscal_se_validan_en_el_dominio', function () {
     $profile = fiscalLayerProfile();
@@ -117,6 +119,23 @@ test('test_los_conjuntos_cerrados_del_perfil_fiscal_se_validan_en_el_dominio', f
     ]);
 
     expect($environment->fresh()->role)->toBe('issuer');
+
+    // El actor intermedio valida su clase contra el enum `ProviderKind`.
+    expect(fn () => FiscalProvider::create([
+        'fiscal_profile_id' => $profile->id,
+        'code' => 'BAD',
+        'name' => 'Proveedor invalido',
+        'kind' => 'imprenta',
+    ]))->toThrow(InvalidArgumentException::class);
+
+    $provider = FiscalProvider::create([
+        'fiscal_profile_id' => $profile->id,
+        'code' => 'PRINTER',
+        'name' => 'Imprenta de prueba',
+        'kind' => 'printer',
+    ]);
+
+    expect($provider->fresh()->kind)->toBe('printer');
 });
 
 /**

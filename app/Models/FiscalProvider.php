@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Fiscal\Enums\ProviderKind;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,12 +12,6 @@ use InvalidArgumentException;
 class FiscalProvider extends Model
 {
     use HasFactory;
-
-    /**
-     * Conjunto cerrado del actor intermedio. Los enums genéricos del dominio
-     * fiscal son de 0.2.5 (PR siguiente).
-     */
-    public const KINDS = ['printer', 'pac', 'portal'];
 
     protected $fillable = [
         'fiscal_profile_id', 'code', 'name', 'kind', 'base_url', 'auth_scheme',
@@ -35,9 +30,9 @@ class FiscalProvider extends Model
     protected static function booted(): void
     {
         static::saving(function (self $provider): void {
-            if (! in_array($provider->kind, self::KINDS, true)) {
+            if (ProviderKind::tryFrom((string) $provider->kind) === null) {
                 throw new InvalidArgumentException(
-                    'kind must be one of: '.implode(', ', self::KINDS)
+                    'kind must be one of: '.implode(', ', array_column(ProviderKind::cases(), 'value'))
                 );
             }
         });
