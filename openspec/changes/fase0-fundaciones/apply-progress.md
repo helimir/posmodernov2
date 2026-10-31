@@ -1,29 +1,29 @@
 # Apply progress — fase0-fundaciones
 
-**Change**: `fase0-fundaciones` · **Work unit**: PR1-ciimientos-a · **Branch**: `feature/fase0-01-ciimientos-a`
+**Change**: `fase0-fundaciones` · **Work unit**: PR2-ciimientos-b · **Branch**: `feat/fase0-02-ciimientos-b`
 **Mode**: Strict TDD (`strict_tdd: true`, runner `./vendor/bin/pest` sobre PostgreSQL 17 `pos_moderno_v2_test`)
-**Chain strategy**: `stacked-to-main` · **Presupuesto**: 800 líneas (dentro: 797 authored)
+**Chain strategy**: `stacked-to-main` · **Presupuesto**: 800 líneas por PR
 
 ## Estado
 
 | Tarea | Estado | Nota |
 |---|---|---|
-| 0.1.1 Dependencias de dominio | ✅ | `brick/math` ^0.14.8, `mike42/escpos-php` ^5.0 |
+| 0.1.1 Dependencias de dominio | ✅ | `brick/math` ^0.14.8, `mike42/escpos-php` ^5.0 (PR1) |
 | 0.1.1-T | ✅ | `tests/Unit/DomainDependenciesTest.php` |
-| 0.1.2 Segunda conexión `pgsql_b` | ✅ | `config/database.php` |
+| 0.1.2 Segunda conexión `pgsql_b` | ✅ | `config/database.php` (PR1) |
 | 0.1.2-T | ✅ | `tests/Feature/Database/SecondConnectionTest.php` |
-| 0.1.3 Interruptores de módulo | ✅ | `config/fiscal.php`, `config/sync.php`, `config/print.php`, `.env.example` |
+| 0.1.3 Interruptores de módulo | ✅ | `config/fiscal.php`, `config/sync.php`, `config/print.php`, `.env.example` (PR1) |
 | 0.1.3-T | ✅ | `tests/Feature/Domain/ModuleSwitchesTest.php` |
-| 0.1.4 Migrations M04 + M05 | ✅ | `stores`/`store_settings`/`store_fiscal_registrations` · `roles`/`permissions`/`role_permissions`/`role_store_scopes`/`login_logs`/`dashboard_shortcuts` |
+| 0.1.4 Migrations M04 + M05 | ✅ | `stores`/`store_settings`/`store_fiscal_registrations` · `roles`/`permissions`/`role_permissions`/`role_store_scopes`/`login_logs`/`dashboard_shortcuts` (PR1) |
 | 0.1.4-T | ✅ | `tests/Feature/Domain/TypedStoreAndPermissionTablesTest.php` |
-| 0.1.5 Migrations M06 + M07 | ✅ | edición de la migración base de `users` + `password_reset_tokens`/`user_settings` + `settings` |
+| 0.1.5 Migrations M06 + M07 | ✅ | edición de la migración base de `users` + `password_reset_tokens`/`user_settings` + `settings` (PR1) |
 | 0.1.5-T | ✅ | `tests/Feature/Domain/PasswordAndTypedSettingsTest.php` |
-| 0.1.6 M25 + M26 | ⬜ | **PR2** — fuera de esta unidad |
-| 0.1.6-T | ⬜ | **PR2** — fuera de esta unidad |
-| 0.1.7 Modelos base | ◐ **parcial** | 8 modelos base + `User` entregados; **se completa en el PR2** con los 5 modelos de i18n/outbox (`Language`, `LanguageTranslation`, `SmsMessage`, `SmsProvider`, `MessageTemplate`), cuyas tablas son M25–M26 |
-| 0.1.7-T | ✅ | `tests/Feature/Domain/ModelCastsTest.php` |
+| 0.1.6 M25 + M26 | ✅ | M25: `languages`/`language_translations`/`sms_providers`/`message_templates`/`sms_messages` (outbox) · M26: `audit_logs` (auditoría de negocio) |
+| 0.1.6-T | ✅ | `tests/Feature/Domain/SmsProviderCredentialsTest.php` |
+| 0.1.7 Modelos base | ✅ **cerrada** | los **13** modelos existen: 8 base + `User` (PR1) y 5 de i18n/outbox + `AuditLog` (esta unidad) |
+| 0.1.7-T | ✅ | `tests/Feature/Domain/ModelCastsTest.php` (extendido de 8 a 13 modelos) |
 
-**11 de 152 tareas del change completadas.** 0.1.7 queda abierta a propósito: el corte es el que fija la tabla §Cadena de entrega (PR1 = 8 modelos; PR2 = i18n/outbox/auditoría).
+**14 de 152 tareas del change completadas.** 0.1.7 queda **cerrada**: los 13 modelos de la tarea existen y su test gemelo los cubre.
 
 ## TDD Cycle Evidence
 
@@ -31,63 +31,56 @@
 |---|---|---|---|
 | 0.1.1-T | ❌ `Failed asserting that false is true` (BigDecimal y Printer ausentes) | ✅ `composer require brick/math mike42/escpos-php` → 1 passed (3 assertions) | — |
 | 0.1.2-T | ❌ `Failed asserting that null is identical to 'pos_moderno_v2_test'` | ✅ `pgsql_b` en `config/database.php` → 1 passed (2 assertions) | — |
-| 0.1.3-T | ❌ `BindingResolutionException: Target class [config] does not exist` | ✅ 3 configs + `.env.example` → 1 passed (3 assertions) | el test se movió de `tests/Unit` a `tests/Feature`: `tests/Unit` no arranca la app (ver *Desviaciones*) |
+| 0.1.3-T | ❌ `BindingResolutionException: Target class [config] does not exist` | ✅ 3 configs + `.env.example` → 1 passed (3 assertions) | el test se movió de `tests/Unit` a `tests/Feature` |
 | 0.1.4-T | ❌ `Failed asserting that true is true` (`store_settings` inexistente) | ✅ M04 + M05 → 1 passed (21 assertions) | — |
 | 0.1.5-T | ❌ `Failed asserting that false is true` (`user_settings` inexistente) | ✅ M06 + M07 + edición de `users` → 1 passed (16 assertions) | — |
-| 0.1.7-T | ❌ `Failed asserting that null is an instance of HasOne` | ✅ 8 modelos + `User` → 1 passed (33 assertions) | la aserción de relación pasó de `$model->rel` a `$model->rel()` (ver *Desviaciones*) |
+| 0.1.6-T | ❌ `Failed asserting that an array contains 'credential_env_prefix'` | ✅ M25 + M26 → 1 passed (18 assertions) | — |
+| 0.1.7-T | ❌ `Class "App\Models\Language" not found` | ✅ 5 modelos de i18n/outbox + `AuditLog` (M25–M26) → 1 passed (66 assertions) | `AuditLog` declara además `action`/`entity_type`/`ip_address` como `string` (los casts de PR1 eran incompletos) |
 
-## Work Unit Evidence
+## Work Unit Evidence (PR2-ciimientos-b)
 
 | Evidencia | Valor |
 |---|---|
-| Test focalizado | `php vendor/bin/pest --filter='dependencias_de_decimal_exacto\|segunda_conexion_pgsql_b\|interruptores_de_modulo\|tablas_de_tienda_y_de_permisos\|contrasenas_se_guardan_con_hash\|modelos_declaran_sus_casts'` → **6 passed (78 assertions)**; suite completa `./vendor/bin/pest` → **33 passed (142 assertions)** |
-| Harness de runtime | `php artisan migrate:fresh --force` sobre PostgreSQL 17 → **7 migraciones en verde** (0001×3 + M04–M07) |
-| Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`. Sin datos de producción: todo el esquema se reconstruye. Reversible sin afectar a PR2–PR16 (M04–M07 son la base de la cadena). |
-| Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes** fuera de esta unidad (idéntico a `main`); `npm run lint:check` → limpio; `npm run typecheck` → limpio; `public/build/manifest.json` presente |
+| Test focalizado | `php vendor/bin/pest --filter="credenciales_de_proveedor"` → **1 passed (18 assertions)**; `php vendor/bin/pest --filter="modelos_declaran_sus_casts"` → **1 passed (66 assertions)**; suite completa `./vendor/bin/pest` → **34 passed (193 assertions)** (baseline del PR1: 33 passed / 142 assertions) |
+| Harness de runtime | `php artisan migrate:fresh --seed --force` → **9 migraciones en verde** (0001×3 + M04–M07 + M25–M26); `tinker` → outbox `status=pending`/`sent_at=NULL`, traducción sin traducir con `lang_value=NULL`, fila de proveedor con sólo `credential_env_prefix` (sin secreto), `audit_logs.context` con payload JSON |
+| Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran M25, M26, los 5 modelos y la extensión del test. No toca M04–M07 (base de la cadena) ni ninguna tabla de PR3–PR16 |
+| Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `public/build/manifest.json` presente |
 
-## Ficheros
+## Ficheros de esta unidad
 
 | Fichero | Acción | Qué hace |
 |---|---|---|
-| `composer.json` / `composer.lock` | Modificado | `brick/math` (decimal exacto en PHP puro) + `mike42/escpos-php` (ADR-0005) |
-| `config/database.php` | Modificado | Segunda sesión PostgreSQL `pgsql_b` sobre la misma base (design §E.1) |
-| `config/fiscal.php`, `config/sync.php`, `config/print.php` | Creado | Interruptores de módulo, los tres en `false` por defecto |
-| `.env.example` | Modificado | Declara los tres interruptores |
-| `database/migrations/0001_01_01_000000_create_users_table.php` | Modificado | D18: se edita la migración base (`group_id`, columnas del legacy, `raw_password`/`preference`/`pass_reset_code`/`reset_code_time` **no** existen) |
-| `database/migrations/2026_11_01_000004_create_stores_table.php` | Creado | M04: `stores` sin blob + `store_settings` tipada + `store_fiscal_registrations` |
-| `database/migrations/2026_11_01_000005_create_roles_permissions_tables.php` | Creado | M05: `roles`, `permissions`, `role_permissions`, `role_store_scopes`, `login_logs`, `dashboard_shortcuts` |
-| `database/migrations/2026_11_01_000006_edit_users_table_add_user_settings.php` | Creado | M06: `password_reset_tokens`, `user_settings`, FK `users.group_id → roles.id` |
-| `database/migrations/2026_11_01_000007_create_settings_table.php` | Creado | M07: ajustes globales tipados `key`/`value`/`type` |
-| `app/Models/{Store,StoreSetting,StoreFiscalRegistration,Role,Permission,Setting,UserSetting,AuditLog}.php` | Creado | Modelos base con casts exactos y relaciones con FK |
-| `app/Models/User.php` | Modificado | `hashed`, sin `raw_password`/`preference`, `group_id → roles` |
-| `tests/Unit/DomainDependenciesTest.php` | Creado | 0.1.1-T |
-| `tests/Feature/Database/SecondConnectionTest.php` | Creado | 0.1.2-T |
-| `tests/Feature/Domain/ModuleSwitchesTest.php` | Creado | 0.1.3-T |
-| `tests/Feature/Domain/TypedStoreAndPermissionTablesTest.php` | Creado | 0.1.4-T |
-| `tests/Feature/Domain/PasswordAndTypedSettingsTest.php` | Creado | 0.1.5-T |
-| `tests/Feature/Domain/ModelCastsTest.php` | Creado | 0.1.7-T |
+| `database/migrations/2026_11_01_000025_create_languages_and_messages_table.php` | Creado | M25: i18n (`languages`, `language_translations`) + mensajería (`sms_providers` con `credential_env_prefix`, `message_templates`, `sms_messages` como outbox con `status`/`sent_at`) |
+| `database/migrations/2026_11_01_000026_create_audit_logs_table.php` | Creado | M26: auditoría de **negocio** (actor, acción, entidad, payload), distinta de la fiscal append-only `fiscal_document_events` |
+| `app/Models/{Language,LanguageTranslation,MessageTemplate,SmsMessage,SmsProvider}.php` | Creado | Modelos con casts exactos y relaciones con FK; `SmsProvider::credential()` resuelve el secreto desde el entorno |
+| `app/Models/AuditLog.php` | Modificado | La tabla de M26 ya existe: docblock actualizado y casts `action`/`entity_type`/`ip_address` declarados |
+| `tests/Feature/Domain/SmsProviderCredentialsTest.php` | Creado | 0.1.6-T: ninguna credencial en claro; el secreto sale del entorno por prefijo |
+| `tests/Feature/Domain/ModelCastsTest.php` | Modificado | 0.1.7-T extendido a los 13 modelos (casts + relaciones con FK) |
 
 ## Desviaciones del diseño
 
-1. **FK `stores.country_id → countries.id` diferida a M27.** `countries` la crea M01, que aterriza en el PR3; en el orden final de migraciones M01 corre **antes** que M04, pero M01 no puede añadir una FK a `stores` (la tabla aún no existe). M04 crea la columna indexada y la restricción se añade en M27 (`add_domain_indexes_and_constraints`), que el propio diseño designa como la migración de FKs tardías. Sin esta diferencia, `migrate:fresh` del PR1 fallaría.
-2. **FK `users.group_id → roles.id` añadida en M06, no en la migración base.** La columna se crea en la migración base de `users` (D18) y la restricción en M06, que es la primera migración que corre después de M05 (`roles`). La migración base no puede declarar la FK: `roles` no existe todavía.
-3. **`password_reset_tokens` se crea en M06** y se retira de la migración base de `users`, como fija el diseño (M06 «crea `password_reset_tokens`, `user_settings`»). Se conserva la forma de Laravel (`email` PK, `token`, `created_at`) para no romper `PasswordResetTest`.
-4. **La aserción de relación usa `$model->rel()` y no `$model->rel`.** En Laravel 12, `getRelationshipFromMethod()` devuelve el **resultado** de la consulta, no la instancia de `Relation`; el objeto de relación se obtiene del método. Corregido tras el primer RED.
-5. **0.1.7 queda parcial.** El corte PR1/PR2 lo fija la tabla §Cadena de entrega del propio plan (PR1 = 8 modelos; PR2 = M25–M26 + 6 modelos). No se ha estirado el alcance ni inventado las tablas de M25–M26.
+1. **FK `stores.country_id → countries.id` diferida a M27** (PR1). `countries` la crea M01, en el PR3; M04 crea la columna indexada y M27 añade la restricción.
+2. **FK `users.group_id → roles.id` añadida en M06** (PR1): la migración base de `users` no puede declarar la FK porque `roles` no existe todavía.
+3. **`password_reset_tokens` se crea en M06** (PR1) y se retira de la migración base de `users`, como fija el diseño.
+4. **La aserción de relación usa `$model->rel()` y no `$model->rel`** (PR1): en Laravel 12 `getRelationshipFromMethod()` devuelve el resultado de la consulta.
+5. **`message_templates` conserva los TAGS del legacy, no el cuerpo del mensaje.** `mail_sms_tag` guardaba `tagname` + `type`; el legacy no guardaba cuerpos, así que la tabla destino es el catálogo de marcadores `{{…}}` (`tag_name` + `type`).
+6. **La resolución del secreto vive en el modelo, no en un servicio.** `SmsProvider::credential($variable)` lee `PREFIX_VARIABLE` del entorno (`Illuminate\Support\Env`): es el mínimo que hace verificable la regla de 0.1.6-T sin adelantar el job de envío de Fase 2.
+7. **`language_translations` no conserva `key_type`** (`specific`/`default` del legacy). El contrato que fija la tarea es `lang_key`/`lang_value`/`lang_id`, y ninguna regla del change usa `key_type`.
+8. **`timestamptz` en el outbox y en la auditoría.** `sms_messages.sent_at`/`scheduled_at` y `audit_logs.created_at`/`updated_at` son `timestamptz` (design §A.2: "timestamptz para auditoría"); el resto de M25 usa `timestamp`, como las tablas de M04–M07.
 
 ## Fuera de esta unidad (no implementado)
 
-- **0.1.6 / 0.1.6-T** (M25–M26) → **PR2**.
-- **0.9.5 / 0.9.5-T** (`test_el_arnes_de_concurrencia_deja_la_base_limpia_y_la_segunda_conexion_apunta_a_la_misma_base`) → **PR15**. La fase 0.9 está explícitamente fuera del alcance de esta work unit; 0.1.2 deja lista la conexión `pgsql_b` que el arnés necesita.
-- **0.1.7 (resto)**: los 5 modelos de i18n/outbox → **PR2**.
-- Todo `0.2.*`–`0.9.*` y `T1–T3`.
+- **0.2.\***–**0.9.\***, **T1–T3** (`0.3.10–0.3.12` → PR6), y todo `0.9.5` (→ PR15).
+- El **job de envío SMS** (Fase 2): aquí sólo el esquema y el modelo del outbox.
+- `fiscal_document_events` (auditoría fiscal append-only): es de M22, en el PR6.
 
 ## Hallazgos
 
-- `vendor/bin/pint --test` **ya fallaba en `main`** con 9 ficheros del esqueleto de Laravel (`NewPasswordController`, `PasswordResetLinkController`, `RegisteredUserController`, `VerifyEmailController`, `LoginRequest`, `bootstrap/providers.php`, `config/auth.php`, `UserFactory`, `app/Models/User.php`). Los 8 restantes son preexistentes y ajenos a esta unidad: **no se han tocado**. `app/Models/User.php` sí estaba en la lista y se ha corregido (fichero de esta unidad): la lista baja de 9 a 8.
-- `tests/Unit` **no arranca la aplicación** en este proyecto (`tests/Pest.php` sólo extiende `TestCase` + `RefreshDatabase` en `Feature`). Cualquier test que necesite `config()` o la BD va en `tests/Feature`.
-- El nombre canónico de **0.1.7-T** en `tasks.md` L156 es `test_los_modelos_declaran_sus_casts_de_importes_y_de_json`, no `test_las_tablas_de_tienda_y_de_permisos_no_guardan_blobs_php_serializados` (ese es el de 0.1.4-T). Se implementó el canónico de `tasks.md`.
+- `vendor/bin/pint --test` **ya fallaba en `main`** con 8 ficheros del esqueleto de Laravel (`NewPasswordController`, `PasswordResetLinkController`, `RegisteredUserController`, `VerifyEmailController`, `LoginRequest`, `bootstrap/providers.php`, `config/auth.php`, `UserFactory`). **No se han tocado**: ninguno pertenece a esta unidad.
+- `Schema::getColumnListing()` sobre una tabla inexistente devuelve `[]` en vez de lanzar: el RED de 0.1.6-T falla por aserción, no por excepción.
+- `Illuminate\Support\Env` lee `putenv()` (adaptador activo por defecto), lo que permite probar la resolución del secreto sin tocar `.env`.
+- `tests/Unit` **no arranca la aplicación** en este proyecto (`tests/Pest.php` sólo extiende `TestCase` + `RefreshDatabase` en `Feature`).
 
 ## Siguiente unidad
 
-**PR2-ciimientos-b** (`feature/fase0-02-ciimientos-b`): M25–M26 + los 6 modelos de i18n/outbox/auditoría, cierra 0.1.6, 0.1.6-T y 0.1.7.
+**PR3-ciimientos-c** (`feat/fase0-03-pais-fiscal-a`): M01–M02 + los 10 modelos de país/perfil fiscal, cierra 0.2.1–0.2.3 y 0.2.6.
