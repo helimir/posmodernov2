@@ -1,9 +1,19 @@
 <?php
 
 use App\Models\AuditLog;
+use App\Models\Country;
+use App\Models\Currency;
+use App\Models\FiscalProfile;
+use App\Models\FiscalProfileDocumentType;
+use App\Models\FiscalProfileEnvironment;
+use App\Models\FiscalProfileField;
+use App\Models\FiscalProvider;
+use App\Models\FiscalStatusVocabulary;
+use App\Models\FiscalTaxScheme;
 use App\Models\Language;
 use App\Models\LanguageTranslation;
 use App\Models\MessageTemplate;
+use App\Models\NumberFormat;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Setting;
@@ -80,4 +90,63 @@ test('test_los_modelos_declaran_sus_casts_de_importes_y_de_json', function () {
         ->and((new MessageTemplate)->messages())->toBeInstanceOf(HasMany::class)
         ->and((new AuditLog)->user())->toBeInstanceOf(BelongsTo::class)
         ->and((new AuditLog)->store())->toBeInstanceOf(BelongsTo::class);
+});
+
+/**
+ * 0.2.6-T (parte) — los modelos de la capa de país y fiscal declaran sus casts
+ * y sus relaciones con FK. `TaxCategory` y `TaxRate` llegan con M03 (PR
+ * siguiente): la tarea 0.2.6 sigue abierta.
+ */
+test('test_los_modelos_de_la_capa_de_pais_y_fiscal_declaran_sus_casts_y_sus_relaciones', function () {
+    expect((new Country)->getCasts())->toHaveKey('default_currency_id', 'integer')
+        ->and((new Country)->getCasts())->toHaveKey('iso_code', 'string')
+        ->and((new Currency)->getCasts())->toHaveKey('decimals', 'integer')
+        ->and((new Currency)->getCasts())->toHaveKey('code', 'string')
+        ->and((new NumberFormat)->getCasts())->toHaveKey('country_id', 'integer')
+        ->and((new NumberFormat)->getCasts())->toHaveKey('invoice_number_format', 'string')
+        ->and((new FiscalProfile)->getCasts())->toHaveKey('requires_control_number', 'boolean')
+        ->and((new FiscalProfile)->getCasts())->toHaveKey('holes_allowed', 'boolean')
+        ->and((new FiscalProfile)->getCasts())->toHaveKey('tax_inclusive_default', 'boolean')
+        ->and((new FiscalProfile)->getCasts())->toHaveKey('signer_model', 'string')
+        ->and((new FiscalProfile)->getCasts())->toHaveKey('hash_algorithm', 'string')
+        ->and((new FiscalProfile)->getCasts())->toHaveKey('signature_scheme', 'string')
+        ->and((new FiscalProfile)->getCasts())->toHaveKey('rounding_rule', 'string')
+        ->and((new FiscalProfile)->getCasts())->toHaveKey('effective_from', 'date')
+        ->and((new FiscalProfileDocumentType)->getCasts())->toHaveKey('tax_treatment', 'string')
+        ->and((new FiscalProfileDocumentType)->getCasts())->toHaveKey('requires_parent_reference', 'boolean')
+        ->and((new FiscalProfileDocumentType)->getCasts())->toHaveKey('exemption_marker', 'string')
+        ->and((new FiscalProfileEnvironment)->getCasts())->toHaveKey('role', 'string')
+        ->and((new FiscalProfileEnvironment)->getCasts())->toHaveKey('provider_id', 'integer')
+        ->and((new FiscalProfileField)->getCasts())->toHaveKey('key', 'string')
+        ->and((new FiscalProfileField)->getCasts())->toHaveKey('value', 'string')
+        ->and((new FiscalProfileField)->getCasts())->toHaveKey('required', 'boolean')
+        ->and((new FiscalProfileField)->getCasts())->toHaveKey('evidence_status', 'string')
+        ->and((new FiscalProfileField)->getCasts())->toHaveKey('source_ref', 'string')
+        ->and((new FiscalTaxScheme)->getCasts())->toHaveKey('is_withholding', 'boolean')
+        ->and((new FiscalStatusVocabulary)->getCasts())->toHaveKey('native_code', 'string')
+        ->and((new FiscalStatusVocabulary)->getCasts())->toHaveKey('generic_status', 'string')
+        ->and((new FiscalStatusVocabulary)->getCasts())->toHaveKey('is_cancellation', 'boolean')
+        ->and((new FiscalProvider)->getCasts())->toHaveKey('kind', 'string')
+        ->and((new FiscalProvider)->getCasts())->toHaveKey('is_active', 'boolean');
+
+    expect((new Country)->defaultCurrency())->toBeInstanceOf(BelongsTo::class)
+        ->and((new Country)->numberFormat())->toBeInstanceOf(HasOne::class)
+        ->and((new Country)->fiscalProfiles())->toBeInstanceOf(HasMany::class)
+        ->and((new NumberFormat)->country())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalProfile)->country())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalProfile)->defaultCurrency())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalProfile)->documentTypes())->toBeInstanceOf(HasMany::class)
+        ->and((new FiscalProfile)->environments())->toBeInstanceOf(HasMany::class)
+        ->and((new FiscalProfile)->fields())->toBeInstanceOf(HasMany::class)
+        ->and((new FiscalProfile)->taxSchemes())->toBeInstanceOf(HasMany::class)
+        ->and((new FiscalProfile)->statusVocabularies())->toBeInstanceOf(HasMany::class)
+        ->and((new FiscalProfile)->providers())->toBeInstanceOf(HasMany::class)
+        ->and((new FiscalProfileDocumentType)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalProfileEnvironment)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalProfileEnvironment)->provider())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalProfileField)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalTaxScheme)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalStatusVocabulary)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalProvider)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
+        ->and((new FiscalProvider)->environments())->toBeInstanceOf(HasMany::class);
 });
