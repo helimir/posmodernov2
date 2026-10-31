@@ -97,6 +97,25 @@ return [
             'sslmode' => 'prefer',
         ],
 
+        /*
+        | Second PostgreSQL session, on the same database as "pgsql" on
+        | purpose: row-level locking is only real across two distinct
+        | PostgreSQL sessions. See design.md §E.1.
+        */
+        'pgsql_b' => [
+            'driver' => 'pgsql',
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '5432'),
+            'database' => env('DB_DATABASE', 'pos_moderno_v2_test'),
+            'username' => env('DB_USERNAME', 'pos'),
+            'password' => env('DB_PASSWORD', 'pos'),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => 'prefer',
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),
