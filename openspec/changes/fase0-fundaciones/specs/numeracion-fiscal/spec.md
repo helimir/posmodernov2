@@ -8,7 +8,7 @@ Reserva atómica del correlativo fiscal y del Número de Control. El número se 
 
 ### Requirement: Dos series con dos reservas atómicas independientes
 
-`fiscal_series` MUST discriminating por `series_role` (`document` del emisor, `control` de la imprenta digital) y por `assigned_by`. Un documento fiscal MUST tener sus propias reservas: una del número de documento y otra del número de control, independientes entre sí. La reserva MUST ejecutarse con `UPDATE … RETURNING` dentro de la transacción de emisión; el sistema MUST NOT derivar el número con `rowCount()` ni del último registro leído.
+`fiscal_series` MUST distinguirse por `series_role` (`document` del emisor, `control` de la imprenta digital) y por `assigned_by`. Un documento fiscal MUST tener sus propias reservas: una del número de documento y otra del número de control, independientes entre sí. La reserva MUST ejecutarse con `UPDATE … RETURNING` dentro de la transacción de emisión; el sistema MUST NOT derivar el número con `rowCount()` ni del último registro leído.
 
 **Trazabilidad:** S3 · Criterio C4 · SNAT/2026/00093 arts. 8.2, 8.3 y 27 · SNAT/2024/000102 art. 30
 
