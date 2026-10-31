@@ -1,8 +1,19 @@
 # Design: Fase 0 — Fundaciones
 
-> **Pasada 1 de 2.** Esta pasada fija el **esquema destino**, los **tres flujos transaccionales** y los **contratos de núcleo**.
-> La pasada 2 añade: **D.** los 6 ADR · **E.** plan de testing ejecutable · **F.** trazabilidad de los 44 requisitos.
+> **Pasada 2 de 2 — el diseño queda cerrado.** La pasada 1 fijó el **esquema destino** (§A), los **tres flujos transaccionales** (§B) y los **contratos de núcleo** (§C).
+> Esta pasada añade: **§D** los 6 ADR · **§E** plan de testing ejecutable · **§F** trazabilidad de los 44 requisitos.
 > Reglas aplicadas: `openspec/config.yaml → rules.design` (diagramas de secuencia, decisiones con motivo, escritura atómica con bloqueo de fila, correlativo con `UPDATE … RETURNING`).
+
+## Estado de la fase de diseño
+
+| Aspecto | Estado |
+|---|---|
+| Pasada | **2 de 2** — esta pasada **cierra** el diseño de `fase0-fundaciones` |
+| Secciones | §A–§C fijadas en la pasada 1 · **§D, §E y §F** añadidas en esta pasada |
+| Cobertura | **44 / 44 requisitos con diseño** (§F.1) · **0 requisitos sin diseño** |
+| Conflictos | **C1 y C5 RESUELTOS** por decisión del usuario · C2, C3, C4, C6 y C7 resueltos en el diseño · **C8, C9 y C10 nuevos**, documentados con propuesta y **no resueltos** |
+| Preguntas abiertas | 6, cada una con **recomendación** y motivo; ninguna bloquea `sdd-tasks` |
+| Siguiente fase | `sdd-tasks` |
 
 ## Enfoque técnico
 
@@ -10,7 +21,7 @@ El legacy **no se porta**: se reemplaza. Fase 0 = **esquema destino + núcleo pu
 
 | Pieza | Decisión | Ancla |
 |---|---|---|
-| Esquema | 27 migraciones Laravel sobre PostgreSQL 17; 109 tablas de negocio; `numeric(25,4)`; FKs reales | `exploration.md` §3, `research/estandares-latam.md` §5 |
+| Esquema | 27 migraciones Laravel sobre PostgreSQL 17 (**27 migraciones ≠ 27 tablas**: hay **54 tablas nuevas**) · 109 tablas de negocio; `numeric(25,4)`; FKs reales | `exploration.md` §3, `research/estandares-latam.md` §5 |
 | Fiscal | **Datos**, no código: perfil → tipos de documento → ambientes → esquemas de impuesto → vocabulario de estado → proveedores → series | `research/estandares-latam.md` §5.4–5.8 |
 | Numeración | **Dos** series y **dos** reservas atómicas independientes (`series_role` `document` \| `control`) | SNAT/2026/00093 arts. 8.2, 8.3, 9.1, 27 |
 | Motor de impuestos | `TaxCalculator` **puro** (sin I/O), snapshots congelados | `exploration.md` §6 |
@@ -115,6 +126,8 @@ Orden = dependencias de FK. Los nombres siguen la convención Laravel (`YYYY_MM_
 Las 73 del legacy cuadran exacto: **55 + 17 + 1 = 73**.
 Desglose de las **54 nuevas**: 22 nacidas de la fusión (nombres nuevos: `sales`, `sale_items`, `sale_totals`, `sale_item_lot_consumptions`, `purchases`, `purchase_items`, `purchase_totals`, `inventory_lots`, `ledger_entries`, `quotations*`, `orders*`, `tax_categories`, `tax_rates`, `currencies`, `fiscal_documents`, `settings`, `store_settings`, `print_targets`) · 19 de la capa de país/fiscal · 13 de plataforma/operativa.
 
+> ⚠ **Aritmética de la tabla (C10):** la columna de la tabla anterior suma 111 (55 + 24 + 32) porque las **2 tablas "ya conservadas"** de la fila de fusión están contadas también dentro de las 55. El total correcto es `55 + 22 + 19 + 13 = 109`. La tabla se deja tal cual hasta que se aplique el delta propuesto en *Conflictos detectados → C10*; no afecta a los dos invariantes que sí son exactos: **73 = 55 + 17 + 1** (legacy) y **109 = 55 + 54** (destino).
+
 ---
 
 ## B) Diagramas de secuencia
@@ -169,6 +182,8 @@ POS │ Dominio (T1)                       │ Fiscal (T2)              │ Impr
 | `TaxCalculator` lanza | `ROLLBACK` de T1 ⇒ nada persistido. |
 | Falla la emisión en T2 | T1 ya está confirmada ⇒ la venta queda `status='fiscal_failed'`; **las reservas NO se liberan**; el reintento **reutiliza la misma reserva** (`fiscal_document_reservations`), no quema números nuevos. |
 | Falla la impresión | `print_jobs.status='failed'`; el documento sigue `issued`; la reimpresión crea un trabajo nuevo con `reason='reprint'` y **0 reservas nuevas**. |
+
+> **Secuencing de T2 (decisión C5).** La llamada HTTP al proveedor (`submit` → `assignControl`) ocurre **fuera** de la transacción de base de datos. T2 es la transacción que persiste `fiscal_documents` + `fiscal_document_events` + `fiscal_document_control_assignments` **una vez recibida** la respuesta. Así no se mantiene ningún bloqueo de fila durante I/O externo (motivo de D4) y la unidad de escritura sigue siendo atómica. Si la llamada HTTP falla, **no hay transacción que revertir**: la venta queda `sales.status='fiscal_failed'` y el reintento **reutiliza la misma reserva** (`fiscal_document_reservations`), sin quemar números nuevos.
 
 ### B.2 Consumo FIFO
 
@@ -395,7 +410,7 @@ Terminales legacy ──► POST sync.php (wire v2 intacto) ──► LegacySync
 | `.github/workflows/tests.yml` | Modificar | Job con PostgreSQL 17: `npm ci && npm run build` → `npm run lint` → `npm run typecheck` → `vendor/bin/pint --test` → `./vendor/bin/pest`. `typecheck` entra en el gate. |
 | `README.md` | Crear | Arranque, precondiciones, credenciales del seed. |
 
-## Estrategia de testing (resumen — el plan ejecutable es la pasada 2, §E)
+## Estrategia de testing (resumen — el plan ejecutable es la §E)
 
 | Capa | Qué | Cómo |
 |---|---|---|
@@ -431,51 +446,433 @@ Proyecto **verde**: no hay datos de producción que migrar.
 | Interruptores | `fiscal.emission_enabled` · `sync.legacy_adapter_enabled` · `print.lan_agent_enabled` — todos por defecto **off** hasta que el módulo esté validado. |
 | Saldos de apertura | Dependencia **operativa**: `opening_balances` con `certified_at` + `certified_by`; un comando `ops:check-opening-balances` bloquea el arranque operativo si no hay saldos certificados (P9). |
 
-## Decisiones que serán ADR en la pasada 2
+## D) Los 6 ADR
 
-Seccionadas; cada una con **motivo** y **alternativa descartada** (las 20 filas de la tabla de decisiones son la fuente).
+Seccionados; cada uno con **contexto, decisión, consecuencias y alternativas descartadas**. Los ficheros canónicos están en `docs/adr/`; el **mecanismo** (esquema, diagramas, contratos, plan de tests) queda en §A–§C y §E de este documento.
 
-| ADR | Título | Motivo (una línea) | Alternativa descartada |
-|---|---|---|---|
-| ADR-0001 | Numeración fiscal de dos series con reserva atómica | La norma tiene dos autoridades de numeración; una sola reserva no garantiza nada | Una sola serie (`exploration.md` §5) |
-| ADR-0002 | Actor intermedio emisor / imprenta digital | El emisor no emite solo (F2 art. 18.4/18.6) | `issue()` único sin proveedor |
-| ADR-0003 | Capa de país/fiscal como datos, sin `if` por país | La Fase 2 debe ser "insertar filas" | `if ($country === 'VE')` en el dominio |
-| ADR-0004 | Stock por lotes sin `status` mutable + `FOR UPDATE SKIP LOCKED` | La aritmética no puede desincronizarse; `SKIP LOCKED` da concurrencia sin sobreventa | `status` enum + `UPDATE` sin `id` (defecto legacy P0) |
-| ADR-0005 | Bytes ESC/POS en el servidor + agente en pull + USB descartado | Un solo formateador; el agente agnóstico; Zadig es inviable en desatendido | Render en el agente · push · USB directo |
-| ADR-0006 | Adaptador sync v2: wire intacto, traducción por datos, idempotencia | El terminal sigue siendo legacy y reenvía; cambiar el contrato lo rompería | Reescribir el protocolo · traducir en código · cambiar el wire |
+| ADR | Fichero | Decisión | Motivo (una línea) | Alternativa descartada |
+|---|---|---|---|---|
+| ADR-0001 | `docs/adr/0001-numeracion-fiscal-doble-serie.md` | Numeración fiscal de dos series con reserva atómica | La norma tiene dos autoridades de numeración; una sola reserva no garantiza nada | Una sola serie (`exploration.md` §5) |
+| ADR-0002 | `docs/adr/0002-actor-intermedio-imprenta-digital.md` | Actor intermedio emisor / imprenta digital | El emisor no emite solo (F2 art. 18.4/18.6) | `issue()` único sin proveedor |
+| ADR-0003 | `docs/adr/0003-capa-pais-fiscal-como-datos.md` | Capa de país/fiscal como datos, sin `if` por país | La Fase 2 debe ser "insertar filas" | `if ($country === 'VE')` en el dominio |
+| ADR-0004 | `docs/adr/0004-stock-por-lotes-sin-status-mutable.md` | Stock por lotes sin `status` mutable + `FOR UPDATE SKIP LOCKED` | La aritmética no puede desincronizarse; `SKIP LOCKED` da concurrencia sin sobreventa | `status` enum + `UPDATE` sin `id` (defecto legacy P0) |
+| ADR-0005 | `docs/adr/0005-bytes-escpos-en-el-servidor.md` | Bytes ESC/POS en el servidor + agente en pull + USB descartado | Un solo formateador; el agente agnóstico; Zadig es inviable en desatendido | Render en el agente · push · USB directo |
+| ADR-0006 | `docs/adr/0006-adaptador-sync-v2-wire-intacto.md` | Adaptador sync v2: wire intacto, traducción por datos, idempotencia | El terminal sigue siendo legacy y reenvía; cambiar el contrato lo rompería | Reescribir el protocolo · traducir en código · cambiar el wire |
 
-**Decisiones adicionales de esta pasada que también serán ADR** (menor): D7 (`ledger_lines`), D10 (`brick/math`), D11 (bytes en servidor, ya en ADR-0005), D13 (token por agente), D17 (Redis para nonces), D18 (editar la migración base en verde).
+**Decisiones adicionales que también serán ADR** (menor, no en esta tanda): D7 (`ledger_lines`), D10 (`brick/math`), D11 (bytes en servidor → ya en ADR-0005), D13 (token por agente → ADR-0005 §Consecuencias), D17 (Redis para nonces → ADR-0006 §Decisión), D18 (editar la migración base en verde).
 
-## Requisitos sin diseño en esta pasada
+### D.1 ADR-0001 · Numeración fiscal de dos series con reserva atómica
 
-| Capacidad | Requisito | Motivo |
+**Contexto.** SNAT/2026/00093 distingue **dos** numeraciones con autoridades distintas: la del **documento**, consecutiva y única, a cargo del emisor (art. 8.2), precedida de la palabra "serie" si no hay sistema centralizado (art. 20); y el **Nº de Control**, consecutivo y único por emisor, a cargo de la **imprenta digital** (art. 8.3, 9.1, 27; SNAT/2024/000102 art. 30). El número consumido **no se libera** (art. 8.2, 21, 27; F2 art. 34). El legacy no reserva nada: `generate_invoice_id()` (`_inc/helper/invoice.php:139-172`) deriva del "último `invoice_id`" leído y le suma 1; `unique_transaction_ref_no()` (`:95-109`) usa `rowCount()` de un `SELECT`, que en PDO no es el nº de filas afectadas. Con dos cajas simultáneas, dos documentos reciben el mismo número.
+
+**Decisión.**
+1. `fiscal_series` se distingue por `series_role` (`document` | `control` | `retention_receipt`) y `assigned_by` (`issuer` | `authority` | `printer` | `psp`).
+2. Cada documento fiscal tiene **dos reservas atómicas independientes**, una por serie, dentro de la misma transacción que el documento: `UPDATE fiscal_series SET next_number = next_number + 1 WHERE id = ? AND next_number <= to_number RETURNING next_number - 1`.
+3. El **Nº de Control se reserva localmente como espejo** del rango autorizado de la imprenta (`from_number`/`to_number`/`credential_ref` sembrados) y se **verifica** contra lo que la imprenta devuelve; la discrepancia se registra como evento en `fiscal_document_events`.
+4. La traza vive en `fiscal_document_reservations` (`series_id`, `number`, `series_role`, `reserved_by`, `reserved_at`, `voided_at`).
+5. **La anulación no libera el número** (`status='void'` + `voided_at`); **el rollback sí lo devuelve** (la transacción fallida revierte el contador).
+6. El rollback operativo de la numeración es **apagar, nunca renumerar**: desde el primer documento emitido la numeración es irrecuperable por diseño.
+
+**Consecuencias.** *Positivas:* unicidad correcta por construcción; las dos autoridades con rango, vigencia y ciclo de vida propios; número quemado auditable y defendible; verificable con T1–T3. *Costes:* doble superficie de bloqueo (dos filas de `fiscal_series`); el emisor necesita el rango de control sembrado antes de operar; irreversibilidad desde el primer documento emitido. *Riesgo residual:* la divergencia entre el control reservado y el devuelto por la imprenta se detecta **después** de emitir (T2) ⇒ evento de discrepancia + `sales.status='fiscal_failed'` con reutilización de la reserva.
+
+**Alternativas descartadas.** Una sola serie (`exploration.md` §5) · `SELECT` + `rowCount()` + `+1` (no atómico, prohibido por `rules.design`) · `SELECT … FOR UPDATE` en vez de `RETURNING` (no devuelve el valor reservado en la misma sentencia) · esperar el control de la imprenta antes de numerar (rompe la consecutividad sin huecos y bloquea la caja) · reciclar el correlativo tras anulación (prohibido) · liberar la reserva cuando falla T2 (el número puede haberse publicado: se **reutiliza**, no se devuelve).
+
+### D.2 ADR-0002 · Actor intermedio obligatorio: emisor e imprenta digital
+
+**Contexto.** El emisor **no emite solo**: F2 art. 18.4 obliga a contratar una **imprenta digital autorizada**; el art. 18.6 exige remitirle la estructura para su validación; el art. 29 y F1 art. 42.1 establecen que la **imprenta** asigna el Nº de Control y valida estructura y autenticidad ⇒ el control es **entrada**, no salida. F1 art. 4 enumera los medios (Portal/App del SENIAT, imprenta digital o proveedor autorizado, máquinas fiscales) y el art. 39 permite que el propio sistema sea **imprenta digital**, con obligaciones propias de registro automatizado (art. 44).
+
+**Decisión.**
+1. Toda emisión atraviesa un **actor intermedio** por `ElectronicInvoiceProvider`, que separa fases: `submit(FiscalDocumentDraft): SubmissionReceipt` → `assignControl(SubmissionReceipt): ?ControlAssignment` → `issue(FiscalDocumentDraft, ?ControlAssignment): FiscalDocumentData`, más `cancel()`, `queryStatus()` y `deliver()`.
+2. El actor es **dato**: `fiscal_providers.kind` ∈ `printer` | `pac` | `portal`; el canal concreto es `fiscal_profile_environments` con `provider_id`.
+3. La responsabilidad de la firma es **dato**: `fiscal_profiles.signer_model` ∈ `authority` | `psp` | `printer` | `legal_signature`; sin valor por defecto para `hash_algorithm`/`signature_scheme` (no hay algoritmo en la norma).
+4. El papel del despliegue es **dato**: `fiscal_profile_environments.role` ∈ `issuer` | `printer`.
+5. El control tiene **una única sede**: `fiscal_document_control_assignments` (1:1 con el documento).
+6. El dominio ramifica **sólo** sobre `ProviderKind` (3 valores) y `SignerModel` (4 valores), leídos de filas.
+
+**Consecuencias.** *Positivas:* un solo flujo cubre emisor, imprenta y portal (añadir un canal es una fila); el rol dual queda disponible sin reescribir el núcleo; la fase de emisión es auditable antes de que exista documento; QR, hash y firma dejan de ser supuestos. *Costes:* sin canal configurado no se emite; `assignControl()` puede no devolver control (canal portal) ⇒ retorno nullable e invariante validada por perfil; el control llega **después** del documento ⇒ la numeración de control no puede depender de la respuesta de la imprenta (ADR-0001); el adaptador real está bloqueado por el Manual Técnico del art. 41. *Riesgo residual:* un canal mal configurado falla en T2, no en el alta.
+
+**Alternativas descartadas.** `issue()` único sin proveedor (contradice F2 18.4/18.6 y F1 42.1) · emisión directa al SENIAT como camino único (excluye la imprenta digital) · actor y rol como columnas en `fiscal_profiles` (un despliegue puede tener varios canales) · `if ($kind === 'printer')` (bifurca el núcleo) · duplicar el control en `fiscal_documents` y en `fiscal_document_control_assignments` (dos fuentes de verdad).
+
+### D.3 ADR-0003 · Capa de país/fiscal como datos, sin `if` por país
+
+**Contexto.** `openspec/config.yaml → context` fija la regla de oro (el motor fiscal, de impuestos, de numeración y de formatos es **dato, no código**) y la regla de control (*cambiar de país = insertar filas*). La comparación CL/MX/CO/PA/VE (`research/estandares-latam.md` §4.3) registra **12 divergencias** que obligan a diseño de modelo: impuestos multinivel (D1), doble ubicación del tratamiento fiscal (D2), vocabularios de estado incomparables (D3), cuatro formas de referencia (D4), tres roles de parte (D5), cuatro dueños del sello (D6), tres formas de autorizar el rango (D7), cuatro naturalezas de anulación (D8), QR obligatorio sólo en CO (D9), doble numeración (D10), actor intermedio (D11), RIF opcional para persona natural (D12). En el legacy el prefijo de país vive en **16 sitios** (`get_preference('invoice_view') == 'indian_gst'`), no en un `switch`: la fuga ya es difusa.
+
+**Decisión.**
+1. La capa de país/fiscal es un conjunto de **catálogos**: `countries`, `currencies`, `number_formats`, `fiscal_profiles`, `fiscal_profile_document_types`, `fiscal_profile_environments`, `fiscal_profile_fields`, `fiscal_tax_schemes`, `fiscal_status_vocabularies`, `tax_categories`, `tax_rates`, `fiscal_providers`.
+2. El dominio **sólo** ramifica sobre enums genéricos leídos de filas: `ProviderKind`, `SignerModel`, `EnvironmentRole`, `TaxMethod`, `RoundingRule`. **Nunca** sobre un código de país.
+3. Todo parámetro normativo lleva `evidence_status` y `source_ref`: una tasa no confirmada se siembra `pending_confirmation`.
+4. Frases y tokens obligatorios (prefijo "serie" del art. 20, "Contribuyentes Formales del IVA", marcador `(E)`) se siembran en `fiscal_profile_fields`; el dominio **compara contra el valor leído**.
+5. Control **ejecutable**: `tests/Architecture/NoCountryLiteralsTest.php` escanea `app/Domain/` y falla ante cualquier literal de país, moneda o autoridad, informando fichero, línea, literal y categoría (§E.3).
+
+**Consecuencias.** *Positivas:* la Fase 2 se reduce a sembrar filas; un solo motor sirve todos los perfiles; D1–D12 tienen sede propia en el esquema; cada dato sembrado es rastreable hasta la norma. *Costes:* un país nuevo exige sembrar muchas filas (coste de **datos**, no de código); el test anti-país es un **proxy** (no detecta forks sin literal); el vocabulario genérico es más pobre que el nativo (el código nativo vive en `native_status_code`). *Riesgo residual:* un adaptador de país colocado por error **dentro** de `app/Domain/` puede reintroducir el fork sin que el test lo detecte ⇒ los adaptadores viven fuera (`app/Providers/Fiscal/`) y el test verifica la ruta.
+
+**Alternativas descartadas.** `if ($country === 'VE')` / `switch` de país · una clase de dominio por país · configuración por `config/` (no auditable ni versionable como dato) · interfaces por país (`TaxCalculatorVE`, `TaxCalculatorCL`) · detectar el país por heurística (moneda, decimales, formato) · sin test anti-país (la convención sola ya se erosionó en el legacy).
+
+### D.4 ADR-0004 · Stock por lotes sin `status` mutable + `FOR UPDATE SKIP LOCKED`
+
+**Contexto.** El FIFO del legacy tiene tres defectos verificados en `_inc/model/invoice.php`: (1) el `SELECT` de lotes (`:237`, `:244`) **no tiene `ORDER BY`** ⇒ FIFO no determinista; (2) el `UPDATE` de consumo (`:262-263`) es `UPDATE purchase_item SET total_sell = total_sell + … WHERE store_id = ? AND item_id = ? AND status = ?` **sin `id = ?`** ⇒ con varios lotes activos el consumo se contabiliza **en todos** (hallazgo H1, ausente del catálogo del mapa); (3) cantidades interpoladas en el SQL (`:262`, `:294`). La tríada `qty_in`/`qty_out`/`status` codifica "disponible" con un enum que hay que sincronizar, y la devolución actualiza `purchase_item` con dos claves distintas (`_inc/sell_return.php:142-153`).
+
+**Decisión.**
+1. `inventory_lots` **no tiene `status` mutable**: `available = quantity_received − quantity_consumed + quantity_returned`, como `GENERATED ALWAYS AS (…) STORED` ⇒ exacta por definición.
+2. Todo consumo deja traza en `sale_item_lot_consumptions` (`sale_item_id`, `lot_id`, `quantity`, `unit_cost`).
+3. Consumo `ORDER BY received_at ASC, id ASC` con `FOR UPDATE SKIP LOCKED`.
+4. La devolución repone **el lote exacto** desde la traza: no repone el más antiguo disponible ni crea un lote nuevo.
+5. `product_stores.quantity_in_stock` es **caché** (el requisito lo permite con test de invariante), con índice parcial `inventory_lots (product_id, store_id, received_at, id) WHERE available > 0`.
+6. Un producto de servicio no genera lote ni consume stock.
+
+**Consecuencias.** *Positivas:* no hay estado que pueda desincronizarse; FIFO determinista y auditable; COGS desde la traza y devolución al coste correcto; `SKIP LOCKED` ⇒ dos cajas venden a la vez sin sobreventa; el defecto H1 es estructuralmente imposible. *Costes:* `SKIP LOCKED` puede devolver "stock insuficiente" **aunque exista stock** si el único lote disponible está bloqueado (se acepta: preferible a la sobreventa, y el error es reintentable ⇒ hay que distinguirlo en el mensaje); `available` GENERATED no se indexa por sí sola ⇒ índice parcial; el caché exige un **test de invariante permanente**; `quantity_returned` es una tercera aritmética que el legacy no tenía. *Riesgo residual:* el test de invariante comprueba el caché, no el conteo físico.
+
+**Alternativas descartadas.** `status` enum + `UPDATE` (el defecto del legacy) · `FOR UPDATE` sin `SKIP LOCKED` (serializa las cajas, riesgo de `lock_timeout` en el punto de venta) · reponer el lote "más antiguo disponible" (rompe la traza de coste) · crear un lote nuevo por devolución (infla los lotes y pierde la correspondencia) · derivar el stock siempre por `SUM(available)` (O(lotes) en cada lectura) · `quantity_available` mantenida a mano (reintroduce el estado desincronizable).
+
+### D.5 ADR-0005 · Bytes ESC/POS en el servidor + agente en modo pull; USB directo descartado
+
+**Contexto.** El legacy genera el ESC/POS **en el servidor** (`_inc/print.php:30-31`) pero el endpoint está roto (`dd($data)` en `:29` y un segundo `dd($printer)` en `_inc/lib/escpos.php:32`); su modo "navegador" imprimía **HTML**, no ESC/POS (`PosController.js:881-890`): el binario nunca fue denominador común. En la nube el servidor deja de alcanzar la impresora de la LAN (NAT, firewall, IP privada) ⇒ hace falta un proceso en la LAN. Dos restricciones verificadas condicionan el diseño: **Windows + USB directo exige Zadig** (la ruta `libusb` de `node-escpos/driver` no puede separar el kernel driver en Windows: *"This functionality is not available on Windows"*) y **CP858 no es codificable** en `mike42/escpos-php` (`capabilities.json` declara la tabla 19 sin `iconv`; `CodePage::isEncodable()` devuelve `false`).
+
+**Decisión.**
+1. El **servidor genera los bytes ESC/POS** con `mike42/escpos-php` y los congela en `print_jobs.payload_bytes` + `payload_sha256`. El agente **sólo escribe**.
+2. El agente trabaja en **pull** con long-poll: siempre inicia la conexión (registro, heartbeat, `GET /api/print-agents/jobs`).
+3. **Destinos admitidos**: `tcp://host:9100` o **impresora compartida de Windows** (`smb://`, `LPT1` mapeado). **USB directo excluido**.
+4. **Token por agente** (no por tienda), sólo `token_hash` (argon2id/bcrypt), con `Authorization: Bearer` + `X-Agent-Id`; el servidor fuerza la coincidencia del `agent_id` y **resuelve la tienda desde el `agent_id`**, nunca desde el cuerpo.
+5. El **perfil de impresora es dato** de `print_targets` (`printer_profile`, `charset` con CP850 por defecto, `char_per_line`, `max_qr_payload_bytes`), congelado en el trabajo; si el perfil no soporta QR, la generación **falla en el servidor** con error explícito, y el límite de payload del QR lo impone el servidor (ninguna librería lo valida).
+6. `fiscal_documents.status='issued'` es **independiente** de `print_jobs.status`; una reimpresión crea un trabajo nuevo (`reason='reprint'`, `reprint_of_job_id`), con **0 reservas nuevas** y **0** modificación del documento.
+
+**Consecuencias.** *Positivas:* un único formateador ⇒ el mismo ticket en LAN, servidor y `browser` (que renderiza HTML/PDF desde el **mismo modelo de plantilla**); el agente es **agnóstico al lenguaje** (puede ser Node); el servidor puede **rechazar un ticket no representable antes de enviarlo** (el error aparece en el backoffice, no como un `?` en el papel); el token por agente acota una fuga a **una caja**; `issued` no depende de la impresora. *Costes:* el servidor carga con el render ESC/POS y con la librería; hay que dar de alta las impresoras con su perfil correcto; `escpos-php` no trae composición de ticket; el instalador del agente es **entregable de Fase 1** (riesgo R9); el long-poll mantiene una petición abierta por agente y `poll_after_ms` es un parámetro. *Riesgo residual:* el límite real de payload del QR es el buffer del modelo y no es verificable en este entorno ⇒ valor conservador en `print_targets.max_qr_payload_bytes`, calibrado en Fase 1.
+
+**Alternativas descartadas.** Renderizar el ticket en el agente (tres implementaciones ⇒ tres formatos) · render desde una DSL (el agente vuelve a depender de una librería) · push desde el servidor (exige IP pública, EXP o VPN por terminal; un "push" sobre la conexión abierta por el agente es pull con otra forma) · USB directo (Zadig; para una impresora USB en terminal Windows la salida es la **impresora compartida**, sin driver adicional) · token por tienda (un terminal comprometido de la tienda A podría suplantar a la B) · que el navegador genere ESC/POS (el navegador no habla ESC/POS) · CP858 por defecto (no codificable).
+
+### D.6 ADR-0006 · Adaptador del protocolo sync v2: wire intacto, traducción por datos sembrados, idempotencia por `sync_batches`
+
+**Contexto.** Los terminales offline **siguen siendo legacy** durante la transición (decisión de producto P1): el nuevo sistema reemplaza al legacy y `sync.php` viejo se apaga el mismo día. El payload es **SQL crudo de MySQL con nombres del legacy**: `_inc/lib/database.php:79` escribe `sql . '|' . serialize($args)` en `storage/logs/sql.txt` y `ReadSyncData()` (`_inc/model/cron.php`) lo arma como `[{"sql": …, "args": […]}]`. El maestro nuevo es PostgreSQL 17 con esquema de nombres nuevos ⇒ hay que **traducir identificadores**, no sólo verificar firmas. Dos fallos operacionales verificados que el maestro debe tapar **sin tocar el contrato**: **S1 — no es idempotente** (el maestro confirma en `sync.php:141-148` y el cliente sólo trunca su log si la respuesta fue exitosa ⇒ una respuesta perdida provoca un reenvío idéntico ⇒ violación de PK ⇒ el terminal queda congelado; hallazgo H3, el riesgo operativo nº 1 de la ventana de corte) y **S2 — nonces en sistema de ficheros** (`storage/sync-nonces/`, que no escala a varios contenedores; H4). Además `ReadSyncData()` parte el log con `explode('|')`: un `|` en un literal pierde la operación en silencio (H7).
+
+**Decisión.**
+1. **El contrato de wire queda intacto**: mismas claves JSON, mismo canonizado (`username \n action \n timestamp \n nonce \n sha256(data)`), misma firma `hash_hmac('sha256', …)`, mismo `SYNC_MAX_AGE`, mismo orden de verificación — cliente conocido → timestamp → `hash_equals` de la firma → **sólo después** consumo del nonce — y misma forma de respuesta.
+2. **La traducción de identificadores es un dato sembrado**: `legacy_translation_map` (`legacy_table`, `legacy_column`, `new_table`, `new_column`, `transform`), dirección **legacy → destino**, cubriendo las ~18 tablas del terminal. El reescritor es ligero: sólo identificadores, no un parser SQL completo.
+3. **El lote se aplica en una única transacción**, sólo `INSERT|UPDATE|DELETE`, sin sentencias apiladas; una operación sin `sql`/`args` válidos ⇒ **se rechaza el lote entero**.
+4. **Idempotencia en el maestro**: `sync_batches` con `UNIQUE (client_id, payload_sha256)`; un reenvío con el mismo contenido responde **éxito** sin reaplicar.
+5. **Los nonces viven en Redis** (`SET NX EX`): mismo contrato, mejor implementación; la creación es atómica y el consumo sigue ocurriendo **después** de validar la firma.
+6. El des-escapeado de los valores que el legacy HTML-escapea (`Request`) se normaliza **una vez, en la frontera** del adaptador.
+
+**Consecuencias.** *Positivas:* el terminal legacy **no cambia** (cero coste de despliegue y cero riesgo de congelamiento en la ventana de corte); el fallo S1 desaparece sin tocar el protocolo (es una **adición de servidor**); el mapa es auditable y ajustable sin desplegar; la traducción **falla cerrada**. *Costes:* hay que **mantener el mapa sincronizado con el esquema** (un mapa desalineado rompe el lote ⇒ test que compara el mapa con las tablas y columnas destino); el reescritor no es un parser SQL (una forma no contemplada ⇒ el lote se rechaza; se acepta: el legacy verificado no usa `ON DUPLICATE KEY UPDATE` ni `REPLACE INTO`, y PostgreSQL acepta los backticks como delimitadores); Redis pasa a ser dependencia del sync; la idempotencia por hash cubre reenvíos **idénticos**, no lotes con el mismo contenido y distinto `client_id` (correcto: son clientes distintos). *Riesgo residual:* la traducción es el punto de mayor riesgo de la fase (R4) ⇒ tests de traslación con casos reales del log del terminal y rechazo del lote completo ante cualquier operación no reconocida.
+
+**Alternativas descartadas.** Reescribir el protocolo v2 (los terminales son legacy: cambiarlo los deja sin sincronizar en la ventana de corte) · traducir por tabla en código (18 tablas × código; contradice "datos, no código") · tablas o vistas espejo del legacy (duplican el modelo; `INSERT` sobre vista no es válido) · normalizar el log en el terminal (exige tocar producción) · resolver la idempotencia en el cliente (modifica el terminal, no el maestro) · nonces en ficheros (no escala) · consumir el nonce antes de validar la firma (permite que una petición no autenticada queme nonces ajenos).
+
+
+## E) Plan de testing ejecutable
+
+### E.1 T1–T3: mecanismo concreto, sin `RefreshDatabase`
+
+**Por qué no `RefreshDatabase`.** `RefreshDatabase` envuelve cada test en una transacción que se revierte al terminar. La **segunda conexión** es independiente y **no ve las filas no commiteadas** ⇒ el `SELECT … FOR UPDATE` de A no bloquearía a B ⇒ el test pasaría sin probar el bloqueo. Por eso `numeracion-fiscal` §"T1–T3 verifican la reserva sin `RefreshDatabase`" lo exige explícitamente.
+
+| Aspecto | Con `RefreshDatabase` | Con `DatabaseMigrations` + `TRUNCATE` |
 |---|---|---|
-| `calidad-continua` | CI con PostgreSQL, lint, typecheck, tests y build | Diseño de alto nivel en *Ficheros afectados*; el **gate ejecutable** (orden, caché, matriz de servicios) va en la pasada 2 §E. |
-| `calidad-continua` | Suite Pest del dominio | Las invariantes están diseñadas; el **plan de tests caso por caso** va en la pasada 2 §E. |
-| `calidad-continua` | Cada test nombra la regla de negocio que fija | Convención de nombrado fijada; los **44 nombres** van en la pasada 2 §E. |
-| `calidad-continua` | Seis ADRs y README de arranque | Los 6 ADR están **seccionados** arriba; el texto completo va en la pasada 2 §D. |
-| `calidad-continua` | Baseline verde sin fallos preexistentes | Depende de la ejecución de la suite (pasada 2 §E). |
+| Aislamiento de datos | Sí — transaction + rollback | Manual: `TRUNCATE … RESTART IDENTITY CASCADE` de las tablas tocadas en `afterEach` |
+| Estado del esquema | Sí | Sí (migra y **commitea**) |
+| Visibilidad entre 2 conexiones | **No** | **Sí** — ambas ven el estado commiteado |
+| Bloqueo de fila reproducible | **No** | **Sí** |
+| `SQLSTATE 55P03` reproducible | **No** | **Sí** |
+| Rollback que devuelve el número | **No verificable** (el rollback de Laravel es al final del test, no el de la reserva) | **Sí** |
 
-Los otros **39 requisitos** tienen diseño en esta pasada (A/B/C). La tabla de trazabilidad requisito→diseño es la §F de la pasada 2.
+**Segunda conexión.** Se declara en `config/database.php`:
+
+```php
+'pgsql_b' => [
+    'driver'         => 'pgsql',
+    'host'           => env('DB_HOST', '127.0.0.1'),
+    'port'           => env('DB_PORT', '5432'),
+    'database'       => env('DB_DATABASE', 'pos_moderno_v2_test'),
+    'username'       => env('DB_USERNAME', 'pos'),
+    'password'       => env('DB_PASSWORD', 'pos'),
+    'charset'        => 'utf8',
+    'prefix'         => '',
+    'prefix_indexes' => true,
+    'search_path'    => 'public',
+    'sslmode'        => 'prefer',
+],
+```
+
+Se abre con `DB::connection('pgsql_b')` (Laravel la mantiene viva durante el test y la cierra al destruirla). Debe abrirse **fuera** de la transacción del test: son **dos conexiones PDO distintas** al mismo servidor ⇒ **dos sesiones PostgreSQL distintas** ⇒ los bloqueos de fila son reales, no simulados.
+
+**`SET LOCAL lock_timeout`.** `SET LOCAL` aplica **sólo** a la transacción en curso y se descarta al hacer `COMMIT`/`ROLLBACK`; `SET` persistiría en la sesión y contaminaría los tests siguientes. Por eso va **dentro** de la transacción de B:
+
+```php
+$b = DB::connection('pgsql_b');
+$b->beginTransaction();
+$b->statement("SET LOCAL lock_timeout = '250ms'");
+```
+
+**T1 — secuencia sin huecos** · `tests/Feature/Fiscal/NumberReservationSequenceTest.php`
+1. Una conexión. Serie con `next_number = 100`, `to_number = 200`.
+2. 50 reservas consecutivas con `NumberSeries::reserve($seriesId)` (que ejecuta `UPDATE … RETURNING`).
+3. Aserciones: los 50 números devueltos son `100…149` **en orden** (sin huecos, sin repeticiones); `fiscal_series.next_number == 150`; hay 50 filas en `fiscal_document_reservations` con `series_role='document'`.
+4. T1 **no** necesita dos conexiones: verifica la corrección del contador, no el aislamiento.
+
+**T2 — bloqueo real → SQLSTATE `55P03`** · `tests/Feature/Fiscal/NumberReservationLockTest.php`
+1. Conexión A: `DB::connection('pgsql')->beginTransaction()` + `SELECT id FROM fiscal_series WHERE id = :id FOR UPDATE` ⇒ la fila queda bloqueada.
+2. Conexión B: `beginTransaction()` + `SET LOCAL lock_timeout = '250ms'`.
+3. Conexión B intenta la reserva (el mismo `UPDATE … RETURNING`).
+4. Aserciones:
+   - se lanza `Illuminate\Database\QueryException`;
+   - `$e->getCode() === '55P03'` (SQLSTATE) y el mensaje de PostgreSQL contiene `lock_not_available`;
+   - `fiscal_series.next_number` **no** cambió;
+   - la espera efectiva está entre **250 ms y 3 s** (acota el test: si el `lock_timeout` no se aplicó, falla rápido en vez de colgarse).
+5. `rollBack()` de B y de A en `finally`.
+
+> **Distinción que la regla fija**: la reserva fiscal **no** usa `SKIP LOCKED` (a diferencia del FIFO de stock, §B.2). Aquí se **espera** y se falla con timeout; saltarse la fila convertiría un bloqueo en un correlativo repartido al azar.
+
+**T3 — el rollback devuelve el número** · `tests/Feature/Fiscal/NumberReservationRollbackTest.php`
+1. Conexión A: `beginTransaction()` → reserva (devuelve 42) → `INSERT` en `fiscal_document_reservations` → **fallo forzado** (FK inexistente en `sales` o excepción explícita) → `rollBack()`.
+2. Aserciones:
+   - `fiscal_series.next_number` vuelve al valor previo;
+   - la siguiente reserva devuelve **42** (el mismo número);
+   - no queda ninguna fila en `fiscal_document_reservations` con ese número ⇒ el rollback deshace también la traza;
+   - **verificación desde la conexión B** (`SELECT next_number FROM fiscal_series WHERE id = :id`): devuelve el valor original ⇒ el número volvió **de verdad**, no sólo en la vista de la sesión A.
+
+### E.2 Suite del dominio (Pest)
+
+| Área | Regla que fija | Tests |
+|---|---|---|
+| Checkout | toda escritura es una unidad atómica; el fallo intermedio no deja cabecera ni stock | `test_un_fallo_intermedio_no_deja_cabecera_ni_cambio_de_stock_persistidos` |
+| FIFO | orden, multi-lote, devolución al lote exacto, invariante, servicio | los 4 tests de `inventario-lotes` + `test_un_producto_de_servicio_no_genera_lote_ni_consume_stock` |
+| IVA | dos perfiles con un motor; snapshot congelado; redondeo; retenido propio | los 4 tests de `motor-impuestos` |
+| Crédito | el saldo del cliente se deriva de sus movimientos; un cobro reduce deuda | `test_un_cobro_reduce_la_deuda_del_cliente_y_el_saldo_se_deriva_de_sus_movimientos` |
+| Cuota | interés simple sobre el payable, calculado en el servidor y repartido entre cuotas | `test_la_cuota_se_calcula_en_el_servidor_con_interes_simple_sobre_el_payable_y_se_reparte_entre_cuotas` |
+| Transferencia | una sola cabecera; el stock sale del lote origen y entra en el destino | `test_la_transferencia_mueve_el_stock_desde_el_lote_origen_y_registra_una_sola_cabecera` |
+| Reserva fiscal | dos series, dos reservas, sin huecos, bloqueo real, rollback | T1, T2, T3 (§E.1) |
+| Caja | saldo por fecha de negocio, no por día/mes/año | `test_el_saldo_de_caja_por_fecha_de_negocio_coincide_con_los_movimientos_del_periodo` |
+| Invariantes | caché de stock == `SUM(available)` · saldo de cuenta == `SUM(asientos)` · `roundingAdjustment` cuadra · control ↔ perfil | tests de `inventario-lotes`, `contabilidad-caja` y `numeracion-fiscal` |
+| Documento fiscal | el mismo nº de documento y de control en todas las páginas | `test_un_documento_multipagina_conserva_el_mismo_numero_de_documento_y_de_control` |
+
+**6 tests transversales.** Los de la última columna no son trazables a un requisito individual: los exige `calidad-continua` §"Suite Pest del dominio" (*el checkout, el FIFO, los impuestos, la reserva fiscal, las cuotas, el saldo de caja y la devolución que repone stock*). **Total de la suite: 44 trazables + 6 transversales = 50 tests con nombre.**
+
+### E.3 Test de arquitectura anti-país
+
+| Aspecto | Definición |
+|---|---|
+| Fichero | `tests/Architecture/NoCountryLiteralsTest.php` |
+| Qué escanea | Recursivamente `app/Domain/**/*.php`. **No** escanea `tests/`, `config/`, `database/seeders/` ni `app/Providers/Fiscal/` (los adaptadores de canal legítimamente contienen literales). |
+| Qué busca | **1) Códigos ISO-3166 alpha-2** en posición de comparación o de `match`/`switch`/`case`: `VE`, `CL`, `MX`, `CO`, `PA`, `AR`, `PE`, `EC`, `BO`, `UY`, `GT`, `CR`, `PY`, `DO`, `PR`, `BR`. **2) Nombres de país** en literales: `Venezuela`, `Chile`, `Mexico`/`México`, `Colombia`, `Panama`/`Panamá`, `Argentina`, `Peru`/`Perú`, `Bolivia`, `Ecuador`, `Uruguay`, `Guatemala`, `Costa Rica`, `Paraguay`, `Dominicana`, `Brazil`/`Brasil`. **3) Códigos de moneda y símbolos** como literal: `USD`, `VES`, `MXN`, `CLP`, `COP`, `PAB`, `Bs`, `Bs.`. **4) Autoridades y organismos**: `seniat`, `sii`, `sat`, `dian`, `dgi`, `RIF`, `RUC`, `NIT`. **5) Tokens normativos locales** como literal: `serie` (prefijo del art. 20), `Contribuyentes Formales del IVA`, `(E)`. |
+| Dónde **no** busca | Nombres de clase, método o constante (`VenezuelaFiscalProfile` no es un literal). Sólo **literales de cadena** y **comparaciones**: evita falsos positivos y hace la regla precisa. |
+| Qué falla | `expect($hallazgos)->toBeEmpty()`: falla ante **cualquier** hallazgo. Sin lista blanca — un literal de país en `app/Domain/` es un defecto por definición. |
+| Con qué mensaje | `Fallo de arquitectura: app/Domain/ contiene N literales de país.` + una línea por hallazgo `ruta:línea  categoría=…  literal=…` + el cierre `El motor fiscal, de impuestos, de numeración y de formatos es DATO, no código: cambiar de país debe consistir sólo en insertar filas.` |
+| Categorías | `country-code` · `country-name` · `currency` · `authority` · `locale-token` |
+| Enforcement de **C4** | El token `serie` del art. 20 es `fiscal_profile_fields.value`; su aparición como literal en `app/Domain/` es categoría `locale-token` ⇒ el test **hace ejecutable** la resolución de C4. |
+| Control complementario | `test_el_motor_de_impuestos_no_consulta_la_base_de_datos_ni_la_red` (pureza del `TaxCalculator`, §C.2): un motor que no puede leer el país no puede ramificar por él. |
+
+### E.4 Puerta de calidad (CI)
+
+| Etapa | Comando | Estado verificado en `.github/workflows/tests.yml` |
+|---|---|---|
+| Build (precondición de la suite) | `npm ci && npm run build` | ✅ presente (`:49-53`) |
+| Typecheck | `npm run typecheck` | ✅ **ya está en el gate** (`:67-68`) — el hueco que la pasada 1 daba por abierto **ya no existe** (ver C8) |
+| Lint JS | `npm run lint:check` | ✅ presente (`:69-71`). Ojo: `npm run lint` es `eslint . --fix` (**muta**); en CI debe usarse `lint:check` |
+| Lint PHP | `vendor/bin/pint --test` | ❌ **falta** en el workflow → tarea de `sdd-tasks` |
+| Suite | `./vendor/bin/pest` | ✅ presente (`:64-65`), **después** del build |
+| Precondición explícita | `public/build/manifest.json` debe existir | ⚠ implícita: hoy falla con `ViteManifestNotFoundException` (HTTP 500) en vez de un error de precondición ⇒ añadir un paso que verifique el manifiesto antes de la suite |
+
+Servicio: `postgres:17-alpine` con `POSTGRES_DB=pos_moderno_v2_test`, `POSTGRES_USER=pos` (`:19-31`) ⇒ coincide con `phpunit.xml` (`DB_CONNECTION=pgsql`, `DB_DATABASE=pos_moderno_v2_test`).
+
+Orden propuesto (cumple `rules.design` y `calidad-continua`): `npm ci` → `npm run build` → `vendor/bin/pint --test` → `npm run lint:check` → `npm run typecheck` → `./vendor/bin/pest`.
+
+**Baseline verde.** `calidad-continua` §"Baseline verde sin fallos preexistentes" exige que la puerta pase sin fallos ajenos al cambio. La suite actual (`tests/Feature/Auth/*`, `DashboardTest.php`) **no toca el dominio**, de modo que el baseline es verde antes de la Fase 0 ⇒ cualquier fallo de la Fase 0 es atribuible al cambio. Un fallo ajeno (p. ej. la precondición de Vite) se corrige o se aísla con justificación antes de declarar verde la fase.
+
+### E.5 Los 44 tests con la regla que fija cada uno
+
+*Un test por requisito; el nombre es la documentación de la regla (§10.6 del mapa funcional: el test es la documentación).*
+
+| # | Test | Regla que fija | Requisito (§F.1) |
+|---|---|---|---|
+| 1 | `test_el_esquema_destino_se_construye_solo_por_migraciones_sin_float_ni_blobs_php` | el esquema se entrega por migraciones, no por scripts | `esquema-dominio` · Esquema destino por migraciones |
+| 2 | `test_los_saldos_y_totales_se_derivan_y_los_catalogos_no_exponen_banderas_contables` | el tipo de movimiento sustituye a las banderas booleanas | `esquema-dominio` · Una sola fuente de verdad por dato |
+| 3 | `test_un_fallo_intermedio_no_deja_cabecera_ni_cambio_de_stock_persistidos` | toda escritura es una unidad atómica con bloqueo de fila | `esquema-dominio` · Atomicidad de toda escritura |
+| 4 | `test_ningun_literal_de_pais_sobrevive_en_app_domain` | cambiar de país es insertar filas, no bifurcar código | `esquema-dominio` · El dominio no contiene literales de país |
+| 5 | `test_un_pais_nuevo_se_anade_sembrando_filas_sin_tocar_el_motor_de_impuestos` | el motor de impuestos es puro y agnóstico | `capa-pais-fiscal` · El motor fiscal es dato |
+| 6 | `test_la_emision_atraviesa_un_actor_intermedio_que_asigna_el_control_antes_de_consolidar` | el emisor no emite solo; hay un actor intermedio | `capa-pais-fiscal` · Actores y modelo de firma como dato |
+| 7 | `test_cada_pais_guarda_su_referencia_como_valor_y_esquema_sin_columna_uuid` | la referencia de verificación es un par valor + esquema | `capa-pais-fiscal` · Vocabularios de estado y referencias de autoridad por perfil |
+| 8 | `test_la_tasa_de_iva_sembrada_figura_pendiente_de_confirmacion_con_su_fuente` | un dato no verificado se marca como pendiente, no se afirma | `capa-pais-fiscal` · Semilla del perfil venezolano con evidencia trazable |
+| 9 | `test_el_comprobante_renderiza_base_e_iva_por_alicuota_con_el_marcador_exento` | el art. 8 es obligatorio | `documentos-fiscales` · Contenido y render normados del comprobante |
+| 10 | `test_la_nota_referencia_fecha_correlativo_control_y_monto_del_original` | el IVA retenido es documento propio | `documentos-fiscales` · Documentos derivados que referencian el original |
+| 11 | `test_la_anulacion_deja_evento_y_no_altera_el_evento_de_emision` | toda acción queda auditada | `documentos-fiscales` · Evidencia e integridad del comprobante |
+| 12 | `test_el_papel_de_contingencia_se_concilia_en_pdf_al_dia_siguiente` | el papel sólo es contingencia y se concilia a D+1 | `documentos-fiscales` · Contingencia exclusivamente en papel |
+| 13 | `test_un_documento_reserva_un_numero_de_documento_y_otro_de_control_en_reservas_distintas` | hay dos numeraciones con autoridades distintas | `numeracion-fiscal` · Dos series con dos reservas atómicas independientes |
+| 14 | `test_la_anulacion_consuma_el_correlativo_y_la_siguiente_reserva_devuelve_el_siguiente` | el número consumido no se reutiliza jamás | `numeracion-fiscal` · El número no retrocede |
+| 15 | `test_la_primera_asignacion_de_control_usa_identificador_00_y_secuencial_1` | la primera asignación de control es `00` + `1` | `numeracion-fiscal` · Primera asignación de control |
+| 16 | `test_la_consolidacion_se_rechaza_si_el_control_no_corresponde_al_perfil` | exactamente un número de control si el perfil lo exige | `numeracion-fiscal` · Invariante del número de control |
+| 17 | `test_la_reserva_bloqueada_falla_con_sqlstate_55p03_y_el_rollback_devuelve_el_numero` | el bloqueo de fila es real, no simulado | `numeracion-fiscal` · T1–T3 verifican la reserva sin `RefreshDatabase` |
+| 18 | `test_el_mismo_motor_calcula_el_resultado_de_dos_perfiles_sin_ramificar_por_pais` | el motor de impuestos es puro y agnóstico | `motor-impuestos` · `TaxCalculator` puro |
+| 19 | `test_un_documento_emitido_conserva_la_tasa_la_categoria_y_el_estado_de_evidencia_congelados` | el impuesto se persiste, no se recalcula | `motor-impuestos` · Cinco categorías de IVA y snapshots congelados |
+| 20 | `test_la_suma_de_lineas_mas_el_ajuste_de_redondeo_iguala_el_total_redondeado` | el ajuste de redondeo es visible en el total | `motor-impuestos` · Redondeo por línea con ajuste visible |
+| 21 | `test_el_iva_retenido_se_emite_como_documento_propio_y_no_como_linea_de_la_venta` | el IVA retenido es crédito del comprador, con documento propio | `motor-impuestos` · El IVA retenido es documento propio |
+| 22 | `test_la_disponibilidad_del_lote_es_la_aritmetica_recibido_menos_consumido_mas_devuelto` | el estado del lote se deriva, no se codifica | `inventario-lotes` · Aritmética de lotes sin estado mutable |
+| 23 | `test_el_consumo_toma_el_lote_mas_antiguo_y_registra_un_consumo_por_lote` | el FIFO ordena por antigüedad y por id | `inventario-lotes` · FIFO determinista con bloqueo por salto |
+| 24 | `test_la_devolucion_repone_el_lote_exacto_del_que_salio_la_linea` | la devolución repone el lote exacto | `inventario-lotes` · Devolución repone el lote exacto |
+| 25 | `test_el_stock_en_cache_iguala_la_suma_de_lotes_y_no_se_sobrevende_bajo_concurrencia` | `quantity_in_stock` es igual a la suma de la disponibilidad de los lotes | `inventario-lotes` · Invariante de stock y no sobreventa |
+| 26 | `test_el_agente_recibe_bytes_ya_generados_y_no_interpreta_el_ticket` | lo unificable es el origen del contenido, no el binario | `impresion-lan` · Un origen de contenido, binario por transporte |
+| 27 | `test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_desde_el_agent_id` | el agente siempre inicia la conexión | `impresion-lan` · Agente en pull con long-poll |
+| 28 | `test_un_destino_usb_directo_se_rechaza_y_exige_tcp_9100_o_impresora_compartida` | el USB directo se descarta por requisito de Zadig | `impresion-lan` · Destinos de impresión admitidos |
+| 29 | `test_un_qr_sobre_un_perfil_sin_soporte_falla_en_el_servidor_antes_de_enviarlo` | el límite de payload del QR lo impone el servidor | `impresion-lan` · El perfil de impresora es dato |
+| 30 | `test_reimprimir_crea_un_trabajo_nuevo_sin_consumir_correlativo_ni_alterar_el_documento` | reimprimir no es reemitir | `impresion-lan` · La emisión fiscal no depende de la impresión |
+| 31 | `test_un_lote_firmado_con_los_vectores_dorados_se_acepta_con_la_misma_respuesta` | el contrato de wire no cambia | `adaptador-sync-legacy` · Contrato de wire v2 intacto |
+| 32 | `test_la_traduccion_resuelve_tabla_y_columnas_contra_el_mapa_sembrado` | el mapa de traducción es dato auditable, no código | `adaptador-sync-legacy` · Traducción por mapa sembrado |
+| 33 | `test_un_reenvio_identico_responde_exito_sin_aplicar_el_lote_dos_veces` | el reenvío no viola la clave primaria ni duplica efectos | `adaptador-sync-legacy` · Aplicación idempotente del lote |
+| 34 | `test_el_terminal_reenvia_tras_perder_la_respuesta_y_el_maestro_lo_acepta_sin_congelarse` | la idempotencia del maestro desactiva la falla operativa del reenvío | `adaptador-sync-legacy` · Truncado del log sólo con respuesta exitosa |
+| 35 | `test_cada_movimiento_contable_tiene_un_unico_entry_type_y_ninguna_bandera_dispersa` | un movimiento contable tiene un tipo, no once banderas | `contabilidad-caja` · Asientos con tipo explícito |
+| 36 | `test_un_gasto_sin_movimiento_bancario_sigue_siendo_gasto_con_su_asiento` | el gasto nace en `expenses`, no en el banco | `contabilidad-caja` · `expenses` es la fuente de verdad del gasto |
+| 37 | `test_el_movimiento_cerca_del_cambio_de_dia_queda_en_el_registro_de_caja_de_su_fecha_de_negocio` | la caja se filtra por fecha de negocio, no por día/mes/año | `contabilidad-caja` · Caja por fecha de negocio |
+| 38 | `test_el_saldo_de_cuenta_se_deriva_de_los_asientos_y_no_de_un_contador_almacenado` | los saldos de cuenta se derivan, no se cuentan dos veces | `contabilidad-caja` · Sin contadores derivados |
+| 39 | `test_el_arranque_operativo_queda_bloqueado_hasta_que_exista_un_saldo_certificado` | sin saldos de apertura firmados no hay cifras defendibles | `contabilidad-caja` · Saldos de apertura congelados |
+| 40 | `test_la_puerta_de_calidad_declara_typecheck_y_build_como_etapas_del_gate` | el typecheck está en el gate, no fuera | `calidad-continua` · CI con PostgreSQL, lint, typecheck, tests y build |
+| 41 | `test_la_suite_del_dominio_cubre_checkout_fifo_impuestos_reserva_fiscal_cuotas_caja_y_devolucion` | el dominio se prueba sin interfaz | `calidad-continua` · Suite Pest del dominio |
+| 42 | `test_cada_test_de_la_suite_declara_la_regla_de_negocio_que_fija` | el test es la documentación de la regla | `calidad-continua` · Cada test nombra la regla de negocio que fija |
+| 43 | `test_el_repositorio_contiene_los_seis_adr_y_el_readme_de_arranque` | cada decisión estructural queda documentada | `calidad-continua` · Seis ADRs y README de arranque |
+| 44 | `test_la_suite_no_deja_fallos_preexistentes_sin_aislar` | la suite debe estar en verde sin fallos preexistentes | `calidad-continua` · Baseline verde sin fallos preexistentes |
+
+
+## F) Trazabilidad requisito → diseño
+
+### F.1 Los 44 requisitos de las 10 specs
+
+| # | Capacidad | Requisito | Sección del diseño que lo satisface |
+|---|---|---|---|
+| 1 | `esquema-dominio` | Esquema destino por migraciones | §A.1 · §A.2 · §A.3 · §D.3 · §E.4 · **§F.2 (delta C1)** |
+| 2 | `esquema-dominio` | Una sola fuente de verdad por dato | §A.2 ("Sin contadores derivados", "Sin flags contables") · §D.4 · §E.2 (invariantes) |
+| 3 | `esquema-dominio` | Atomicidad de toda escritura | §B.1 · §D.1 · §D.4 · §E.1 |
+| 4 | `esquema-dominio` | El dominio no contiene literales de país | §C.1 (regla de despach) · §D.3 · §E.3 |
+| 5 | `capa-pais-fiscal` | El motor fiscal es dato | §A.1 (M01–M03) · §C.2 · §D.3 |
+| 6 | `capa-pais-fiscal` | Actores y modelo de firma como dato | §C.1 · §D.2 · §B.1 (pasos 11–15) |
+| 7 | `capa-pais-fiscal` | Vocabularios de estado y referencias de autoridad por perfil | §C.1 · §A.1 (M02) · §D.3 |
+| 8 | `capa-pais-fiscal` | Semilla del perfil venezolano con evidencia trazable | §A.1 (seeders) · §C.2 (snapshots + `evidence_status`) · §E.5 (#8) |
+| 9 | `documentos-fiscales` | Contenido y render normados del comprobante | §C.1 · §C.2 · §A.1 (M22) · §D.2 |
+| 10 | `documentos-fiscales` | Documentos derivados que referencian el original | §C.1 (`retention_receipt`) · §B.3 · §A.1 (M22 `fiscal_document_links`) · §D.2 |
+| 11 | `documentos-fiscales` | Evidencia e integridad del comprobante | §A.1 (M22 `fiscal_document_events`) · §Migración / rollout (retención 10 años) · §D.2 |
+| 12 | `documentos-fiscales` | Contingencia exclusivamente en papel | §A.1 (M22 `fiscal_contingency_forms`) · §Migración / rollout · §B.1 (tabla de fallos) |
+| 13 | `numeracion-fiscal` | Dos series con dos reservas atómicas independientes | §B.3 · §D.1 · §A.1 (M21) · §C.1 |
+| 14 | `numeracion-fiscal` | El número no retrocede | §B.3 · §D.1 · §Migración / rollout ("apagar, nunca renumerar") |
+| 15 | `numeracion-fiscal` | Primera asignación de control | §B.3 · §C.1 (`control_identifier`, `sequence_length`) · §A.1 (M21) |
+| 16 | `numeracion-fiscal` | Invariante del número de control | §B.3 (invariante) · §C.1 · §D.2 |
+| 17 | `numeracion-fiscal` | T1–T3 verifican la reserva sin `RefreshDatabase` | §E.1 · §E.5 (#17) · §D.1 |
+| 18 | `motor-impuestos` | `TaxCalculator` puro | §C.2 · §D.3 · §E.2 |
+| 19 | `motor-impuestos` | Cinco categorías de IVA y snapshots congelados | §C.2 · §A.1 (M03) · §E.5 (#19) |
+| 20 | `motor-impuestos` | Redondeo por línea con ajuste visible | §C.2 · §E.5 (#20) |
+| 21 | `motor-impuestos` | El IVA retenido es documento propio | §C.2 · §C.1 (`retention_receipt`) · §D.2 |
+| 22 | `inventario-lotes` | Aritmética de lotes sin estado mutable | §B.2 · §A.1 (M14, M27) · §D.4 |
+| 23 | `inventario-lotes` | FIFO determinista con bloqueo por salto | §B.2 · §D.4 · §E.2 |
+| 24 | `inventario-lotes` | Devolución repone el lote exacto | §B.2 · §D.4 · §E.5 (#24) |
+| 25 | `inventario-lotes` | Invariante de stock y no sobreventa | §B.2 · §D.4 · §E.2 · §E.5 (#25) |
+| 26 | `impresion-lan` | Un origen de contenido, binario por transporte | §C.3 · §D.5 · §A.1 (M23) |
+| 27 | `impresion-lan` | Agente en pull con long-poll | §C.3 · §D.5 |
+| 28 | `impresion-lan` | Destinos de impresión admitidos | §C.3 · §D.5 |
+| 29 | `impresion-lan` | El perfil de impresora es dato | §C.3 · §D.5 · §E.5 (#29) |
+| 30 | `impresion-lan` | La emisión fiscal no depende de la impresión | §C.3 (`issued` + máquina de estados) · §D.5 · §B.1 (pasos 16–18) |
+| 31 | `adaptador-sync-legacy` | Contrato de wire v2 intacto | §D.6 · §A.1 (M24) · §Flujo de datos |
+| 32 | `adaptador-sync-legacy` | Traducción por mapa sembrado | §D.6 · §A.1 (M24 + `LegacyTranslationMapSeeder`) · §E.5 (#32) |
+| 33 | `adaptador-sync-legacy` | Aplicación idempotente del lote | §D.6 · §A.1 (M24 `sync_batches`) |
+| 34 | `adaptador-sync-legacy` | Truncado del log sólo con respuesta exitosa | §D.6 · §E.5 (#34) |
+| 35 | `contabilidad-caja` | Asientos con tipo explícito | §A.1 (M18) · D8 · §E.5 (#35) |
+| 36 | `contabilidad-caja` | `expenses` es la fuente de verdad del gasto | §A.1 (M19) · D19 · §Ficheros afectados (`LedgerWriter`) |
+| 37 | `contabilidad-caja` | Caja por fecha de negocio | §A.1 (M19 `cash_registers.business_date`) · §E.5 (#37) |
+| 38 | `contabilidad-caja` | Sin contadores derivados | §A.2 · §A.1 (M20) · §E.2 (invariantes) |
+| 39 | `contabilidad-caja` | Saldos de apertura congelados | §A.1 (M19 `opening_balances`) · §Migración / rollout (`ops:check-opening-balances`) · §F.3 (P9: dependencia operativa) |
+| 40 | `calidad-continua` | CI con PostgreSQL, lint, typecheck, tests y build | §E.4 · §Ficheros afectados (`.github/workflows/tests.yml`) |
+| 41 | `calidad-continua` | Suite Pest del dominio | §E.2 · §E.5 · §Ficheros afectados (`tests/`) |
+| 42 | `calidad-continua` | Cada test nombra la regla de negocio que fija | §E.5 (los 44 nombres) · §F.1 |
+| 43 | `calidad-continua` | Seis ADRs y README de arranque | §D · `docs/adr/0001…0006` · §Ficheros afectados |
+| 44 | `calidad-continua` | Baseline verde sin fallos preexistentes | §E.4 · §Migración / rollout |
+
+**Cobertura: 44 / 44 requisitos con diseño. 0 requisitos sin diseño.**
+
+### F.2 Delta de spec (C1) y nota de nomenclatura (C2)
+
+**Delta — `esquema-dominio` §"Esquema destino por migraciones".** Se registra aquí; **no** se aplica a `openspec/specs/esquema-dominio/spec.md` (el store OpenSpec versiona la spec; el delta se aplica en `sdd-archive`).
+
+```markdown
+## MODIFIED Requirements
+
+### Requirement: Esquema destino por migraciones
+
+El esquema MUST construirse sólo por migraciones: 55 tablas conservadas, 17 fusionadas, 1 eliminada y 54 nuevas, para un total de 109 tablas de negocio. Cada relación MUST usar clave foránea real con `ON DELETE` explícito (`RESTRICT` histórico, `CASCADE` dependiente, `SET NULL` opcional). Todo importe MUST ser `numeric(25,4)`; el sistema MUST NOT usar `float` ni columnas con blobs PHP serializado.
+
+**Trazabilidad:** S1 · Criterio C1 (`migrate:fresh --seed` en verde sobre PostgreSQL 17) · research/estandares-latam.md §5
+
+#### Scenario: Esquema íntegro y reproducible
+
+- GIVEN un checkout limpio con PostgreSQL 17
+- WHEN se ejecuta `php artisan migrate:fresh --seed`
+- THEN el esquema queda completo, sin `float` monetario ni blobs serializados
+- AND Regla fijada: el esquema se entrega por migraciones, no por scripts
+
+#### Scenario: Integridad referencial
+
+- GIVEN una tabla hija con clave foránea a su padre
+- WHEN se inserta una fila cuyo padre no existe
+- THEN la base rechaza la inserción
+- AND Regla fijada: toda relación tiene FK real
+```
+
+**Cambio único:** `27 nuevas` → `54 nuevas (109 tablas de negocio)`. La disposición del legacy (**73 = 55 + 17 + 1**) **no** cambia; la regla de fondo (FKs reales, `numeric(25,4)`, sin blobs, sin flags, sin contadores) se cumple íntegra.
+
+**Nota de nomenclatura (C2) — sin delta.** `fiscal_series.series_role` es el nombre canónico, con valores `document` | `control` | `retention_receipt`, y `assigned_by` ∈ `issuer` | `authority` | `printer` | `psp` distingue la autoridad. `series_kind` (propuesto por la investigación) queda como **alias documentado**, no como columna: **no** se crea ninguna columna `series_kind`.
+
+**Ampliaciones de `documentos-fiscales` (C7) — sin delta en esta pasada.** La spec está en **647/650** palabras. Las ampliaciones derivadas (actor intermedio, control, comprobante de retención) **no** se añaden al fichero: quedan registradas aquí como delta pendiente para la fase que lo solicite.
+
+```markdown
+## MODIFIED Requirements
+
+### Requirement: Documentos derivados que referencian el original
+
+<texto íntegro del requisito vigente> + precisiones sobre `fiscal_document_control_assignments`
+(1:1 con el documento) y sobre `fiscal_series.series_role = 'retention_receipt'` con numeración de 14 caracteres.
+```
+
+*(Bloque pendiente de redactar: no se redacta aquí para no desbordar el presupuesto de palabras de la spec.)*
+
+### F.3 Observaciones
+
+| # | Observación | Impacto | Propuesta |
+|---|---|---|---|
+| O1 | El `proposal.md` (S1) arrastra el mismo número: "55 conservadas, 17 fusionadas, 1 eliminada, **27 nuevas**". | Inconsistencia entre artefactos del mismo change. | Corregir S1 en el mismo change, junto con el delta de §F.2. **No aplicado en esta pasada** (no formaba parte del encargo). |
+| O2 | `calidad-continua` §"CI…" exige `typecheck` en el gate: **ya está** en `.github/workflows/tests.yml:67-68`. El hueco real es `vendor/bin/pint --test` y el check explícito del manifiesto de Vite. | La fila de "Ficheros afectados" de la pasada 1 describe un cambio ya hecho a medias. | Ver **C8**. |
+| O3 | P9 (saldos de apertura) es **dependencia operativa**, no de código: el esquema y el comando de bloqueo están diseñados (§A.1 M19, §Migración / rollout), pero el dato lo certifica una persona. | Bloquea el arranque, no la fase de tareas. | Ver §Preguntas abiertas (P9). |
+| O4 | La §A.3 enumera 22 + 19 + 13 = 54, pero la columna de su tabla suma 111 (55 + 24 + 32) porque las 2 tablas "ya conservadas" de la fila de fusión están contadas dos veces. El total correcto es `55 + 22 + 19 + 13 = 109`. | Un revisor que sume la columna encuentra una contradicción. | Ver **C10**. |
+
+
+## Requisitos sin diseño
+
+**Ninguno.** Los **44 requisitos** de las 10 specs tienen diseño (§F.1): 39 en §A–§C (pasada 1) y 5 de `calidad-continua`, que esta pasada cierra en §D (los 6 ADR), §E (gate ejecutable + suite) y §F (trazabilidad). Los 5 requisitos de `calidad-continua` que la pasada 1 dejó abiertos quedan así:
+
+| Capacidad | Requisito | Dónde queda cubierto |
+|---|---|---|
+| `calidad-continua` | CI con PostgreSQL, lint, typecheck, tests y build | §E.4 (etapas, orden, servicio PostgreSQL, precondición de Vite) + *Ficheros afectados* (`.github/workflows/tests.yml`) |
+| `calidad-continua` | Suite Pest del dominio | §E.2 (áreas y reglas) + §E.5 (los 44 nombres + los 6 transversales) + *Ficheros afectados* (`tests/`) |
+| `calidad-continua` | Cada test nombra la regla de negocio que fija | §E.5 — la columna "Regla que fija" es la documentación de cada test |
+| `calidad-continua` | Seis ADRs y README de arranque | §D (texto completo) + `docs/adr/0001…0006-*.md` + *Ficheros afectados* |
+| `calidad-continua` | Baseline verde sin fallos preexistentes | §E.4 (baseline + regla de aislamiento y corrección de fallos ajenos) |
 
 ## Conflictos detectados
 
-| # | Conflicto | Impacto | Resolución propuesta |
+| # | Conflicto | Impacto | Estado y resolución |
 |---|---|---|---|
-| **C1** | **El requisito de `esquema-dominio` fija "27 tablas nuevas"; el diseño necesita 54.** `exploration.md` §3.3 (pre-research) lista **26**, no 27. La investigación añadió **13** (capa fiscal de documentos: `fiscal_profile_document_types`, `_environments`, `_fields`, `fiscal_tax_schemes`, `fiscal_status_vocabularies`, `fiscal_providers`, `fiscal_document_taxes`, `_parties`, `_links`, `_events`, `_control_assignments`, `fiscal_periodic_reports`, `fiscal_contingency_forms`); el encargo añadió **3** operativas (`ledger_lines`, `legacy_translation_map`, `sms_providers`); y la fusión de las 17 legacy genera **12** destinos con nombre nuevo (`sales*`, `purchases*`, `purchase_items`, `inventory_lots`, `ledger_entries`, `quotations*`, `orders*`). **26 + 13 + 3 + 12 = 54.** | El requisito, tal como está escrito, **es inviable**: incumplirlo obligaría a borrar tablas que exigen `capa-pais-fiscal` y `documentos-fiscales`. La disposición del legacy 73 **sí** cuadra exacto (55+17+1). | En la pasada 2 §F, corregir el requisito a **"55 conservadas · 17 fusionadas · 1 eliminada · 54 nuevas (109 tablas de negocio)"**. La regla de fondo (FKs reales, `numeric(25,4)`, sin blobs, sin flags, sin contadores) **se cumple íntegra**. |
-| **C2** | **`fiscal_series.series_role` vs `series_kind`.** El encargo dice `series_role` ∈ `document`/`control`; la investigación propone `series_kind` ∈ `document_number`/`control_number`/`retention_receipt`. | Nomenclatura, no semántica. | Se adopta **`series_role`** (encargo) con valores `document` \| `control` \| `retention_receipt`, más `assigned_by`. Documentar el alias en la §F. |
-| **C3** | **La invariante "exactamente un `control_number`" y la doble reserva vs. la norma**: la norma dice que el control lo **asigna la imprenta** (F1 art. 42.1), pero `numeracion-fiscal` exige **dos reservas atómicas independientes**. | Sin diseño, o se quema un número, o se duplica. | Diseño D3: **espejo local** del rango de control de la imprenta (`from_number`/`to_number`/`credential_ref` sembrados del rango autorizado) + reserva atómica local + **verificación de correspondencia** con lo que la imprenta devuelve. La discrepancia se registra como evento en `fiscal_document_events`. |
-| **C4** | **El prefijo obligatorio "serie" (F1 art. 20) es un literal de país dentro del dominio**, y el test anti-país prohíbe literales de país en `app/Domain/`. | Un `str_contains($prefix, 'serie')` en el dominio rompe el test anti-país. | El token exigido **es un dato**: fila en `fiscal_profile_fields` (`key='series_prefix_required_token'`, `value='serie'`). El dominio compara contra el valor leído. **Cumple las dos reglas.** |
-| **C5** | **Atomicidad vs. I/O externo**: el checkout debe ser atómico, pero `submit()`/`assignControl()` son llamadas HTTP al proveedor. | Una sola transacción mantiene bloqueos de fila durante I/O → riesgo de `lock_timeout` en la caja. | Diseño D4: dos transacciones (T1 dominio / T2 fiscal), con `sales.status='fiscal_failed'` y **reutilización de la reserva** en el reintento. La atomicidad exigida por el requisito se aplica a **cada** unidad de escritura; la atomicidad cross-proveedor es imposible por naturaleza y se sustituye por un estado explícito. **Requiere confirmación del usuario.** |
-| **C6** | **`quantity_in_stock` cacheado vs. "MUST derivarse"**. | El requisito lo permite *si* hay test de invariante; el diagrama B.2 exige la invariante. | Diseño D5+D6: `inventory_lots.available` es **GENERATED** (exacta por definición); `product_stores.quantity_in_stock` es caché **con test de invariante** en la pasada 2 §E. |
-| **C7** | **`documents-fiscales` está al límite de palabras** (647/650 según el brief) y la capa fiscal añade requisitos nuevos (control, actor intermedio, retención). | Una spec nueva o un delta podría desbordar el presupuesto. | No se añade requisito en esta pasada; las ampliaciones van como **delta de spec** en la §F de la pasada 2, no dentro del fichero actual. |
+| **C1** | **El requisito de `esquema-dominio` fija "27 tablas nuevas"; el diseño necesita 54.** `exploration.md` §3.3 (pre-research) lista **26**, no 27. La investigación añadió **13** (capa fiscal de documentos: `fiscal_profile_document_types`, `_environments`, `_fields`, `fiscal_tax_schemes`, `fiscal_status_vocabularies`, `fiscal_providers`, `fiscal_document_taxes`, `_parties`, `_links`, `_events`, `_control_assignments`, `fiscal_periodic_reports`, `fiscal_contingency_forms`); el encargo añadió **3** operativas (`ledger_lines`, `legacy_translation_map`, `sms_providers`); y la fusión de las 17 legacy genera **12** destinos con nombre nuevo (`sales*`, `purchases*`, `purchase_items`, `inventory_lots`, `ledger_entries`, `quotations*`, `orders*`). **26 + 13 + 3 + 12 = 54.** | El requisito, tal como estaba escrito, **era inviable**: incumplirlo obligaría a borrar tablas que exigen `capa-pais-fiscal` y `documentos-fiscales`. La disposición del legacy 73 **sí** cuadra exacto (55 + 17 + 1). | **RESUELTO (decisión del usuario, 2026-10-31).** El requisito se corrige a **"55 conservadas · 17 fusionadas · 1 eliminada · 54 nuevas · 109 tablas de negocio"**. Se registra como **delta de spec** en §F.2; la spec existente **no** se reescribe (el store OpenSpec la versiona; el delta se aplica en `sdd-archive`). El conteo del legacy se mantiene exacto. |
+| **C2** | **`fiscal_series.series_role` vs `series_kind`.** El encargo dice `series_role` ∈ `document`/`control`; la investigación propone `series_kind` ∈ `document_number`/`control_number`/`retention_receipt`. | Nomenclatura, no semántica. | **RESUELTO.** Se adopta **`series_role`** con valores `document` \| `control` \| `retention_receipt`, más `assigned_by`. `series_kind` queda como **alias documentado**, **no** como columna. Nota de nomenclatura en §F.2. |
+| **C3** | **La invariante "exactamente un `control_number`" y la doble reserva vs. la norma**: la norma dice que el control lo **asigna la imprenta** (F1 art. 42.1), pero `numeracion-fiscal` exige **dos reservas atómicas independientes**. | Sin diseño, o se quema un número, o se duplica. | **RESUELTO (D3).** **Espejo local** del rango de control de la imprenta (`from_number`/`to_number`/`credential_ref` sembrados del rango autorizado) + reserva atómica local + **verificación de correspondencia** con lo que la imprenta devuelve. La discrepancia se registra como evento en `fiscal_document_events`. |
+| **C4** | **El prefijo obligatorio "serie" (F1 art. 20) es un literal local dentro del dominio**, y el test anti-país prohíbe literales de país en `app/Domain/`. | Un `str_contains($prefix, 'serie')` en el dominio rompe el test anti-país. | **RESUELTO (D4).** El token exigido **es un dato**: fila en `fiscal_profile_fields` (`key='series_prefix_required_token'`, `value='serie'`). El dominio compara contra el valor leído. El test anti-país lo hace ejecutable (categoría `locale-token`, §E.3). **Cumple las dos reglas.** |
+| **C5** | **Atomicidad vs. I/O externo**: el checkout debe ser atómico, pero `submit()`/`assignControl()` son llamadas HTTP al proveedor. | Una sola transacción mantiene bloqueos de fila durante I/O → riesgo de `lock_timeout` en la caja. | **RESUELTO (decisión del usuario, 2026-10-31).** **Dos transacciones**: **T1** (dominio: números + FIFO + IVA + asientos + pago) y **T2** (fiscal: emisión). Si el proveedor falla, la venta queda con `sales.status='fiscal_failed'` y el **reintento reutiliza la misma reserva** (`fiscal_document_reservations`), sin quemar números. La atomicidad exigida por el requisito se aplica a **cada** unidad de escritura; la atomicidad cross-proveedor es **imposible por naturaleza** y se sustituye por ese estado explícito. Secuencing en §B.1 (nota) · §D.1 · §D.6. |
+| **C6** | **`quantity_in_stock` cacheado vs. "MUST derivarse"**. | El requisito lo permite *si* hay test de invariante; el diagrama B.2 exige la invariante. | **RESUELTO (D5 + D6).** `inventory_lots.available` es **GENERATED** (exacta por definición); `product_stores.quantity_in_stock` es caché **con test de invariante** (test #25, §E.5). |
+| **C7** | **`documentos-fiscales` está al límite de palabras** (647/650 según el brief) y la capa fiscal añadiría requisitos nuevos (control, actor intermedio, retención). | Una spec nueva o un delta podría desbordar el presupuesto. | **RESUELTO sin tocar la spec.** No se añade **ningún** requisito dentro de `documentos-fiscales`. Las ampliaciones quedan como **delta pendiente** registrado en §F.2, para la fase que lo solicite. |
+| **C8** | **El hueco de `typecheck` en CI ya no existe.** La pasada 1 (§Ficheros afectados) y `exploration.md` §11.1 R10 dan por hecho que `npm run typecheck` **no** está en el gate; `.github/workflows/tests.yml:67-68` **ya lo ejecuta**. El hueco real es otro: falta `vendor/bin/pint --test` y el fallo por manifiesto de Vite ausente es un HTTP 500, no un error de precondición. | La tarea de CI tal como está descrita en la pasada 1 sería un no-op en su parte principal. | **NUEVO — no resuelto.** Propuesta: corregir la fila de `.github/workflows/tests.yml` en *Ficheros afectado* para que describa el estado real y concrete el trabajo pendiente: (a) añadir `vendor/bin/pint --test` al gate; (b) añadir un paso que verifique `public/build/manifest.json` **antes** de la suite y falle con un error de precondición explícito; (c) fijar el orden `build → pint → lint:check → typecheck → pest`. Sin cambiar requisitos. Detalle en §E.4. |
+| **C9** | **La spec `esquema-dominio` exige bloqueo de fila "(`SELECT … FOR UPDATE`)"**, pero la reserva fiscal se hace con `UPDATE … RETURNING` (D1, §B.3). `openspec/config.yaml → rules.design` admite **las dos** ("`UPDATE … RETURNING` **o** `SELECT … FOR UPDATE`"); el texto de la spec sólo menciona la segunda. | Un implementador que siga la spec al pie de la letra rompería la reserva atómica, o un revisor encontraría una divergencia entre spec y diseño. | **NUEVO — no resuelto.** Propuesta: delta menor de `esquema-dominio` §"Atomicidad de toda escritura" que acepte `UPDATE … RETURNING` como mecanismo equivalente de bloqueo de fila (el `UPDATE` toma el lock de la fila en la misma sentencia). **No se aplica en esta pasada**: tocar la spec excede el encargo, que reservaba el delta de §F.2 para C1. El diseño y la spec son coherentes en la práctica; lo que falta es el texto. |
+| **C10** | **La §A.3 suma 111 en la columna y declara 109 en el total**: las 2 tablas "ya conservadas" de la fila de fusión (17 legacy → 24 destinos) están contadas también dentro de las 55. La aritmética correcta es `55 + 22 + 19 + 13 = 109`. | Un revisor que sume la columna encuentra una contradicción en el documento que fija el conteo de tablas. | **NUEVO — no resuelto.** Propuesta: cambiar la fila "Destinos de fusión" a `24 (**22** nuevas + 2 ya conservadas)` y anotar la aritmética del total como `55 + 22 + 19 + 13 = 109`; los dos invariantes exactos (73 = 55 + 17 + 1 y 109 = 55 + 54) **no** cambian. Nota de aviso añadida en §A.3. |
 
 ## Preguntas abiertas
 
-- [ ] **C5** (dos transacciones en el checkout): ¿se acepta el estado `fiscal_failed` como sustituto de la atomicidad cross-proveedor, o se exige emisión síncrona bloqueante en la caja?
-- [ ] ¿El formato del correlativo fiscal es `000-00000000` (prefijo de 3 + 8 dígitos) o el del legacy? (P6) — el dato queda en `fiscal_series.prefix` + `number_formats`, pero **el valor sembrado** es una decisión de producto.
-- [ ] ¿Las **compras** consumen serie fiscal propia? (P7) — el esquema lo permite (`fiscal_profile_document_types.direction='purchase'`); falta la decisión.
-- [ ] ¿Fase 0 exige **T4** (dos procesos reales compitiendo por el mismo correlativo) o basta con T1–T3? (P5)
-- [ ] ¿Qué saldos de apertura se congelan, con qué fecha y quién los certifica? (P9) — dependencia operativa, no de código.
-- [ ] ¿El sistema opera como **imprenta digital** además de emisor? (D1 de la investigación) — el esquema lo soporta (`fiscal_profile_environments.role`); falta la decisión.
-- [ ] ¿La entrega del comprobante al usuario final es por **correo**, por **consulta pública**, o ambas? (D5) — el esquema soporta ambas; falta la decisión.
+**Cerradas en esta pasada:** **C1** (el conteo se corrige a 54; delta en §F.2) y **C5** (dos transacciones, `fiscal_failed` y reutilización de la reserva). Ninguna queda bloqueando `sdd-tasks`.
+
+| # | Pregunta | Recomendación | Motivo |
+|---|---|---|---|
+| **P6** | ¿El formato del correlativo fiscal es `000-00000000` (prefijo de 3 + 8 dígitos) o el del legacy? | **`000-00000000`**, sembrado en `fiscal_series.prefix` + `number_formats.invoice_number_format` + `sequence_length`, **nunca como código**. | Es el formato factual que cita el mapa funcional §8.5.1, y el legacy **no** lo produce (genera `prefijo + store_id + 8 dígitos`). Al ser un **dato**, cambiarlo no cuesta migración ni código. **No bloquea.** |
+| **P7** | ¿Las **compras** consumen serie fiscal propia? | **Sí**: serie propia por tienda (`fiscal_profile_document_types.direction='purchase'`), **sembrada pero sin emisión** en Fase 0. | El esquema ya lo soporta y el correlativo de compra del legacy es `prefijo + referencia escrita por el usuario`, **sin reserva atómica** (hallazgo H10) — un hueco que este diseño cierra. No amplía el alcance: sólo la fila y el tipo de documento. **No bloquea.** |
+| **P5** | ¿Fase 0 exige **T4** (dos procesos reales compitiendo por el mismo correlativo) o basta con T1–T3? | **T1–T3 en Fase 0; T4a en Fase 1** (comando Artisan + `Symfony\Process`). | `UPDATE … RETURNING` dentro de una transacción **serializa la fila**: la unicidad es correcta por construcción y T1–T3 la certifican sobre PostgreSQL real. T4 certificaría el **escenario de negocio**, no la invariancia, y cuesta un proceso paralelo propenso a *flaky*. **No bloquea.** |
+| **P9** | ¿Qué saldos de apertura se congelan, con qué fecha y quién los certifica? | Congelar **stock por tienda y producto**, **saldo y deuda por cliente y proveedor** y **saldo de caja por cuenta y tienda**, con fecha de corte y responsable nominal, **antes** de la primera operación. | **Dependencia operativa, no de código**: el esquema (`opening_balances` con `certified_at`/`certified_by`) y el comando `ops:check-opening-balances` que bloquea el arranque ya están diseñados (§A.1 M19, §Migración / rollout). Sin cifras certificadas el arranque no es defendible. **No bloquea el código; bloquea el arranque operativo.** |
+| **D1** | ¿El sistema opera como **imprenta digital** además de emisor? | **Sembrar ambos roles** (`fiscal_profile_environments.role ∈ {issuer, printer}`) y **activar sólo `issuer`** en Fase 0. | El rol **ya es dato** (§C.1, §D.2), así que sembrarlo no cuesta código. Activar el rol `printer` implica obligaciones propias de la imprenta (registro automatizado mensual, art. 44; causas de revocación, art. 34) que son de Fase 1. **No bloquea.** |
+| **D5** | ¿La entrega del comprobante al usuario final es por **correo**, por **consulta pública**, o ambas? | **Ambas**: la entrega se modela como `ElectronicInvoiceProvider::deliver()` con un registro por documento. | F2 art. 18.10 ofrece la web **propia** del emisor como alternativa a la de la imprenta, y el transporte `browser` ya entrega la representación. El esquema no bloquea ninguna de las dos; el método `deliver()` ya está en el contrato (§C.1). **No bloquea.** |
+
+**Ninguna de las 6 preguntas bloquea la fase de tareas**: todas tienen una recomendación con motivo y todas son cambios de **datos sembrados** o de **alcance de una fase posterior**, no de esquema ni de contratos.
