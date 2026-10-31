@@ -10,49 +10,131 @@
 
 | Field | Value |
 |---|---|
-| Estimated changed lines | **~6.740** (rango 6.000–7.500) |
+| Estimated changed lines | **~8.735** (rango 7.300–9.200) — **recalculado**; el forecast inicial de ~6.740 estaba descalibrado (§"Por qué cambió el forecast") |
 | 400-line budget risk | **High** |
 | Chained PRs recommended | **Yes** |
-| Suggested split | PR1 cimientos → PR2 capa país/fiscal → PR3 numeración+documentos fiscales → PR4 catálogo/ventas/compras → PR5 stock por lotes → PR6 impuestos+checkout → PR7 contabilidad/caja → PR8 impresión+sync → PR9 seed+suite+CI+docs |
-| Delivery strategy | `ask-on-risk` |
-| Chain strategy | `pending` |
+| Suggested split | **16 PRs** encadenados (`stacked-to-main`); el corte fino de las 6 unidades que exceden 800 está en §Cadena de entrega |
+| Delivery strategy | `ask-on-risk` → **resuelto: work units encadenadas** |
+| Chain strategy | **`stacked-to-main`** (decidido 2026-10-31) |
+| Review budget por PR | **800 líneas** (preflight del mantenedor; override del default de 400 de la skill `chained-pr`) |
+| Unidades que exceden 800 | **6 de 9** — U1 960 · U2 1.061 · U3 845 · U4 1.205 · U8 1.013 · U9 1.330 |
 
-Decision needed before apply: Yes
+Decision needed before apply: No
 Chained PRs recommended: Yes
-Chain strategy: pending
+Chain strategy: stacked-to-main
 400-line budget risk: High
 
-> **El cambio es ~17× el presupuesto de revisión de 400 líneas.** No es un PR: son 9 work units encadenadas. El equipo debe fijar la estrategia de cadena (`stacked-to-main` · `feature-branch-chain` · `size:exception`) antes de `sdd-apply`; por eso `Decision needed before apply: Yes`.
+> **El cambio es ~11× el presupuesto de revisión.** No es un PR: son work units encadenadas. El mantenedor decidió estrategia **`stacked-to-main`** y un presupuesto efectivo de **800 líneas por PR** (override explícito del default de 400 de la skill `chained-pr`). La medición real dean que **6 de las 9 unidades originales excedían 800**, así que la pasada honesta de slicing las parte en **16 PRs** (mínimo 12 si se aceptaran enteras las unidades frágiles U3/U5/U6/U7).
 
 ### Desglose de líneas estimadas
 
 | Bloque | Contenido | Líneas |
 |---|---|---|
-| 27 migraciones | esquema destino: 109 tablas de negocio | ~1.400 |
-| 6 seeders | perfil VE + CL/MX/CO/PA, taxonomías, tipos de asiento, mapa sync, saldos | ~450 |
-| ~28 modelos Eloquent | casts exactos, relaciones, FKs | ~980 |
-| `app/Domain/**` | Tax (6) · Fiscal (8) · Inventory (3) · Accounting (1) · Checkout (2) | ~1.100 |
+| 27 migraciones | esquema destino: 109 tablas de negocio | ~1.380 |
+| 6 seeders | perfil VE + CL/MX/CO/PA, taxonomías, tipos de asiento, mapa sync, saldos | ~405 |
+| **66 modelos Eloquent** | casts exactos, relaciones, FKs (`tasks.md` nombra 65 + `User`) | **~2.220** |
+| `app/Domain/**` | **~29 clases** · Tax (6) · Fiscal (8) · Inventory (3) · Accounting (1) · Checkout (2) + contratos/VO/enums | **~1.605** |
 | Impresión + Sync | renderer ESC/POS, controller, jobs, adaptador v2 | ~700 |
 | Config + CI | `config/database.php`, 3 configs, `.env.example`, workflow | ~120 |
-| Suite Pest | 44 trazables + 6 transversales + 1 de pureza + T1–T3 | ~1.900 |
+| Suite Pest | **73 tareas `-T`** (una por tarea de implementación) + T1–T3 | **~2.875** |
 | README + verificación ADR | arranque y trazabilidad | ~90 |
-| **Total** | | **~6.740** |
+| **Total** | | **~8.735** |
 
-### Suggested Work Units
+### Por qué cambió el forecast
 
-| Unit | Goal | Likely PR | Focused test command | Runtime harness | Rollback boundary |
+El forecast inicial de **~6.740** estaba descalibrado en tres bloques. Verificado con grep sobre el propio plan, no a ojo:
+
+| Bloque | Estimado | Real | Causa |
+|---|---|---|---|
+| Modelos | ~980 | **~2.220** | El plan nombra **65 modelos + `User` = 66**, no "~28" |
+| Tests | ~1.900 | **~2.875** | Hay **73 tareas `-T`** (una por tarea de implementación); los "51" de §E.5 son *nombres canónicos*, no ficheros |
+| Dominio | ~1.100 | **~1.605** | Son **~29 clases**, no 20 (contratos, value objects y enums incluidos) |
+| Modelos implícitos | — | **~390** | Series y documentos fiscales (U3), lotes y transferencias (U5), cuotas y cotizaciones (U6): exigidos por el diseño pero no enumerados en el plan |
+
+Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa directa de que 6 de las 9 unidades originales superen las 800 líneas.
+
+### Work Units medidas y corte final en 16 PRs
+
+**Medición por unidad original** (una sola pasada honesta de slicing, como exige la skill `chained-pr`):
+
+| Unit | Fase | Migr | Modelos | Dominio | Seeds | Tests | Cfg/Docs | TOTAL | Veredicto |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 0.1 | 265 | 400 | 0 | 0 | 215 | 80 | **960** | excede 800 (+160) |
+| 2 | 0.2 | 150 | 336 | 355 | 0 | 220 | 0 | **1.061** | excede 800 (+261) |
+| 3 | 0.3 | 120 | 140 | 245 | 0 | 340 | 0 | **845** | excede 800 (+45, frágil) |
+| 4 | 0.4 | 325 | 700 | 0 | 0 | 180 | 0 | **1.205** | excede 800 (+405) |
+| 5 | 0.5 | 220 | 112 | 155 | 0 | 285 | 0 | **772** | dentro (margen 28, frágil) |
+| 6 | 0.6 | 0 | 112 | 285 | 0 | 360 | 0 | **757** | dentro (margen 43, frágil) |
+| 7 | 0.7 | 145 | 252 | 170 | 0 | 225 | 0 | **792** | dentro (margen 8, frágil) |
+| 8 | 0.8 | 100 | 168 | 395 | 0 | 310 | 40 | **1.013** | excede 800 (+213) |
+| 9 | 0.9 | 55 | 0 | 0 | 405 | 740 | 130 | **1.330** | excede 800 (+530) |
+| | | | | | | | | **Total** | **~8.735** | 6 de 9 exceden 800 |
+
+### Corte final: 16 PRs (`stacked-to-main`)
+
+| PR | Rama | Unidad | Contenido | Líneas | Test focalizado | Harness | Rollback |
+|---|---|---|---|---|---|---|---|
+| PR1 | `feature/fase0-01-ciimientos-a` | 1a | M04–M07 + `composer.json`/`composer.lock` + `config/database.php` (`pgsql_b`) + 3 configs + `.env.example` + 8 modelos (tienda/roles/permisos/settings) | 611 | `./vendor/bin/pest --filter="Store\|Role\|Setting"` | `migrate:fresh` sobre PostgreSQL 17 | Revertible; sin datos de producción |
+| PR2 | `feature/fase0-02-ciimientos-b` | 1b | M25–M26 + 6 modelos (i18n/outbox/auditoría) | 388 | `./vendor/bin/pest --filter="AuditLog\|SmsMessage"` | `migrate:fresh` | Revertible |
+| PR3 | `feature/fase0-03-pais-fiscal-a` | 2a | M01–M02 + 10 modelos país/perfil fiscal | 509 | `./vendor/bin/pest --filter="FiscalProfile\|Country"` | `migrate:fresh --seed` | Revertible |
+| PR4 | `feature/fase0-04-pais-fiscal-b` | 2b | M03 + contrato + 8 value objects + 5 enums + `TaxContext` | 562 | `./vendor/bin/pest --filter="TaxContext"` | `tinker` → `TaxRate::where('evidence_status','pending_confirmation')` | Revertible; catálogo sembrado en PR15 |
+| PR5 | `feature/fase0-05-numeracion-a` | 3a | M21 + series/reservas + `NumberSeries` | 238 | `./vendor/bin/pest --filter="NumberSeries"` | `tinker` → 2 reservas seguidas | **NUNCA** borrar `fiscal_document_reservations`; rollback = apagar `fiscal.emission_enabled` |
+| PR6 | `feature/fase0-06-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render + **T1–T3** | 630 | `./vendor/bin/pest tests/Feature/Fiscal` | `psql -c "select next_number from fiscal_series"` | Ídem PR5; **el número nunca se renumera** |
+| PR7 | `feature/fase0-07-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | `./vendor/bin/pest --filter="Product\|Customer"` | `migrate:fresh --seed` | Revertible |
+| PR8 | `feature/fase0-08-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | `./vendor/bin/pest --filter="Sale\|Purchase"` | `migrate:fresh --seed` | Revertible |
+| PR9 | `feature/fase0-09-stock-lotes` | 5 | M14–M17 + `LotConsumer`, `LotReturner`, `StockInvariant` | 772 | `./vendor/bin/pest tests/Feature/Inventory` | `tinker` → venta FIFO sobre 2 lotes | Revertible; sin `status` mutable ⇒ nada que desincronizar |
+| PR10 | `feature/fase0-10-impuestos-checkout` | 6 | `TaxCalculator` + T1 dominio + reintento T2 | 757 | `./vendor/bin/pest tests/Unit/Tax tests/Feature/Checkout` | `tinker` → `CheckoutService` con perfil VE | Revertible; `sales.status='fiscal_failed'` se reconcilia por reintento |
+| PR11 | `feature/fase0-11-contabilidad-caja` | 7 | M18–M20 + `LedgerWriter` + `business_date` + saldos | 792 | `./vendor/bin/pest tests/Feature/Accounting` | `php artisan ops:check-opening-balances` (debe fallar sin saldos certificados) | Revertible |
+| PR12 | `feature/fase0-12-impresion-lan` | 8a | M23 + 4 modelos + `EscposRenderer`/controller/job + routes | 565 | `./vendor/bin/pest tests/Feature/Print` | `POST /api/print-agents/register` | Interruptor `print.lan_agent_enabled` en `false` |
+| PR13 | `feature/fase0-13-sync-legacy` | 8b | M24 + 2 modelos + 4 clases `Sync/Legacy` | 464 | `./vendor/bin/pest tests/Feature/Sync` | `GET /api/print-agents/jobs` con `curl` | Interruptor `sync.legacy_adapter_enabled` en `false` |
+| PR14 | `feature/fase0-14-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | `./vendor/bin/pest --filter="Seed"` | `migrate:fresh --seed` | Revertible; filas sembradas se truncan |
+| PR15 | `feature/fase0-15-suite` | 9b | `NoCountryLiteralsTest` + 4 canónicos de 0.9.11 | 550 | `./vendor/bin/pest` | suite completa verde | Sin impacto en runtime |
+| PR16 | `feature/fase0-16-ci-docs` | 9c | workflow CI + `README.md` + 7 meta-tests | 340 | `./vendor/bin/pest` | push a `main` con PostgreSQL 17 en CI | Sin impacto en runtime |
+
+**PRs finales = 16.** Mínimo **12** si se aceptaran enteras las unidades frágiles (U3 845, U5 772, U6 757, U7 792).
+
+### Diagrama de dependencias
+
+```
+PR1 ─┬─► PR2
+     ├─► PR3 ─► PR4
+     └─► PR5 ─► PR6
+PR7 ─┬─► PR8
+     ├─► PR9  ─┬─► PR10 ─► PR11
+     │         │
+     └─► PR12 ─► PR13
+PR14 ─► PR15 ─► PR16
+                    📍 = PR en curso
+```
+
+### Chain Context por PR
+
+Reglas de la skill `chained-pr`: cada PR declara *inicio*, *fin*, *dependencias previas*, *trabajo posterior* y *fuera de alcance*; el diff debe mostrar **sólo** su unidad (si aparece ruido de la base, es un bug de base: se retargetea o se rebasa).
+
+| PR | Inicio | Fin | Dependencias previas | Trabajo posterior | Fuera de alcance |
 |---|---|---|---|---|---|
-| 1 | Cimientos: deps, `pgsql_b`, interruptores, M04–M07 + M25–M26, modelos base | PR 1 | `./vendor/bin/pest --filter="Store\|Setting"` | `php artisan migrate:fresh --seed` sobre PostgreSQL 17 | PR 1 completo revertible; sin datos de producción |
-| 2 | Capa de país/fiscal: M01–M03, contratos, enums, modelos | PR 2 | `./vendor/bin/pest --filter="FiscalProfile\|TaxCategory"` | `php artisan migrate:fresh --seed` + `php artisan tinker` → `TaxRate::where('evidence_status','pending_confirmation')` | PR 2 revertible; catálogo sembrado en PR 9 |
-| 3 | Numeración fiscal + documentos fiscales: M21–M22, `NumberSeries`, `FiscalIssuanceService`, T1–T3 | PR 3 | `./vendor/bin/pest tests/Feature/Fiscal` | `php artisan tinker` → 2 reservas seguidas + `psql -c "select next_number from fiscal_series"` | **NUNCA** borrar `fiscal_document_reservations`; rollback = apagar `fiscal.emission_enabled` |
-| 4 | Catálogo, clientes, compras y ventas: M08–M13 + modelos | PR 4 | `./vendor/bin/pest --filter="Product\|Sale\|Purchase"` | `php artisan migrate:fresh --seed` | PR 4 revertible |
-| 5 | Stock por lotes: M14–M17, `LotConsumer`, `LotReturner`, `StockInvariant` | PR 5 | `./vendor/bin/pest tests/Feature/Inventory` | `php artisan tinker` → venta FIFO sobre 2 lotes | PR 5 revertible; sin `status` mutable ⇒ nada que desincronizar |
-| 6 | Motor de impuestos + checkout: `TaxCalculator`, T1 dominio, reintento T2 | PR 6 | `./vendor/bin/pest tests/Unit/Tax tests/Feature/Checkout` | `php artisan tinker` → `CheckoutService` con perfil VE | PR 6 revertible; `sales.status='fiscal_failed'` se reconcilia por reintento |
-| 7 | Contabilidad y caja: M18–M20, `LedgerWriter`, `business_date`, saldos | PR 7 | `./vendor/bin/pest tests/Feature/Accounting` | `php artisan ops:check-opening-balances` (debe fallar sin saldos certificados) | PR 7 revertible |
-| 8 | Impresión LAN + sync legacy: M23–M24, renderer, controller, adaptador v2 | PR 8 | `./vendor/bin/pest tests/Feature/Print tests/Feature/Sync` | `POST /api/print-agents/register` + `GET /api/print-agents/jobs` con `curl` | Interruptores `print.lan_agent_enabled` / `sync.legacy_adapter_enabled` en `false` |
-| 9 | Seed, suite, CI y documentación: M27, 6 seeders, 51 tests, workflow, README | PR 9 | `./vendor/bin/pest` | `php artisan migrate:fresh --seed` + push a `develop` con PostgreSQL 17 en CI | Sin impacto en runtime |
+| PR1 | `composer.json` + `config/database.php` con `pgsql_b` | Tiendas, roles, permisos y settings tipados; sin blobs | — | PR2 (i18n/auditoría), PR3 (perfil fiscal) | Ventas, compras, POS |
+| PR2 | M25–M26 aplicadas | i18n, outbox SMS y auditoría de negocio | PR1 | PR15 (suite completa) | Facturación fiscal |
+| PR3 | País y perfil fiscal | Perfil, país, moneda y formato como datos | PR1 | PR4 (contratos fiscales) | Adaptadores por país |
+| PR4 | Contrato fiscal | `TaxContext`, enums y value objects | PR3 | PR10 (`TaxCalculator` completo) | Cálculo de impuestos |
+| PR5 | M21 aplicada | Series con reserva atómica | PR1 | PR6 (emisión) | Emisión del documento |
+| PR6 | M22 aplicada | `FiscalIssuanceService` + T1–T3 verdes | PR5, PR1 | PR10 (checkout con reserva) | Adaptador real de SENIAT |
+| PR7 | M08–M10 aplicadas | Catálogo y clientes | PR1 | PR8 (ventas/compra) | Stock |
+| PR8 | M11–M13 aplicadas | Esquema de ventas y compras | PR7 | PR9 (lotes) | Checkout |
+| PR9 | M14–M17 aplicadas | FIFO con `SKIP LOCKED` y reposición al lote exacto | PR8 | PR10 (checkout) | Impresión |
+| PR10 | Dominio de impuestos | `TaxCalculator` + checkout de dos transacciones | PR9, PR4, PR6 | PR11 (contabilidad) | Cuotas, tarjetas |
+| PR11 | M18–M20 aplicadas | Libro contable y caja por fecha de negocio | PR10 | PR14 (seed de saldos) | Reportes |
+| PR12 | M23 aplicada | Renderer ESC/POS y agente LAN | PR9 | PR13 (sync) | Sync legacy |
+| PR13 | M24 aplicada | Adaptador del protocolo v2 | PR12 | PR16 (CI) | Emisión fiscal real |
+| PR14 | M27 aplicada | Perfil VE + catálogos + saldos | PR11 | PR15 (suite) | Datos reales |
+| PR15 | Suite presente | Tests canónicos y test anti-país | PR14 | PR16 | Cobertura E2E |
+| PR16 | Todo lo anterior | CI en verde + `README` + meta-tests | PR15 | — | Fase 1 |
 
-**Base de la cadena**: PR 1 → `develop`; PR 2..9 → PR anterior (feature-branch-chain) o `develop` en orden (stacked-to-main). Cada child PR debe mostrar **sólo** su diff.
+### Plan de verificación por PR
+
+Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run build` (precondición del manifiesto de Vite) · `vendor/bin/pint --test` · `npm run lint:check` · `npm run typecheck` · `./vendor/bin/pest` (suite focalizada de la tabla y suite completa) · el harness de runtime de la tabla · revisión del diff (sólo su unidad) · comprobación manual de la frontera de la tabla. El **rollback** es por PR según la columna correspondiente; el de la numeración fiscal es **apagar, nunca renumerar**.
+
+**Base de la cadena** (`stacked-to-main`, la única estrategia en uso — no se mezclan): cada PR se abre contra `main` y se fusiona en orden. PR1 → `main`; PR2 → `main` (tras mergear PR1); y así sucesivamente.
 
 ---
 
@@ -114,6 +196,12 @@ Chain strategy: pending
 - [ ] **0.3.8-T** Test: `test_la_anulacion_consuma_el_correlativo_y_la_siguiente_reserva_devuelve_el_siguiente` — regla que fija: *el número consumido no se reutiliza jamás*.
 - [ ] **0.3.9** Contingencia en papel (`fiscal_contingency_forms`): los formatos en papel se usan **sólo** por contingencia, ante causales tasadas, y se mantienen en el establecimiento; al cesar la contingencia los documentos físicos se registran y se remiten **en PDF al día siguiente**. Dep: 0.3.2. Aceptación: existe la conciliación D+1 con la fecha de registro y el PDF remitido.
 - [ ] **0.3.9-T** Test: `test_el_papel_de_contingencia_se_concilia_en_pdf_al_dia_siguiente` — regla que fija: *el papel sólo es contingencia y se concilia a D+1*.
+- [ ] **0.3.10** **T1 — secuencia sin huecos**: 50 reservas consecutivas sobre la misma serie devuelven 50 correlativos consecutivos, sin huecos ni repeticiones, y la reserva queda registrada en `fiscal_document_reservations`. `tests/Feature/Fiscal/NumberReservationSequenceTest.php`, con el arnés de 0.9.5 (`DatabaseMigrations`, `TRUNCATE … RESTART IDENTITY CASCADE` en `afterEach`) y **sin `RefreshDatabase`**. Dep: 0.3.3, 0.9.5. Aceptación: los 50 números son consecutivos y ascendentes.
+- [ ] **0.3.10-T** Test: `test_cincuenta_reservas_consecutivas_no_dejan_huecos_ni_repiten_numero` — regla que fija: *el correlativo es consecutivo y único; el número reservado nunca se duplica*.
+- [ ] **0.3.11** **T2 — bloqueo real**: la conexión A bloquea la serie con `SELECT … FOR UPDATE`; la conexión B intenta reservar con `SET LOCAL lock_timeout = '250ms'` **dentro** de su transacción y falla con `QueryException` cuyo `getCode() === '55P03'` y SQLSTATE `lock_not_available`; `next_number` **no cambia** y la espera está entre 250 ms y 3 s. `tests/Feature/Fiscal/NumberReservationLockTest.php`, con `DB::connection('pgsql_b')` como segunda sesión. Dep: 0.3.10, 0.1.2. Aceptación: la reserva fiscal **no** usa `SKIP LOCKED` — espera y falla con timeout.
+- [ ] **0.3.11-T** Test: `test_la_reserva_bloqueada_falla_con_sqlstate_55p03_y_el_numero_no_avanza` — regla que fija: *el bloqueo de fila es real, no simulado*.
+- [ ] **0.3.12** **T3 — el rollback devuelve el número**: una reserva fallida dentro de una transacción que se revierte **devuelve** el número, y la devolución **se verifica desde la conexión B** (que no ve la transacción no commiteada). `tests/Feature/Fiscal/NumberReservationRollbackTest.php`. Dep: 0.3.11. Aceptación: tras el rollback, la siguiente reserva devuelve el mismo número que se había reservado, y la serie queda sin huecos.
+- [ ] **0.3.12-T** Test: `test_el_rollback_de_la_reserva_devuelve_el_numero_y_se_verifica_desde_la_segunda_conexion` — regla que fija: *una transacción fallida devuelve el número, pero una anulación no lo hace*.
 
 ---
 
@@ -230,8 +318,8 @@ Chain strategy: pending
 - [ ] **0.9.3-T** Test: `test_la_tasa_de_iva_sembrada_figura_pendiente_de_confirmacion_con_su_fuente` — regla que fija: *un dato no verificado se marca como pendiente, no se afirma*.
 - [ ] **0.9.4** `tests/Architecture/NoCountryLiteralsTest.php`: escanea recursivamente `app/Domain/**/*.php` (**no** escanea `tests/`, `config/`, `database/seeders/` ni `app/Providers/Fiscal/`) y falla ante: códigos ISO-3166 alpha-2 en posición de comparación, nombres de país en literales, códigos/símbolos de moneda (`USD`, `VES`, `MXN`, `CLP`, `COP`, `PAB`, `Bs`), autoridades (`seniat`, `sii`, `sat`, `dian`, `dgi`, `RIF`, `RUC`, `NIT`) y tokens normativos locales (`serie`, «Contribuyentes Formales del IVA», `(E)`). Mensaje: `Fallo de arquitectura: app/Domain/ contiene N literales de país.` + una línea por hallazgo `ruta:línea  categoría=…  literal=…` + el cierre de la regla de oro. Categorías: `country-code` · `country-name` · `currency` · `authority` · `locale-token`. Dep: 0.2.5. Aceptación: sin lista blanca; sólo literales de cadena y comparaciones (no nombres de clase ni constantes).
 - [ ] **0.9.4-T** Test: `test_ningun_literal_de_pais_sobrevive_en_app_domain` — regla que fija: *cambiar de país es insertar filas, no bifurcar código*.
-- [ ] **0.9.5** Arnés de concurrencia de la reserva fiscal — **T1, T2 y T3** (§E.1), **sin `RefreshDatabase`**: `DatabaseMigrations` + `TRUNCATE … RESTART IDENTITY CASCADE` en `afterEach`; `DB::connection('pgsql_b')` para la segunda sesión; `SET LOCAL lock_timeout = '250ms'` **dentro** de la transacción de B. T1 = 50 reservas consecutivas sin huecos (`tests/Feature/Fiscal/NumberReservationSequenceTest.php`); T2 = bloqueo real → `QueryException` con `getCode() === '55P03'` y `lock_not_available`, `next_number` sin cambios, espera entre 250 ms y 3 s (`NumberReservationLockTest.php`); T3 = el rollback devuelve el número y **se verifica desde la conexión B** (`NumberReservationRollbackTest.php`). Dep: 0.1.2, 0.3.3. Aceptación: la reserva fiscal **no** usa `SKIP LOCKED` — espera y falla con timeout.
-- [ ] **0.9.5-T** Test: `test_la_reserva_bloqueada_falla_con_sqlstate_55p03_y_el_rollback_devuelve_el_numero` — regla que fija: *el bloqueo de fila es real, no simulado*.
+- [ ] **0.9.5** Arnés **reutilizable** de concurrencia (§E.1), **sin `RefreshDatabase`**: clase `DatabaseMigrations` con `TRUNCATE … RESTART IDENTITY CASCADE` en `afterEach`; helper de segunda sesión `DB::connection('pgsql_b')`; helper de `SET LOCAL lock_timeout = '250ms'` **dentro** de la transacción de B. Los **tests T1, T2 y T3 viven en la Fase 0.3** (tareas 0.3.4–0.3.6), junto al código que prueban; aquí queda sólo el arnés que reutilizan. Dep: 0.1.2. Aceptación: el arnés deja la base limpia entre pruebas y `pgsql_b` abre contra la misma base que `pgsql`.
+- [ ] **0.9.5-T** Test: `test_el_arnes_de_concurrencia_deja_la_base_limpia_y_la_segunda_conexion_apunta_a_la_misma_base` — regla que fija: *el bloqueo de fila se prueba con dos sesiones PostgreSQL distintas sobre la misma base, y el arnés no deja residuos entre pruebas*.
 - [ ] **0.9.6** Barrido de la suite: comprobar que los **44 nombres** de §E.5 existen **exactamente una vez** y que los **6 transversales** de §E.2 existen; escribir los que falten y unificar los nombres divergentes con los canónicos. Distribución: `tests/Unit/{Tax,Fiscal,Accounting,Sync}/`, `tests/Feature/{Fiscal,Inventory,Sync,Print,Accounting,Checkout}/`. Dep: 0.2.1–0.8.9. Aceptación: cada nombre enuncia la regla que fija y es legible sin abrir el cuerpo; **ningún** test queda sin nombre canónico.
 - [ ] **0.9.6-T** Test: `test_cada_test_de_la_suite_declara_la_regla_de_negocio_que_fija` — regla que fija: *el test es la documentación de la regla*.
 - [ ] **0.9.7** Meta-tests de la suite: test que comprueba que la suite cubre checkout, FIFO, impuestos, reserva fiscal, cuotas, saldo de caja y devolución que repone stock; y **baseline verde** sin fallos preexistentes sin aislar. Dep: 0.9.6. Aceptación: `./vendor/bin/pest` en verde.
@@ -269,7 +357,7 @@ Chain strategy: pending
 | 14 | `numeracion-fiscal` · El número no retrocede | 0.3.8 | 0.3.8-T |
 | 15 | `numeracion-fiscal` · Primera asignación de control | 0.3.5 | 0.3.5-T |
 | 16 | `numeracion-fiscal` · Invariante del número de control | 0.3.4 | 0.3.4-T |
-| 17 | `numeracion-fiscal` · T1–T3 sin `RefreshDatabase` | 0.1.2, 0.9.5 | 0.9.5-T |
+| 17 | `numeracion-fiscal` · T1–T3 sin `RefreshDatabase` | 0.1.2, 0.3.10–0.3.12, 0.9.5 (arnés) | 0.3.10-T, 0.3.11-T, 0.3.12-T |
 | 18 | `motor-impuestos` · `TaxCalculator` puro | 0.6.1, 0.2.7 | 0.6.1-T |
 | 19 | `motor-impuestos` · Cinco categorías y snapshots congelados | 0.2.3, 0.6.3, 0.4.4 | 0.6.3-T |
 | 20 | `motor-impuestos` · Redondeo por línea con ajuste visible | 0.6.2 | 0.6.2-T |
@@ -332,11 +420,11 @@ Chain strategy: pending
 | **B3** | **Transcripción de SNAT/2026/00093** (texto de terceros) validada contra el PDF de la G.O. 43.484 | Dato externo | Legal del cliente | La **evidencia** (`source_ref` → PDF oficial); no el código |
 | **B4** | **Listado de imprentas digitales autorizadas** (O6) | Dato externo | Legal del cliente | El **actor del canal** (`fiscal_providers.kind`); no el esquema |
 | **B5** | **Manual Técnico del art. 41** | Dato externo | SENIAT | El **adaptador real** de Fase 1; **no** Fase 0 |
-| **B6** | **Estrategia de cadena de PRs** (`stacked-to-main` · `feature-branch-chain` · `size:exception`) | Decisión del equipo | Maintainer | **El inicio de `sdd-apply`** (`Decision needed before apply: Yes`) |
+| **B6** | ~~Estrategia de cadena de PRs~~ **RESUELTO 2026-10-31**: `stacked-to-main`, 16 PRs, presupuesto de 800 líneas por PR (§Cadena de entrega) | Decisión del equipo | Maintainer | Resuelto: **no bloquea `sdd-apply`** |
 | **B7** | **Formato del correlativo** (`000-00000000`, P6) y **serie propia de compras** (P7) | Decisión de producto, ya recomendada | Producto | Nada: son **datos sembrados** (`number_formats`, `fiscal_series`) |
 | **B8** | Rol dual **emisor + imprenta** (P32/D1) | Decisión de producto, ya recomendada | Producto | Nada en Fase 0: se siembran ambos roles y se activa sólo `issuer` |
 
-**No bloquea `sdd-apply`**: B1–B5 y B7–B8 son dependencias de datos y decisiones de producto; B6 es la única decisión que bloquea el **arranque de la implementación**.
+**No bloquea `sdd-apply`**: B1–B5 y B7–B8 son dependencias de datos y decisiones de producto; **B6 quedó resuelto** (estrategia `stacked-to-main`, 16 PRs, presupuesto de 800 líneas por PR), de modo que la implementación puede arrancar.
 
 ---
 
