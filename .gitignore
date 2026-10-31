@@ -25,3 +25,6 @@ npm-debug.log
 yarn-error.log
 # Local AI runtime state
 .atl/
+
+# Local CodeGraph index (per-worktree)
+.codegraph/
