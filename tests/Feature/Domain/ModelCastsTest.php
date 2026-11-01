@@ -22,6 +22,8 @@ use App\Models\SmsProvider;
 use App\Models\Store;
 use App\Models\StoreFiscalRegistration;
 use App\Models\StoreSetting;
+use App\Models\TaxCategory;
+use App\Models\TaxRate;
 use App\Models\User;
 use App\Models\UserSetting;
 use Brick\Math\BigDecimal;
@@ -93,9 +95,9 @@ test('test_los_modelos_declaran_sus_casts_de_importes_y_de_json', function () {
 });
 
 /**
- * 0.2.6-T (parte) — los modelos de la capa de país y fiscal declaran sus casts
- * y sus relaciones con FK. `TaxCategory` y `TaxRate` llegan con M03 (PR6):
- * la tarea 0.2.6 sigue abierta.
+ * 0.2.6-T — los modelos de la capa de país y fiscal declaran sus casts y sus
+ * relaciones con FK. Con M03 (M03 cierra la tarea) los DOCE modelos de la
+ * capa están cubiertos.
  */
 test('test_los_modelos_de_la_capa_de_pais_y_fiscal_declaran_sus_casts_y_sus_relaciones', function () {
     expect((new Country)->getCasts())->toHaveKey('default_currency_id', 'integer')
@@ -127,7 +129,19 @@ test('test_los_modelos_de_la_capa_de_pais_y_fiscal_declaran_sus_casts_y_sus_rela
         ->and((new FiscalStatusVocabulary)->getCasts())->toHaveKey('generic_status', 'string')
         ->and((new FiscalStatusVocabulary)->getCasts())->toHaveKey('is_cancellation', 'boolean')
         ->and((new FiscalProvider)->getCasts())->toHaveKey('kind', 'string')
-        ->and((new FiscalProvider)->getCasts())->toHaveKey('is_active', 'boolean');
+        ->and((new FiscalProvider)->getCasts())->toHaveKey('is_active', 'boolean')
+        ->and((new TaxCategory)->getCasts())->toHaveKey('fiscal_profile_id', 'integer')
+        ->and((new TaxCategory)->getCasts())->toHaveKey('is_withholding', 'boolean')
+        ->and((new TaxCategory)->getCasts())->toHaveKey('evidence_status', 'string')
+        ->and((new TaxCategory)->getCasts())->toHaveKey('source_ref', 'string')
+        ->and((new TaxRate)->getCasts())->toHaveKey('tax_category_id', 'integer')
+        ->and((new TaxRate)->getCasts())->toHaveKey('percentage', 'decimal:6')
+        ->and((new TaxRate)->getCasts())->toHaveKey('rounding_rule', 'string')
+        ->and((new TaxRate)->getCasts())->toHaveKey('valid_from', 'date')
+        ->and((new TaxRate)->getCasts())->toHaveKey('valid_to', 'date')
+        ->and((new TaxRate)->getCasts())->toHaveKey('priority', 'integer')
+        ->and((new TaxRate)->getCasts())->toHaveKey('evidence_status', 'string')
+        ->and((new TaxRate)->getCasts())->toHaveKey('source_ref', 'string');
 
     expect((new Country)->defaultCurrency())->toBeInstanceOf(BelongsTo::class)
         ->and((new Country)->numberFormat())->toBeInstanceOf(HasOne::class)
@@ -148,5 +162,9 @@ test('test_los_modelos_de_la_capa_de_pais_y_fiscal_declaran_sus_casts_y_sus_rela
         ->and((new FiscalTaxScheme)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
         ->and((new FiscalStatusVocabulary)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
         ->and((new FiscalProvider)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
-        ->and((new FiscalProvider)->environments())->toBeInstanceOf(HasMany::class);
+        ->and((new FiscalProvider)->environments())->toBeInstanceOf(HasMany::class)
+        ->and((new FiscalProfile)->categories())->toBeInstanceOf(HasMany::class)
+        ->and((new TaxCategory)->fiscalProfile())->toBeInstanceOf(BelongsTo::class)
+        ->and((new TaxCategory)->rates())->toBeInstanceOf(HasMany::class)
+        ->and((new TaxRate)->category())->toBeInstanceOf(BelongsTo::class);
 });
