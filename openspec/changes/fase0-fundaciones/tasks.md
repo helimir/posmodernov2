@@ -80,8 +80,8 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 2 | `feat/fase0-02-ciimientos-b` | 1b | M25–M26 + 6 modelos (i18n, outbox SMS, auditoría) | 491 | PR #4 · issue #3 | **fusionado** `a5e5100` |
 | 3 | `feat/fase0-03-pais-fiscal-a` | 2a (M01) | M01 + `Country`/`Currency`/`NumberFormat` | 241 | PR #6 · issue #5 | **fusionado** `8b9c553` |
 | 4 | `feat/fase0-04-pais-fiscal-b` | 2b (M02) | M02 + `fiscal_providers` + 7 modelos de perfil fiscal | 767 | PR #8 · issue #7 | **fusionado** `ba28322` |
-| 5 | `feat/fase0-05-pais-fiscal-c` | 2c-a (0.2.4 + 0.2.5) | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genéricos + sustitución de las constantes de PR4 | **773** | — | **listo** `1e62bdb` (sin push) |
-| 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b (0.2.3 + 0.2.6 + 0.2.7) | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | — | en curso |
+| 5 | `feat/fase0-05-pais-fiscal-c` | 2c-a (0.2.4 + 0.2.5) | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genéricos + sustitución de las constantes de PR4 | **773** | PR #10 · issue #9 | **fusionado** `adac1b6` |
+| 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b (0.2.3 + 0.2.6 + 0.2.7) | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | PR #12 · issue #11 | **fusionado** `efbf00d` |
 | 7 | `feat/fase0-07-numeracion-a` | 3a | M21 + series/reservas + `NumberSeries` | 238 | — | pendiente |
 | 8 | `feat/fase0-08-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render + **T1–T3** | 630 | — | pendiente |
 | 9 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
