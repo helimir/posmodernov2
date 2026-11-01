@@ -72,7 +72,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 
 ### Corte final: 18 PRs (`stacked-to-main`)
 
-> **Estado real de la cadena** (actualizado 2026-10-31). La work unit "pais/fiscal a" resultó medir **1.004 líneas**, 204 por encima del techo, así que se **re-sliced** en dos: la work unit "pais/fiscal a" original pasó a ser **PR3 (M01)** y **PR4 (M02 + 7 modelos)**. De ahí 16 PRs pasan a **17**. El re-slice quedó registrado en el ledger con `sdd-attempt reset` y su motivo. La work unit "pais/fiscal c" resultó medir **1.052 líneas** de código y tests (**1.203** con `tasks.md` y `apply-progress.md`), 252 por encima del techo: **no** se concede `size:exception` y se **parte** en dos — **PR5 (0.2.4 + 0.2.5: contrato del actor intermedio + value objects + enums genéricos)** y **PR6 (0.2.3 + 0.2.6 + 0.2.7: M03 + modelos `TaxCategory`/`TaxRate` + `TaxContext`)**. De ahí 17 PRs pasan a **18**.
+> **Estado real de la cadena** (actualizado 2026-10-31). La work unit "pais/fiscal a" resultó medir **1.004 líneas**, 204 por encima del techo, así que se **re-sliced** en dos: la work unit "pais/fiscal a" original pasó a ser **PR3 (M01)** y **PR4 (M02 + 7 modelos)**. De ahí 16 PRs pasan a **17**. El re-slice quedó registrado en el ledger con `sdd-attempt reset` y su motivo. La work unit "pais/fiscal c" resultó medir **1.052 líneas** de código y tests (**1.203** con los artefactos SDD), 252 por encima del techo: **no** se concede `size:exception` y se **parte** en dos — **PR5 (0.2.4 + 0.2.5: contrato del actor intermedio + value objects + enums genéricos)** y **PR6 (0.2.3 + 0.2.6 + 0.2.7: M03 + modelos `TaxCategory`/`TaxRate` + `TaxContext`)**. De ahí 17 PRs pasan a **18**. La work unit "numeracion a" resultó medir **874 líneas** (835 adiciones + 39 borrados), **74 por encima** del techo de 800: **tampoco** se concede `size:exception` y se **parte** en dos slices encadenados — **PR7 (3a-i: M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnés de concurrencia, 362 líneas)** y **PR8 (3a-ii: `NumberSeries` + reserva atómica + T1–T3 + artefactos SDD, 512 líneas)**. **T1–T3 salen del PR9 (numeracion b) y entran en el PR8.** De ahí 18 PRs pasan a **19** y **quedan 11** (PR9–PR19).
 
 | # | Rama | Work unit | Contenido | Líneas est. | GitHub | Estado |
 |---|---|---|---|---|---|---|
@@ -82,18 +82,19 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 4 | `feat/fase0-04-pais-fiscal-b` | 2b (M02) | M02 + `fiscal_providers` + 7 modelos de perfil fiscal | 767 | PR #8 · issue #7 | **fusionado** `ba28322` |
 | 5 | `feat/fase0-05-pais-fiscal-c` | 2c-a (0.2.4 + 0.2.5) | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genéricos + sustitución de las constantes de PR4 | **773** | PR #10 · issue #9 | **fusionado** `adac1b6` |
 | 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b (0.2.3 + 0.2.6 + 0.2.7) | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | PR #12 · issue #11 | **fusionado** `efbf00d` |
-| 7 | `feat/fase0-07-numeracion-a` | 3a | M21 + series/reservas + `NumberSeries` | 238 | — | pendiente |
-| 8 | `feat/fase0-08-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render + **T1–T3** | 630 | — | pendiente |
-| 9 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
-| 10 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
-| 11 | `feat/fase0-11-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
-| 12 | `feat/fase0-12-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | 757 | — | pendiente |
-| 13 | `feat/fase0-13-contabilidad-caja` | 7 | M18–M20 + `LedgerWriter` + `business_date` + saldos | 792 | — | pendiente |
-| 14 | `feat/fase0-14-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | 565 | — | pendiente |
-| 15 | `feat/fase0-15-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | 464 | — | pendiente |
-| 16 | `feat/fase0-16-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | — | pendiente |
-| 17 | `feat/fase0-17-suite` | 9b | `NoCountryLiteralsTest` + tests canónicos | 550 | — | pendiente |
-| 18 | `feat/fase0-18-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | 340 | — | pendiente |
+| 7 | `feat/fase0-07-numeracion-a` | 3a-i | M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnés de concurrencia | **362** | — | implementado (pendiente de PR) |
+| 8 | `feat/fase0-07-numeracion-a` | 3a-ii | `NumberSeries` + reserva atómica + **T1–T3** + artefactos SDD | **512** | — | implementado (pendiente de PR) |
+| 9 | `feat/fase0-08-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render | 630 | — | pendiente |
+| 10 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
+| 11 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
+| 12 | `feat/fase0-11-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
+| 13 | `feat/fase0-12-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | 757 | — | pendiente |
+| 14 | `feat/fase0-13-contabilidad-caja` | 7 | M18–M20 + `LedgerWriter` + `business_date` + saldos | 792 | — | pendiente |
+| 15 | `feat/fase0-14-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | 565 | — | pendiente |
+| 16 | `feat/fase0-15-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | 464 | — | pendiente |
+| 17 | `feat/fase0-16-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | — | pendiente |
+| 18 | `feat/fase0-17-suite` | 9b | `NoCountryLiteralsTest` + tests canónicos | 550 | — | pendiente |
+| 19 | `feat/fase0-18-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | 340 | — | pendiente |
 
 **Reglas operativas de la cadena** (verificadas en la práctica):
 
@@ -108,8 +109,8 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | PR2 | `feature/fase0-02-ciimientos-b` | 1b | M25–M26 + 6 modelos (i18n/outbox/auditoría) | 388 | `./vendor/bin/pest --filter="AuditLog\|SmsMessage"` | `migrate:fresh` | Revertible |
 | PR3 | `feature/fase0-03-pais-fiscal-a` | 2a | M01–M02 + 10 modelos país/perfil fiscal | 509 | `./vendor/bin/pest --filter="FiscalProfile\|Country"` | `migrate:fresh --seed` | Revertible |
 | PR4 | `feature/fase0-04-pais-fiscal-b` | 2b | M03 + contrato + 8 value objects + 5 enums + `TaxContext` | 562 | `./vendor/bin/pest --filter="TaxContext"` | `tinker` → `TaxRate::where('evidence_status','pending_confirmation')` | Revertible; catálogo sembrado en PR15 |
-| PR5 | `feature/fase0-05-numeracion-a` | 3a | M21 + series/reservas + `NumberSeries` | 238 | `./vendor/bin/pest --filter="NumberSeries"` | `tinker` → 2 reservas seguidas | **NUNCA** borrar `fiscal_document_reservations`; rollback = apagar `fiscal.emission_enabled` |
-| PR6 | `feature/fase0-06-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render + **T1–T3** | 630 | `./vendor/bin/pest tests/Feature/Fiscal` | `psql -c "select next_number from fiscal_series"` | Ídem PR5; **el número nunca se renumera** |
+| PR5 | `feature/fase0-05-numeracion-a` | 3a | M21 + series/reservas + `NumberSeries` + **T1–T3** | 874 | `./vendor/bin/pest tests/Feature/Fiscal` | script de integración con `pgsql` + `pgsql_b` | **NUNCA** borrar `fiscal_document_reservations`; rollback = apagar `fiscal.emission_enabled` |
+| PR6 | `feature/fase0-06-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render | 630 | `./vendor/bin/pest tests/Feature/Fiscal` | `psql -c "select next_number from fiscal_series"` | Ídem PR5; **el número nunca se renumera** |
 | PR7 | `feature/fase0-07-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | `./vendor/bin/pest --filter="Product\|Customer"` | `migrate:fresh --seed` | Revertible |
 | PR8 | `feature/fase0-08-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | `./vendor/bin/pest --filter="Sale\|Purchase"` | `migrate:fresh --seed` | Revertible |
 | PR9 | `feature/fase0-09-stock-lotes` | 5 | M14–M17 + `LotConsumer`, `LotReturner`, `StockInvariant` | 772 | `./vendor/bin/pest tests/Feature/Inventory` | `tinker` → venta FIFO sobre 2 lotes | Revertible; sin `status` mutable ⇒ nada que desincronizar |
@@ -121,7 +122,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | PR15 | `feature/fase0-15-suite` | 9b | `NoCountryLiteralsTest` + 4 canónicos de 0.9.11 | 550 | `./vendor/bin/pest` | suite completa verde | Sin impacto en runtime |
 | PR16 | `feature/fase0-16-ci-docs` | 9c | workflow CI + `README.md` + 7 meta-tests | 340 | `./vendor/bin/pest` | push a `main` con PostgreSQL 17 en CI | Sin impacto en runtime |
 
-**PRs finales = 18** (16 en el corte original + 1 por el re-slice de la work unit "pais/fiscal a", que medía 1.004 líneas, + 1 por el re-slice de la work unit "pais/fiscal c", que medía 1.052 líneas). Mínimo **13** si se aceptaran enteras las unidades frágiles (U3 845, U5 772, U6 757, U7 792).
+**PRs finales = 19** (16 en el corte original + 1 por el re-slice de la work unit "pais/fiscal a", que medía 1.004 líneas, + 1 por el re-slice de la work unit "pais/fiscal c", que medía 1.052 líneas, + 1 por el re-slice de la work unit "numeracion a", que medía 819 líneas). Mínimo **13** si se aceptaran enteras las unidades frágiles (U3 845, U5 772, U6 757, U7 792).
 
 > La tabla anterior es la **medición original por work unit** (9 unidades). El corte en 18 PRs y el estado real de cada uno están en **§Cadena de entrega → Estado real de la cadena**.
 
@@ -130,13 +131,13 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 ```
 PR1 ─┬─► PR2
      ├─► PR3 ─► PR4 ─► PR5 ─► PR6
-                              📍 = PR en curso
-     └─► PR7 ─► PR8
-PR9 ─┬─► PR10
-     ├─► PR11 ─┬─► PR12 ─► PR13
-     │         │
-     └─► PR14 ─► PR15
-PR16 ─► PR17 ─► PR18
+     └─► PR7 ─► PR8 ─► PR9
+          📍 = PR en curso
+PR10 ─┬─► PR11
+      ├─► PR12 ─┬─► PR13 ─► PR14
+      │         │
+      └─► PR15 ─► PR16
+PR17 ─► PR18 ─► PR19
 ```
 
 ### Chain Context por PR
@@ -149,8 +150,8 @@ Reglas de la skill `chained-pr`: cada PR declara *inicio*, *fin*, *dependencias 
 | PR2 | M25–M26 aplicadas | i18n, outbox SMS y auditoría de negocio | PR1 | PR15 (suite completa) | Facturación fiscal |
 | PR3 | País y perfil fiscal | Perfil, país, moneda y formato como datos | PR1 | PR4 (contratos fiscales) | Adaptadores por país |
 | PR4 | Contrato fiscal | `TaxContext`, enums y value objects | PR3 | PR10 (`TaxCalculator` completo) | Cálculo de impuestos |
-| PR5 | M21 aplicada | Series con reserva atómica | PR1 | PR6 (emisión) | Emisión del documento |
-| PR6 | M22 aplicada | `FiscalIssuanceService` + T1–T3 verdes | PR5, PR1 | PR10 (checkout con reserva) | Adaptador real de SENIAT |
+| PR5 | M21 aplicada | Series con reserva atómica + **T1–T3** | PR1 | PR6 (emisión) | Emisión del documento |
+| PR6 | M22 aplicada | `FiscalIssuanceService` + generator + render | PR5, PR1 | PR10 (checkout con reserva) | Adaptador real de SENIAT |
 | PR7 | M08–M10 aplicadas | Catálogo y clientes | PR1 | PR8 (ventas/compra) | Stock |
 | PR8 | M11–M13 aplicadas | Esquema de ventas y compras | PR7 | PR9 (lotes) | Checkout |
 | PR9 | M14–M17 aplicadas | FIFO con `SKIP LOCKED` y reposición al lote exacto | PR8 | PR10 (checkout) | Impresión |
@@ -210,12 +211,12 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 
 ## Fase 0.3 — Numeración fiscal y documentos fiscales
 
-- [ ] **0.3.1** Migración **M21** `2026_11_01_000021_create_fiscal_providers_and_series_table.php`: `fiscal_providers` (`kind` ∈ `printer`/`pac`/`portal`) y `fiscal_series` (`series_role` **canónico** ∈ `document`/`control`/`retention_receipt` — `series_kind` queda como alias documentado, **sin columna**—, `assigned_by` ∈ `issuer`/`authority`/`printer`/`psp`, `prefix`, `next_number`, `from_number`, `to_number`, `valid_from`, `valid_to`, `credential_ref`, `control_identifier`, `sequence_length`) + `fiscal_document_reservations` (`series_id`, `number`, `series_role`, `reserved_by`, `reserved_at`, `voided_at`). Dep: 0.2.2, 0.2.6. Aceptación: **no** existe columna `series_kind`; la serie de control guarda el rango de la imprenta (espejo local, C3).
-- [ ] **0.3.1-T** Test: `test_la_serie_se_distingue_por_rol_y_por_autoridad_y_no_por_un_alias_de_columna` — regla que fija: *hay dos numeraciones con autoridades distintas*.
+- [x] **0.3.1** Migración **M21** `2026_11_01_000021_create_fiscal_series_table.php`: `fiscal_series` (`series_role` **canónico** ∈ `document`/`control`/`retention_receipt` — `series_kind` queda como alias documentado, **sin columna**—, `assigned_by` ∈ `issuer`/`authority`/`printer`/`psp`, `prefix`, `next_number`, `from_number`, `to_number`, `valid_from`, `valid_to`, `credential_ref`, `control_identifier`, `sequence_length`) + `fiscal_document_reservations` (`series_id`, `number`, `series_role`, `reserved_by`, `reserved_at`, `voided_at`). Dep: 0.2.2, 0.2.6. Aceptación: **no** existe columna `series_kind`; la serie de control guarda el rango de la imprenta (espejo local, C3). · **PR7**: la migración se **RENOMBRA** — el plan prometía `2026_11_01_000021_create_fiscal_providers_and_series_table.php`, pero `fiscal_providers` **ya existe** (la crea M02, PR4, ya fusionado en `main`): M21 **no la recrea** (sería un error de migración), sólo la referencia (`provider_id` → `fiscal_providers.id`). El nombre nuevo refleja ese alcance real.
+- [x] **0.3.1-T** Test: `test_la_serie_se_distingue_por_rol_y_por_autoridad_y_no_por_un_alias_de_columna` — regla que fija: *hay dos numeraciones con autoridades distintas*.
 - [ ] **0.3.2** Migración **M22** `2026_11_01_000022_create_fiscal_documents_table.php`: `fiscal_documents` (`status` enum genérico, `native_status_code`, `authority_reference` + `authority_reference_scheme`, `qr_content`/`qr_url` **nullable**, `hash_algorithm`/`signature_scheme` parametrizados, `voided_at`), `fiscal_document_taxes` (multinivel: `line_id` **nullable** para el nodo de cabecera), `fiscal_document_parties` (`role`: emisor/receptor/tercero), `fiscal_document_links` (notas, RADIAN, anulación), `fiscal_document_events` (**append-only**: actor, instante, payload), `fiscal_document_control_assignments` (1:1 con el documento: `control_number`, `control_range_from`, `control_range_to`, `printer_id`, `printer_rif`), `fiscal_periodic_reports`, `fiscal_contingency_forms`. Dep: 0.3.1. Aceptación: el control tiene **una única sede** (no se duplica en `fiscal_documents`); `fiscal_document_events` sin `updated_at`/`deleted_at` y con permiso de escritura bloqueado.
 - [ ] **0.3.2-T** Test: `test_los_eventos_fiscales_son_append_only_y_no_admiten_borrado` — regla que fija: *toda acción de emisión, modificación o anulación queda auditada*.
-- [ ] **0.3.3** `app/Domain/Fiscal/NumberSeries.php`: reserva atómica con `UPDATE fiscal_series SET next_number = next_number + 1 WHERE id = ? AND next_number <= to_number RETURNING next_number - 1` y su escritura en `fiscal_document_reservations` — **nunca** `rowCount()` ni lectura del último registro (el legacy usa `rowCount()` de un `SELECT` en `_inc/helper/invoice.php:95-109`). Dep: 0.3.1. Aceptación: el número reservado se devuelve **en la misma sentencia**; la reserva no usa `SKIP LOCKED` (a diferencia del FIFO) — espera y falla con timeout.
-- [ ] **0.3.3-T** Test: `test_la_reserva_devuelve_el_numero_reservado_en_la_misma_sentencia_que_toma_el_bloqueo` — regla que fija: *la reserva es atómica por construcción, no por lectura posterior*.
+- [x] **0.3.3** `app/Domain/Fiscal/NumberSeries.php`: reserva atómica con `UPDATE fiscal_series SET next_number = next_number + 1 WHERE id = ? AND next_number <= to_number RETURNING next_number - 1` y su escritura en `fiscal_document_reservations` — **nunca** `rowCount()` ni lectura del último registro (el legacy usa `rowCount()` de un `SELECT` en `_inc/helper/invoice.php:95-109`). Dep: 0.3.1. Aceptación: el número reservado se devuelve **en la misma sentencia**; la reserva no usa `SKIP LOCKED` (a diferencia del FIFO) — espera y falla con timeout. · **PR7**: el `UPDATE … RETURNING` es literal; la traza se escribe con un `INSERT … SELECT` que copia el rol de la fila que la sentencia anterior bloqueó (ningún literal de rol en el dominio); la conexión se inyecta, que es lo que permite a T2/T3 usar la segunda sesión.
+- [x] **0.3.3-T** Test: `test_la_reserva_devuelve_el_numero_reservado_en_la_misma_sentencia_que_toma_el_bloqueo` — regla que fija: *la reserva es atómica por construcción, no por lectura posterior*.
 - [ ] **0.3.4** `app/Domain/Fiscal/FiscalIssuanceService.php`: orquesta **T2** (`submit()` → `assignControl()` → `issue()`), persiste `fiscal_documents` + `_events` + `_control_assignments` en **una** transacción, valida la **invariante del control** (exactamente una asignación si `requires_control_number`, cero si no) **antes** de consolidar, y registra la **discrepancia de correspondencia** (C3) como evento. Dep: 0.3.2, 0.3.3. Aceptación: la llamada HTTP al proveedor ocurre **fuera** de la transacción de BD; un fallo deja `sales.status='fiscal_failed'` y **reutiliza** la reserva existente.
 - [ ] **0.3.4-T** Test: `test_la_consolidacion_se_rechaza_si_el_control_no_corresponde_al_perfil` — regla que fija: *exactamente un número de control si el perfil lo exige*.
 - [ ] **0.3.5** Generador del Nº de Control: primera asignación = `control_identifier='00'` + secuencial `1`, `sequence_length` de hasta 8, y registro del **rango total** `control_range_from`/`control_range_to` en el documento. Dep: 0.3.4. Aceptación: el rango queda persistido y consultable por el documento.
@@ -228,12 +229,12 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 - [ ] **0.3.8-T** Test: `test_la_anulacion_consuma_el_correlativo_y_la_siguiente_reserva_devuelve_el_siguiente` — regla que fija: *el número consumido no se reutiliza jamás*.
 - [ ] **0.3.9** Contingencia en papel (`fiscal_contingency_forms`): los formatos en papel se usan **sólo** por contingencia, ante causales tasadas, y se mantienen en el establecimiento; al cesar la contingencia los documentos físicos se registran y se remiten **en PDF al día siguiente**. Dep: 0.3.2. Aceptación: existe la conciliación D+1 con la fecha de registro y el PDF remitido.
 - [ ] **0.3.9-T** Test: `test_el_papel_de_contingencia_se_concilia_en_pdf_al_dia_siguiente` — regla que fija: *el papel sólo es contingencia y se concilia a D+1*.
-- [ ] **0.3.10** **T1 — secuencia sin huecos**: 50 reservas consecutivas sobre la misma serie devuelven 50 correlativos consecutivos, sin huecos ni repeticiones, y la reserva queda registrada en `fiscal_document_reservations`. `tests/Feature/Fiscal/NumberReservationSequenceTest.php`, con el arnés de 0.9.5 (`DatabaseMigrations`, `TRUNCATE … RESTART IDENTITY CASCADE` en `afterEach`) y **sin `RefreshDatabase`**. Dep: 0.3.3, 0.9.5. Aceptación: los 50 números son consecutivos y ascendentes.
-- [ ] **0.3.10-T** Test: `test_cincuenta_reservas_consecutivas_no_dejan_huecos_ni_repiten_numero` — regla que fija: *el correlativo es consecutivo y único; el número reservado nunca se duplica*.
-- [ ] **0.3.11** **T2 — bloqueo real**: la conexión A bloquea la serie con `SELECT … FOR UPDATE`; la conexión B intenta reservar con `SET LOCAL lock_timeout = '250ms'` **dentro** de su transacción y falla con `QueryException` cuyo `getCode() === '55P03'` y SQLSTATE `lock_not_available`; `next_number` **no cambia** y la espera está entre 250 ms y 3 s. `tests/Feature/Fiscal/NumberReservationLockTest.php`, con `DB::connection('pgsql_b')` como segunda sesión. Dep: 0.3.10, 0.1.2. Aceptación: la reserva fiscal **no** usa `SKIP LOCKED` — espera y falla con timeout.
-- [ ] **0.3.11-T** Test: `test_la_reserva_bloqueada_falla_con_sqlstate_55p03_y_el_numero_no_avanza` — regla que fija: *el bloqueo de fila es real, no simulado*.
-- [ ] **0.3.12** **T3 — el rollback devuelve el número**: una reserva fallida dentro de una transacción que se revierte **devuelve** el número, y la devolución **se verifica desde la conexión B** (que no ve la transacción no commiteada). `tests/Feature/Fiscal/NumberReservationRollbackTest.php`. Dep: 0.3.11. Aceptación: tras el rollback, la siguiente reserva devuelve el mismo número que se había reservado, y la serie queda sin huecos.
-- [ ] **0.3.12-T** Test: `test_el_rollback_de_la_reserva_devuelve_el_numero_y_se_verifica_desde_la_segunda_conexion` — regla que fija: *una transacción fallida devuelve el número, pero una anulación no lo hace*.
+- [x] **0.3.10** **T1 — secuencia sin huecos**: 50 reservas consecutivas sobre la misma serie devuelven 50 correlativos consecutivos, sin huecos ni repeticiones, y la reserva queda registrada en `fiscal_document_reservations`. `tests/Feature/Fiscal/NumberReservationSequenceTest.php`, con el arnés de 0.9.5 (`DatabaseMigrations`, `TRUNCATE … RESTART IDENTITY CASCADE` en `afterEach`) y **sin `RefreshDatabase`**. Dep: 0.3.3, 0.9.5. Aceptación: los 50 números son consecutivos y ascendentes. · **PR7**: el arnés usa el trait `Tests\Concerns\WithoutWrappingTransaction` en vez de `DatabaseMigrations` — vacía la lista de conexiones que `RefreshDatabase` transacciona, con el **mismo** efecto buscado (filas commiteadas, visibles para `pgsql_b`) sin `migrate:fresh` por test.
+- [x] **0.3.10-T** Test: `test_cincuenta_reservas_consecutivas_no_dejan_huecos_ni_repiten_numero` — regla que fija: *el correlativo es consecutivo y único; el número reservado nunca se duplica*.
+- [x] **0.3.11** **T2 — bloqueo real**: la conexión A bloquea la serie con `SELECT … FOR UPDATE`; la conexión B intenta reservar con `SET LOCAL lock_timeout = '250ms'` **dentro** de su transacción y falla con `QueryException` cuyo `getCode() === '55P03'` y SQLSTATE `lock_not_available`; `next_number` **no cambia** y la espera está entre 250 ms y 3 s. `tests/Feature/Fiscal/NumberReservationLockTest.php`, con `DB::connection('pgsql_b')` como segunda sesión. Dep: 0.3.10, 0.1.2. Aceptación: la reserva fiscal **no** usa `SKIP LOCKED` — espera y falla con timeout. · **PR7**: PostgreSQL nombra la condición en lenguaje natural ("Lock not available"); el test afirma el SQLSTATE `55P03` y ese texto, no el identificador `lock_not_available`.
+- [x] **0.3.11-T** Test: `test_la_reserva_bloqueada_falla_con_sqlstate_55p03_y_el_numero_no_avanza` — regla que fija: *el bloqueo de fila es real, no simulado*.
+- [x] **0.3.12** **T3 — el rollback devuelve el número**: una reserva fallida dentro de una transacción que se revierte **devuelve** el número, y la devolución **se verifica desde la conexión B** (que no ve la transacción no commiteada). `tests/Feature/Fiscal/NumberReservationRollbackTest.php`. Dep: 0.3.11. Aceptación: tras el rollback, la siguiente reserva devuelve el mismo número que se había reservado, y la serie queda sin huecos.
+- [x] **0.3.12-T** Test: `test_el_rollback_de_la_reserva_devuelve_el_numero_y_se_verifica_desde_la_segunda_conexion` — regla que fija: *una transacción fallida devuelve el número, pero una anulación no lo hace*.
 
 ---
 
