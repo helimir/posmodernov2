@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Fiscal\Enums\EnvironmentRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,12 +11,6 @@ use InvalidArgumentException;
 class FiscalProfileEnvironment extends Model
 {
     use HasFactory;
-
-    /**
-     * Conjunto cerrado del papel del despliegue. Los enums genéricos del
-     * dominio fiscal son de 0.2.5 (PR siguiente).
-     */
-    public const ROLES = ['issuer', 'printer'];
 
     protected $fillable = [
         'fiscal_profile_id', 'code', 'label', 'role', 'provider_id', 'base_url',
@@ -36,9 +31,9 @@ class FiscalProfileEnvironment extends Model
     protected static function booted(): void
     {
         static::saving(function (self $environment): void {
-            if (! in_array($environment->role, self::ROLES, true)) {
+            if (EnvironmentRole::tryFrom((string) $environment->role) === null) {
                 throw new InvalidArgumentException(
-                    'role must be one of: '.implode(', ', self::ROLES)
+                    'role must be one of: '.implode(', ', array_column(EnvironmentRole::cases(), 'value'))
                 );
             }
         });

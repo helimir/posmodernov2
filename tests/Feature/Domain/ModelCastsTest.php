@@ -94,8 +94,8 @@ test('test_los_modelos_declaran_sus_casts_de_importes_y_de_json', function () {
 
 /**
  * 0.2.6-T (parte) — los modelos de la capa de país y fiscal declaran sus casts
- * y sus relaciones con FK. `TaxCategory` y `TaxRate` llegan con M03 (PR
- * siguiente): la tarea 0.2.6 sigue abierta.
+ * y sus relaciones con FK. `TaxCategory` y `TaxRate` llegan con M03 (PR6):
+ * la tarea 0.2.6 sigue abierta.
  */
 test('test_los_modelos_de_la_capa_de_pais_y_fiscal_declaran_sus_casts_y_sus_relaciones', function () {
     expect((new Country)->getCasts())->toHaveKey('default_currency_id', 'integer')

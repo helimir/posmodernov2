@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Fiscal\Enums\SignerModel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,13 +12,6 @@ use InvalidArgumentException;
 class FiscalProfile extends Model
 {
     use HasFactory;
-
-    /**
-     * Conjunto cerrado del modelo de firma. Todavía no es un enum de PHP: los
-     * enums genéricos del dominio fiscal son de 0.2.5 (PR siguiente) y este
-     * conjunto se sustituye por `SignerModel::cases()` sin cambiar el contrato.
-     */
-    public const SIGNER_MODELS = ['authority', 'psp', 'printer', 'legal_signature'];
 
     protected $fillable = [
         'country_id', 'code', 'name', 'document_standard', 'schema_version',
@@ -51,9 +45,9 @@ class FiscalProfile extends Model
     protected static function booted(): void
     {
         static::saving(function (self $profile): void {
-            if (! in_array($profile->signer_model, self::SIGNER_MODELS, true)) {
+            if (SignerModel::tryFrom((string) $profile->signer_model) === null) {
                 throw new InvalidArgumentException(
-                    'signer_model must be one of: '.implode(', ', self::SIGNER_MODELS)
+                    'signer_model must be one of: '.implode(', ', array_column(SignerModel::cases(), 'value'))
                 );
             }
         });
