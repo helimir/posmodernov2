@@ -50,11 +50,13 @@
 **38 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 10 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. **La Fase 0.3 arranca cerrada en 0.3.1, 0.3.3 y T1–T3**; 0.3.2 (M22) y 0.3.4–0.3.9 siguen pendientes (PR8).
 
 > **Estado de la cadena tras el 2026-11-02.** El slice **3a-i** está **fusionado** en `main`
-> (PR #14, squash `88e912c`, issue #13 cerrado). Ese PR mergeó además un `NumberSeries`
-> propio que **queda sustituido** por el de **3a-ii** al fusionar `main` sobre esta rama:
-> la conexión se inyecta (`ConnectionInterface`) y sólo así T2 y T3 pueden ejecutar la
-> reserva sobre la **segunda sesión** (`pgsql_b`). El `NumberSeries` estático del PR #14
-> no habría sostenido T2. El diff de esta rama contra `main` muestra **sólo** 3a-ii.
+> (PR #14, squash `88e912c`, issue #13 cerrado) y el slice **3a-ii** también (PR #17,
+> squash `89fa520`, issue #16 cerrado). Ese PR mergeó además un `NumberSeries` propio que
+> **queda sustituido** por el de **3a-ii** al fusionar `main` sobre la rama: la conexión se
+> inyecta (`ConnectionInterface`) y sólo así T2 y T3 pueden ejecutar la reserva sobre la
+> **segunda sesión** (`pgsql_b`). El `NumberSeries` estático del PR #14 no habría
+> sostenido T2. El work unit siguiente es **3b** (M22 + motor de emisión), en la rama
+> `feat/fase0-09-numeracion-b`.
 
 ## TDD Cycle Evidence
 
