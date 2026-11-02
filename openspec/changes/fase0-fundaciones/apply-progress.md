@@ -41,7 +41,7 @@
 | 0.3.3 `NumberSeries` | ✅ **cerrada** | `app/Domain/Fiscal/NumberSeries.php`: reserva con `UPDATE … RETURNING` + traza — **PR7** |
 | 0.3.3-T | ✅ | `tests/Feature/Fiscal/NumberSeriesReservationTest.php` — **PR7** |
 
-**30 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 2 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. La Fase 0.3 queda con su primera unidad (0.3.1 + 0.3.3) cerrada; M22 y el motor de emisión (0.3.4–0.3.12) son de **PR8**.
+**30 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 2 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. La Fase 0.3 queda con su primera unidad (0.3.1 + 0.3.3) cerrada; M22 y el motor de emisión (0.3.4–0.3.12) son de **PR8**. El work unit **PR7-numeracion-a** está **fusionado** en `main` (PR #14, squash `88e912c`, issue #13 cerrado).
 
 ## TDD Cycle Evidence
 
