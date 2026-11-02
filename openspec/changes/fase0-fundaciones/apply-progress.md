@@ -1,6 +1,6 @@
 # Apply progress — fase0-fundaciones
 
-**Change**: `fase0-fundaciones` · **Unidades aplicadas**: PR1-ciimientos-a · PR2-ciimientos-b · PR3-pais-fiscal-a · PR4-pais-fiscal-b · PR5-pais-fiscal-c · **PR6-pais-fiscal-d (esta)**
+**Change**: `fase0-fundaciones` · **Unidades aplicadas**: PR1-ciimientos-a · PR2-ciimientos-b · PR3-pais-fiscal-a · PR4-pais-fiscal-b · PR5-pais-fiscal-c · PR6-pais-fiscal-d · **PR7-numeracion-a (esta)**
 **Mode**: Strict TDD (`strict_tdd: true`, runner `./vendor/bin/pest` sobre PostgreSQL 17 `pos_moderno_v2_test`)
 **Chain strategy**: `stacked-to-main` · **Presupuesto**: 800 líneas por PR
 
@@ -36,12 +36,25 @@
 | 0.2.6-T | ✅ **definitivo** | `tests/Feature/Domain/ModelCastsTest.php` cubre los **12** modelos — **PR6** |
 | 0.2.7 `TaxContext` | ✅ | `app/Domain/Tax/TaxContext.php` + `FiscalProfile::taxContext()` — **PR6** |
 | 0.2.7-T | ✅ | `tests/Feature/Domain/TaxContextTest.php` — **PR6** |
-| 0.3.1 Migrations M21 | ✅ | `fiscal_series` + `fiscal_document_reservations`; `fiscal_providers` la crea M02 (PR4) y M21 sólo la referencia — **PR7** |
-| 0.3.1-T | ✅ | `tests/Feature/Fiscal/FiscalSeriesSchemaTest.php` — **PR7** |
-| 0.3.3 `NumberSeries` | ✅ **cerrada** | `app/Domain/Fiscal/NumberSeries.php`: reserva con `UPDATE … RETURNING` + traza — **PR7** |
-| 0.3.3-T | ✅ | `tests/Feature/Fiscal/NumberSeriesReservationTest.php` — **PR7** |
+| 0.3.1 Migración M21 | ✅ | `fiscal_series` + `fiscal_document_reservations`; **renombrada** (no recrea `fiscal_providers`, que ya crea M02) — **3a-i / PR7** |
+| 0.3.1-T | ✅ | `tests/Feature/Fiscal/FiscalSeriesSchemaTest.php` — **3a-i / PR7** |
+| 0.3.3 `NumberSeries` | ✅ | `app/Domain/Fiscal/NumberSeries.php`: `UPDATE … RETURNING` + traza, con la **conexión inyectada** — **3a-ii / PR8** |
+| 0.3.3-T | ✅ | `tests/Feature/Fiscal/NumberSeriesReservationTest.php` — **3a-ii / PR8** |
+| 0.3.10 T1 (secuencia) | ✅ | `tests/Feature/Fiscal/NumberReservationSequenceTest.php` — **3a-ii / PR8** |
+| 0.3.10-T | ✅ | 50 correlativos consecutivos, sin huecos ni repeticiones — **3a-ii / PR8** |
+| 0.3.11 T2 (bloqueo real) | ✅ | `tests/Feature/Fiscal/NumberReservationLockTest.php` — **3a-ii / PR8** |
+| 0.3.11-T | ✅ | SQLSTATE `55P03` real sobre dos sesiones — **3a-ii / PR8** |
+| 0.3.12 T3 (rollback) | ✅ | `tests/Feature/Fiscal/NumberReservationRollbackTest.php` — **3a-ii / PR8** |
+| 0.3.12-T | ✅ | el número vuelve; se verifica desde `pgsql_b` — **3a-ii / PR8** |
 
-**30 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 2 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. La Fase 0.3 queda con su primera unidad (0.3.1 + 0.3.3) cerrada; M22 y el motor de emisión (0.3.4–0.3.12) son de **PR8**. El work unit **PR7-numeracion-a** está **fusionado** en `main` (PR #14, squash `88e912c`, issue #13 cerrado).
+**38 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 10 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. **La Fase 0.3 arranca cerrada en 0.3.1, 0.3.3 y T1–T3**; 0.3.2 (M22) y 0.3.4–0.3.9 siguen pendientes (PR8).
+
+> **Estado de la cadena tras el 2026-11-02.** El slice **3a-i** está **fusionado** en `main`
+> (PR #14, squash `88e912c`, issue #13 cerrado). Ese PR mergeó además un `NumberSeries`
+> propio que **queda sustituido** por el de **3a-ii** al fusionar `main` sobre esta rama:
+> la conexión se inyecta (`ConnectionInterface`) y sólo así T2 y T3 pueden ejecutar la
+> reserva sobre la **segunda sesión** (`pgsql_b`). El `NumberSeries` estático del PR #14
+> no habría sostenido T2. El diff de esta rama contra `main` muestra **sólo** 3a-ii.
 
 ## TDD Cycle Evidence
 
@@ -64,6 +77,11 @@
 | **0.2.5-T** | ❌ `Class "App\Domain\Fiscal\Enums\ProviderKind" not found` | ✅ 5 enums + sustitución de las constantes → 1 passed (12 assertions) | el escáner de literales **no es vacuo**: un fixture con un código de país prueba que DETECTA |
 | **0.2.6-T (cierre)** | ❌ `Exception "InvalidArgumentException" not thrown` (regla de redondeo inválida) | ✅ validación en cascada de `TaxRate.rounding_rule` → 1 passed (108 assertions) | `ModelCastsTest` pasa a ser **definitivo** con los 12 modelos |
 | **0.2.7-T** | ❌ `BadMethodCallException: Call to undefined method App\Models\FiscalProfile::taxContext()` | ✅ `TaxContext` + `FiscalProfile::taxContext()` → 1 passed (11 assertions) | el test comprueba además que el fichero del dominio **no** contiene el literal del token |
+| **0.3.1-T** | ❌ `Failed asserting that an array contains 'series_role'` (la tabla no existía) | ✅ M21 (`fiscal_series` + `fiscal_document_reservations`) → 1 passed (31 assertions) | el conjunto cerrado de rol y autoridad lo hace cumplir el **esquema** (`enum` → `CHECK` de PostgreSQL), no una constante del código |
+| **0.3.3-T** | ❌ `Class "App\Domain\Fiscal\NumberSeries" not found` | ✅ `NumberSeries` (`UPDATE … RETURNING`) → 1 passed (+ 1 de triangulación) | la traza se escribe con `INSERT … SELECT`: copia el rol de la fila bloqueada y **no** mete un literal de rol en el dominio |
+| **0.3.10-T (T1)** | ❌ `Class "App\Domain\Fiscal\NumberSeries" not found` | ✅ 50 reservas consecutivas → 1 passed | — |
+| **0.3.11-T (T2)** | ❌ `Class "App\Domain\Fiscal\NumberSeries" not found` | ✅ dos sesiones + `SET LOCAL lock_timeout` → 1 passed | el mensaje de PostgreSQL nombra la condición en lenguaje natural ("Lock not available"); el test afirma el **SQLSTATE `55P03`**, que es la forma verificable |
+| **0.3.12-T (T3)** | ❌ `Class "App\Domain\Fiscal\NumberSeries" not found` | ✅ rollback verificado desde `pgsql_b` → 1 passed | — |
 
 ## Work Unit Evidence (PR2-ciimientos-b)
 
@@ -251,46 +269,60 @@
 
 ## Work Unit Evidence (PR7-numeracion-a)
 
-> Work unit **3a**: la primera mitad de la numeración fiscal — el esquema de las DOS series (M21) y la **reserva atómica** (`NumberSeries`). La segunda mitad (M22 + motor de emisión + T1–T3) es **PR8-numeracion-b**.
+> Work unit **3a**: las DOS series fiscales (la del documento y el Número de
+> Control), la traza de reservas y la **reserva atómica** `UPDATE … RETURNING`.
+> **Se parte en dos slices encadenados** (PR7 · 3a-i y PR8 · 3a-ii): medidos
+> **874 líneas**, 74 por encima del techo de 800 ⇒ **no** se concede
+> `size:exception`; el corte es por **dependencia real** (el esquema antes que
+> la reserva que lo usa).
 
 | Evidencia | Valor |
 |---|---|
-| Test focalizado | `./vendor/bin/pest --filter="NumberSeries"` → **1 passed (13 assertions)** · suite completa `./vendor/bin/pest` → **45 passed (424 assertions)** (baseline del PR7: 44 passed / 411 assertions) |
-| Harness de runtime | `php artisan migrate:fresh --force` (BD de test) → **13 migraciones en verde** · `tinker` → 2 reservas seguidas devuelven **100** y **101**, `next_number` queda en **102** y quedan **2** trazas con `series_role='document'` |
-| Mutación verificada | La mutación que reintroduce la lectura previa (`select "next_number" from "fiscal_series" where "id" = ? limit 1`) **hace fallar** el test en el assert de cero `SELECT`: el test **fija** la regla, no sólo la acompaña |
-| Frontera de rollback | `git revert` de los **2** commits del PR (`6742e17` + el de `NumberSeries`) + `migrate:fresh`: se retiran M21, `NumberSeries` y su test. **No toca** M01/M02/M03 (base de la cadena) ni el contrato ni los enums del PR5 |
-| Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `public/build/manifest.json` presente |
-| Tamaño | **232 líneas** en este commit (178 de código y tests + 50 de artefactos SDD); el PR7 completo, con el commit previo de M21 (`6742e17`), suma **590 líneas** en 8 ficheros — dentro del techo de 800 |
+| Test focalizado | `php vendor/bin/pest tests/Feature/Fiscal` → **6 passed (71 assertions)** · `--filter="serie_se_distingue"` → 1 passed (31) · `--filter="55p03"` → 1 passed · `--filter="rollback_de_la_reserva"` → 1 passed · suite completa `./vendor/bin/pest` → **49 passed (451 assertions)** (baseline del PR6: 43 passed / 380 assertions) |
+| Harness de runtime | script de integración sobre `pos_moderno_v2_test` con las dos sesiones (`pgsql` + `pgsql_b`): `[T1] primer=100 ultimo=149 consecutivos=1 next_number=150 reservas=50` · `[T2] sqlstate=55P03 elapsed_ms=337 next_number=100` — `SQLSTATE[55P03]: Lock not available: 7 ERROR: canceling statement due to lock timeout` · `[T3] reservado_en_la_transaccion=100 next_number_desde_B=100 reservas_visibles_desde_B=0 siguiente_reserva=100` |
+| Mutación verificada | La mutación que reintroduce la lectura previa (`select "next_number" from "fiscal_series"`) **hace fallar** el test de 0.3.3-T en su assert de cero `SELECT`: el test **fija** la regla, no sólo la acompaña |
+| Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran M21, `NumberSeries` y los 5 ficheros de test. **NUNCA** borrar `fiscal_document_reservations`: el rollback de la emisión es **apagar** (`fiscal.emission_enabled = false`), nunca renumerar |
+| Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `php artisan migrate:fresh --seed --force` → **13 migraciones en verde** · `public/build/manifest.json` presente |
+| Tamaño | **874 líneas** (835 adiciones + 39 borrados): **725** de código y tests + **149** de artefactos SDD — **74 por encima** del techo de 800 ⇒ la work unit se **parte en dos slices encadenados**: **PR7 (3a-i: M21 + test de esquema + arnés, 362 líneas)** y **PR8 (3a-ii: `NumberSeries` + T1–T3 + artefactos SDD, 512 líneas)**. Sin `size:exception` |
 
 ## Ficheros de esta unidad (PR7-numeracion-a)
 
 | Fichero | Acción | Qué hace |
 |---|---|---|
-| `database/migrations/2026_11_01_000021_create_fiscal_series_table.php` | Creado | M21: `fiscal_series` (`series_role` canónico, `assigned_by`, rango, `control_identifier`, `sequence_length`) + `fiscal_document_reservations` (traza, `unique(series_id, number)`) |
-| `app/Domain/Fiscal/NumberSeries.php` | Creado | `reserve()`: toma el número con `UPDATE … RETURNING` — la misma sentencia que bloquea la fila — y escribe la traza |
-| `tests/Feature/Fiscal/FiscalSeriesSchemaTest.php` | Creado | 0.3.1-T: la serie se distingue por rol y por autoridad; `series_kind` no es una columna |
-| `tests/Feature/Fiscal/NumberSeriesReservationTest.php` | Creado | 0.3.3-T: el número se entrega en la sentencia que toma el bloqueo, sin ninguna lectura |
+| `database/migrations/2026_11_01_000021_create_fiscal_series_table.php` | Creado | M21: `fiscal_series` (rol canónico + autoridad + rango + credencial de la imprenta) + `fiscal_document_reservations` (traza, con `UNIQUE (series_id, number)`) |
+| `app/Domain/Fiscal/NumberSeries.php` | Creado | Reserva atómica: `UPDATE … RETURNING next_number - 1` + traza; sin `rowCount()` ni lectura del último registro; sin `SKIP LOCKED` |
+| `tests/Concerns/WithoutWrappingTransaction.php` | Creado | Trait de test: vacía la lista de conexiones que `RefreshDatabase` transacciona, para que `pgsql_b` vea las filas commiteadas |
+| `tests/Fixtures/FiscalSeriesFixture.php` | Creado | Contexto fiscal de prueba (moneda, país, perfil, tienda, imprenta), creación de series y `TRUNCATE … RESTART IDENTITY CASCADE` |
+| `tests/Feature/Fiscal/FiscalSeriesSchemaTest.php` | Creado | 0.3.1-T: el rol y la autoridad distinguen la serie; `series_kind` no existe; el rango de la imprenta vive en la serie de control |
+| `tests/Feature/Fiscal/NumberSeriesReservationTest.php` | Creado | 0.3.3-T: el número sale de la misma sentencia que toma el bloqueo; la traza; el rango agotado falla |
+| `tests/Feature/Fiscal/NumberReservationSequenceTest.php` | Creado | 0.3.10-T (T1): 50 reservas consecutivas sin huecos ni repeticiones |
+| `tests/Feature/Fiscal/NumberReservationLockTest.php` | Creado | 0.3.11-T (T2): SQLSTATE `55P03` real, `next_number` no avanza, espera acotada |
+| `tests/Feature/Fiscal/NumberReservationRollbackTest.php` | Creado | 0.3.12-T (T3): el rollback devuelve el número; se verifica desde `pgsql_b` |
 
 ## Decisiones de esta unidad (PR7-numeracion-a)
 
-1. **`reserve()` NO abre transacción propia si el llamador ya tiene una.** La reserva es parte de la unidad atómica del checkout (T1) y de la emisión (T2), y el rollback de esa unidad debe **devolver** el número (T3). Abrir una transacción interna rompería el `SET LOCAL lock_timeout` de T2 (que sólo tiene efecto dentro de una transacción) y el rollback de T3. Si el llamador no tiene ninguna, `reserve()` abre una para que el `UPDATE` y su traza no queden separados.
-2. **El número y el rol salen del MISMO `RETURNING`**: `RETURNING next_number - 1 AS reserved_number, series_role`. El rol de la traza se copia de la fila ya bloqueada, sin una segunda lectura — la traza no depende de que la serie cambie después.
-3. **Rango agotado → `RuntimeException`.** El `UPDATE` con `next_number <= to_number` no toca la fila cuando el rango se acaba: no hay número que repartir, el contador no avanza y no queda traza. Se usa `RuntimeException` (SPL) siguiendo la convención ya observada en el dominio (`InvalidArgumentException` en las validaciones de `FiscalProfile`/`TaxRate`), sin añadir una clase de excepción fuera de la lista de ficheros del design.
-4. **El número repartido es `next_number - 1`.** `next_number` guarda el último número repartido; el rango se acota con `next_number <= to_number`, de modo que el primer número de una serie con `next_number = from_number = 100` es el 100.
-5. **`reserved_by` es un parámetro explícito del llamador** (`?int`, la columna admite null). Quien emite decide quién tomó el número; la capa de dominio no lee la sesión.
+1. **M21 NO recrea `fiscal_providers`.** La tabla ya existe (la crea M02, PR4, fusionado en `main`): recrearla sería un error de migración. M21 se **renombra** a `2026_11_01_000021_create_fiscal_series_table.php` y sólo la **referencia** (`provider_id` → `fiscal_providers.id`). El test 0.3.1-T lo verifica: sólo M02 crea esa tabla.
+2. **El conjunto cerrado de rol y autoridad vive en el ESQUEMA** (`enum` → `varchar CHECK (…)` de PostgreSQL), no en una constante de PHP: una tabla nueva no necesita un modelo para que su dominio no se pueda violar por SQL directo. `fiscal_providers.kind` y `fiscal_profiles.signer_model` siguen con validación en el dominio (PR5), porque sus tablas ya existían.
+3. **El rol de la reserva se copia de la fila bloqueada, no de un literal.** La traza se escribe con `INSERT … SELECT`: `series_role` sale de `fiscal_series`, así que `app/Domain/` no contiene ningún literal de rol ni de país.
+4. **La conexión se inyecta en `NumberSeries`.** Es lo que permite a T2 y T3 usar la segunda sesión (`pgsql_b`) con `SET LOCAL lock_timeout` DENTRO de su transacción; la reserva no abre transacción propia (la del llamante).
+5. **`UNIQUE (series_id, number)`** en la traza: última línea de defensa contra la colisión del legacy. Una anulación deja la fila con `voided_at` ⇒ el número queda consumido y no se puede volver a repartir.
+6. **El arnés de T1–T3 no usa `DatabaseMigrations`**: usa el trait `WithoutWrappingTransaction`, que vacía la lista de conexiones que `RefreshDatabase` transacciona. El efecto buscado por el diseño es el mismo (filas commiteadas, visibles para `pgsql_b`) y se evita un `migrate:fresh` por test. El aislamiento lo da el `TRUNCATE … RESTART IDENTITY CASCADE` del `afterEach`.
+7. **`fiscal_series` referencia `stores` y `fiscal_profiles`** (FK reales): el correlativo es por tienda (P7) y la serie pertenece a un perfil fiscal. Cierra las dos FKs que PR3 y PR6 habían diferido a M21.
 
 ## Desviaciones del diseño y FKs diferidas (PR7-numeracion-a)
 
-1. **El nombre del fichero de la migración** no es el del plan: `2026_11_01_000021_create_fiscal_providers_and_series_table.php` → `2026_11_01_000021_create_fiscal_series_table.php`. `fiscal_providers` la crea **M02** (PR4, ya fusionado en `main`) y M21 sólo la referencia; recrearla sería un error de migración. Queda justificado en la cabecera de la propia migración.
-2. **`reserved_by` no se ejercita con un usuario real.** Crear un usuario exige un rol (FK `roles.id`) y no aporta a la regla que fija el test; la columna es nullable por diseño y el parámetro del llamador es explícito. La cobertura con usuario real llega con el motor de emisión (PR8).
-3. **La serie de control guarda el espejo local del rango de la imprenta** (`from_number`, `to_number`, `credential_ref`), no una referencia a la fila del proveedor: el rango autorizado es un dato de la serie (C3). La resolución contra la imprenta es del motor de emisión (PR8).
+1. **Nombre de la migración**: el plan (`tasks.md` 0.3.1) pedía `2026_11_01_000021_create_fiscal_providers_and_series_table.php`. Se renombra porque `fiscal_providers` ya existe (M02). El contenido previsto (`fiscal_series` + la traza) se entrega íntegro.
+2. **Sin modelos Eloquent** (`FiscalSeries`, `FiscalDocumentReservation`): ninguna tarea asignada los exige y la unidad debe caber en el techo de 800. La capa de modelos de la numeración llega con PR8, donde el servicio de emisión los consume; `NumberSeries` habla con las tablas por el query builder.
+3. **Mensaje del bloqueo**: el diseño §E.1 pide que el mensaje contenga `lock_not_available`; PostgreSQL nombra la condición "Lock not available" (el identificador de la condición ES el SQLSTATE `55P03`, que el test sí afirma). La verificación es por SQLSTATE.
+4. **FKs diferidas**: `fiscal_documents.authority_reference` → **M22** (PR8) · `products.tax_category_id` → **M08** (PR9) · `stores.country_id → countries.id` → **M27** (PR16). Esta unidad **no** declara ninguna FK a tablas que no existen todavía.
+5. **La work unit "numeracion a" se parte en dos PRs** (874 líneas, 74 por encima del techo; sin `size:exception`): **PR7 (3a-i)** = M21 + `fiscal_series`/`fiscal_document_reservations` + el test de esquema + el arnés de concurrencia; **PR8 (3a-ii)** = `NumberSeries` + la reserva atómica + T1–T3 + los artefactos SDD. El corte es por dependencia real: **el esquema antes que la reserva que lo usa**, y cada slice deja la suite en verde. La cadena pasa de 18 a **19** PRs y **quedan 11** (PR9–PR19).
 
 ## Fuera de esta unidad (no implementado) — PR7-numeracion-a
 
-- **M22** (`fiscal_documents` + `_taxes` + `_parties` + `_links` + `_events` + `_control_assignments` + `fiscal_periodic_reports` + `fiscal_contingency_forms`): **PR8**.- **`FiscalIssuanceService`** (0.3.4: orquesta `submit()` → `assignControl()` → `issue()`), el generador del Nº de Control (0.3.5), el render del comprobante (0.3.6), los documentos derivados (0.3.7), la anulación (0.3.8) y la contingencia en papel (0.3.9): **PR8**.
-- **T1–T3** (0.3.10 secuencia sin huecos, 0.3.11 bloqueo real `55P03`, 0.3.12 el rollback devuelve el número): **PR8**, junto al código que prueban.
-- **El arnés de concurrencia** (0.9.5: `DatabaseMigrations` con `TRUNCATE … RESTART IDENTITY CASCADE`): **PR17**. Esta unidad se apoya en `WithoutWrappingTransaction` + `TRUNCATE`, que ya es suficiente sin dos sesiones.
+- **M22** (`fiscal_documents` + `_events` + `_control_assignments` + `fiscal_periodic_reports` + `fiscal_contingency_forms`): 0.3.2, en el **PR8**.
+- El **servicio de emisión** (`FiscalIssuanceService`: `submit()` → `assignControl()` → `issue()`), el **generador del Nº de Control** (`00` + `1`), el **render del comprobante** y las **notas de crédito/débito**: 0.3.4–0.3.9, en el **PR8**.
+- La **anulación** que marca `voided_at` sin devolver el número (0.3.8): llega con el servicio de emisión; el esquema y el índice único ya lo soportan.
 
 ## Siguiente unidad
 
-**PR8-numeracion-b** (`feat/fase0-08-numeracion-b`): M22 (`fiscal_documents` y sus tablas satélite) + `FiscalIssuanceService` (submit → assignControl → issue) + el generador del Nº de Control + el render del comprobante + **T1–T3**. Predecesor: PR7-numeracion-a.
+**PR9-numeracion-b** (`feat/fase0-09-numeracion-b`): M22 + `FiscalIssuanceService` + generador del control + render + notas derivadas (0.3.2 y 0.3.4–0.3.9). Predecesor: PR8 (3a-ii, esta rama).
