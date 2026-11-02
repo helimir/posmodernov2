@@ -84,7 +84,8 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b (0.2.3 + 0.2.6 + 0.2.7) | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | PR #12 · issue #11 | **fusionado** `efbf00d` |
 | 7 | `feat/fase0-07-numeracion-a` | 3a-i | M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnés de concurrencia | **362** | PR #14 · issue #13 | **fusionado** `88e912c` |
 | 8 | `feat/fase0-08-numeracion-b` | 3a-ii | `NumberSeries` + reserva atómica + **T1–T3** + artefactos SDD | **512** | PR #17 · issue #16 | **fusionado** `89fa520` |
-| 9 | `feat/fase0-09-numeracion-b` | 3b-i | M22 + `FiscalIssuanceService` + tests | **619** | PR #19 · issue #18 | implementado (pendiente de merge) |
+| 9 | `feat/fase0-09-numeracion-b` | 3b-i | M22 + `FiscalIssuanceService` + tests | **619** | PR #19 · issue #18 | **fusionado** `b7f0c56` |
+| 10 | `feat/fase0-10-numeracion-c` | 3b-ii | `ControlNumberGenerator` + anulación | **310** | PR #21 · issue #20 | implementado (pendiente de merge) |
 | 10 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
 | 11 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
 | 12 | `feat/fase0-11-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
