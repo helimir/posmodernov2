@@ -50,8 +50,12 @@
 | 0.3.2-T | ✅ | `tests/Feature/Fiscal/FiscalDocumentEventsTest.php`: la traza es append-only y el bloqueo es del trigger — **3b / PR9** |
 | 0.3.4 `FiscalIssuanceService` | ✅ | las TRES llamadas al proveedor fuera de la transaccion; la invariante del control se valida antes de consolidar — **3b / PR9** |
 | 0.3.4-T | ✅ | `tests/Feature/Fiscal/FiscalIssuanceServiceTest.php`: tres escenarios de correspondencia — **3b / PR9** |
+| 0.3.5 `ControlNumberGenerator` | ✅ | reserva atómica del correlativo de la serie de control + `identificador` y secuencial de ancho fijo; el rango total sale de la serie — **3b-ii / PR10** |
+| 0.3.5-T | ✅ | `tests/Feature/Fiscal/ControlNumberGeneratorTest.php`: `00-00000001` y `00-00000002` — **3b-ii / PR10** |
+| 0.3.8 Anulación | ✅ | `FiscalIssuanceService::void()`: el documento queda `void`, la reserva consumada y el evento `cancel` auditado; el número **no** vuelve — **3b-ii / PR10** |
+| 0.3.8-T | ✅ | `tests/Feature/Fiscal/FiscalDocumentVoidTest.php`: se anula el 42 y la siguiente reserva devuelve el **43** — **3b-ii / PR10** |
 
-**42 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 14 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. **La Fase 0.3** tiene cerradas 0.3.1, 0.3.3, T1–T3 (3a) y 0.3.2 + 0.3.4 (3b); **siguen pendientes** el generador del Nº de Control (0.3.5), el render del comprobante (0.3.6), los documentos derivados (0.3.7), la anulación (0.3.8) y la contingencia en papel (0.3.9) — **3b no está cerrada**.
+**46 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 18 de Fase 0.3). **La Fase 0.2 queda COMPLETA**. En la Fase 0.3 quedan **abiertos** el render del comprobante (0.3.6), los documentos derivados (0.3.7) y la contingencia en papel (0.3.9): el render exige el modelo de plantilla compartido con el ESC/POS (PR14), y los documentos derivados exigen su propia numeración de 14 caracteres (F1 art. 18). La unidad 3b se abre en **tres** slices encadenados.
 
 > **Estado de la cadena tras el 2026-11-02.** El slice **3a-i** está **fusionado** en `main`
 > (PR #14, squash `88e912c`, issue #13 cerrado) y el slice **3a-ii** también (PR #17,

@@ -106,6 +106,52 @@ final class FiscalIssuanceService
     }
 
     /**
+     * Anula el documento. El correlativo QUEDA CONSUMADO: el numero no se
+     * libera jamas (SNAT/2026/00093 arts. 8.2, 21, 27; SNAT/2024/000102
+     * art. 34). La correccion de una factura anulada se hace con NOTAS, no
+     * devolviendo el numero.
+     *
+     * @param  string  $reason  Motivo de la anulacion; queda auditado.
+     */
+    public function void(int $documentId, string $reason, ?int $actorId = null): void
+    {
+        $this->connection->transaction(function () use ($documentId, $reason, $actorId): void {
+            $document = $this->connection->table('fiscal_documents')->where('id', $documentId)->first();
+
+            if ($document === null) {
+                throw new RuntimeException("El documento fiscal {$documentId} no existe.");
+            }
+
+            $this->connection->table('fiscal_documents')->where('id', $documentId)->update([
+                'status' => 'void',
+                'voided_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // La reserva queda consumada: el numero NO vuelve a estar
+            // disponible. El hueco es deliberado y queda auditable.
+            if ($document->reservation_id !== null) {
+                $this->connection->table('fiscal_document_reservations')
+                    ->where('id', $document->reservation_id)
+                    ->update([
+                        'voided_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            // Toda anulacion queda auditada (append-only).
+            $this->connection->table('fiscal_document_events')->insert([
+                'fiscal_document_id' => $documentId,
+                'action' => 'cancel',
+                'actor' => $actorId,
+                'occurred_at' => now(),
+                'payload' => json_encode(['reason' => $reason], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+            ]);
+        });
+    }
+
+    /**
      * La correspondencia entre el control recibido y el perfil.
      *
      * @return string|null La descripción de la discrepancia, o `null` si
