@@ -83,7 +83,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 5 | `feat/fase0-05-pais-fiscal-c` | 2c-a (0.2.4 + 0.2.5) | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genéricos + sustitución de las constantes de PR4 | **773** | PR #10 · issue #9 | **fusionado** `adac1b6` |
 | 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b (0.2.3 + 0.2.6 + 0.2.7) | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | PR #12 · issue #11 | **fusionado** `efbf00d` |
 | 7 | `feat/fase0-07-numeracion-a` | 3a-i | M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnés de concurrencia | **362** | PR #14 · issue #13 | **fusionado** `88e912c` |
-| 8 | `feat/fase0-08-numeracion-b` | 3a-ii | `NumberSeries` + reserva atómica + **T1–T3** + artefactos SDD | **512** | — | implementado (en esta rama, pendiente de PR) |
+| 8 | `feat/fase0-08-numeracion-b` | 3a-ii | `NumberSeries` + reserva atómica + **T1–T3** + artefactos SDD | **512** | PR #17 · issue #16 | implementado (pendiente de merge) |
 | 9 | `feat/fase0-09-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render | 630 | — | pendiente |
 | 10 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
 | 11 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
