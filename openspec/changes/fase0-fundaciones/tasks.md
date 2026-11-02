@@ -85,8 +85,10 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 7 | `feat/fase0-07-numeracion-a` | 3a-i | M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnés de concurrencia | **362** | PR #14 · issue #13 | **fusionado** `88e912c` |
 | 8 | `feat/fase0-08-numeracion-b` | 3a-ii | `NumberSeries` + reserva atómica + **T1–T3** + artefactos SDD | **512** | PR #17 · issue #16 | **fusionado** `89fa520` |
 | 9 | `feat/fase0-09-numeracion-b` | 3b-i | M22 + `FiscalIssuanceService` + tests | **619** | PR #19 · issue #18 | **fusionado** `b7f0c56` |
-| 10 | `feat/fase0-10-numeracion-c` | 3b-ii | `ControlNumberGenerator` + anulación | **310** | PR #21 · issue #20 | implementado (pendiente de merge) |
+| 10 | `feat/fase0-10-numeracion-c` | 3b-ii | `ControlNumberGenerator` + anulación | **310** | PR #21 · issue #20 | **fusionado** ``abb0b3b`` |
+| 11 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
 | 10 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
+| 11 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
 | 11 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
 | 12 | `feat/fase0-11-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
 | 13 | `feat/fase0-12-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | 757 | — | pendiente |
@@ -393,6 +395,7 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 | 8 | `capa-pais-fiscal` · Semilla del perfil venezolano con evidencia | 0.2.3, 0.9.3 | 0.9.3-T |
 | 9 | `documentos-fiscales` · Contenido y render normados | 0.3.6 | 0.3.6-T |
 | 10 | `documentos-fiscales` · Documentos derivados que referencian el original | 0.3.7, 0.6.4 | 0.3.7-T · 0.6.4-T |
+| 11 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
 | 11 | `documentos-fiscales` · Evidencia e integridad del comprobante | 0.3.2, 0.3.8 | 0.3.2-T · 0.3.8-T |
 | 12 | `documentos-fiscales` · Contingencia exclusivamente en papel | 0.3.9 | 0.3.9-T |
 | 13 | `numeracion-fiscal` · Dos series con dos reservas atómicas | 0.3.1, 0.3.3 | 0.3.1-T · 0.3.3-T |
