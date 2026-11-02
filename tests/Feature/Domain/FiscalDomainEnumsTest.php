@@ -44,9 +44,17 @@ function domainLiterals(?string $directory = null): array
 
             foreach ($categories as $category => $tokens) {
                 foreach ($tokens as $token) {
+                    // El codigo de pais se compara entero. Los demas tokens
+                    // (moneda, autoridad, marcador) se buscan con LIMITES DE
+                    // PALABRA: un codigo es un token, no una subcadena. Sin
+                    // ese limite, "copies" containia "COP" y "absoluto"
+                    // contendria "Bs".
                     $found = $category === 'country-code'
                         ? $literal === $token
-                        : stripos($literal, $token) !== false;
+                        : preg_match(
+                            '/(?<![A-Za-z0-9])'.preg_quote($token, '/').'(?![A-Za-z0-9])/i',
+                            $literal
+                        ) === 1;
 
                     if ($found) {
                         $hallazgos[] = $file->getPathname().' · '.$category.' · '.$token;
