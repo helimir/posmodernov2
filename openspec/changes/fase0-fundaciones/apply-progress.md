@@ -46,8 +46,12 @@
 | 0.3.11-T | ✅ | SQLSTATE `55P03` real sobre dos sesiones — **3a-ii / PR8** |
 | 0.3.12 T3 (rollback) | ✅ | `tests/Feature/Fiscal/NumberReservationRollbackTest.php` — **3a-ii / PR8** |
 | 0.3.12-T | ✅ | el número vuelve; se verifica desde `pgsql_b` — **3a-ii / PR8** |
+| 0.3.2 Migración M22 | ✅ | `fiscal_documents` + `_taxes` + `_parties` + `_links` + `_events` + `_control_assignments` + `fiscal_periodic_reports` + `fiscal_contingency_forms` — **3b / PR9** |
+| 0.3.2-T | ✅ | `tests/Feature/Fiscal/FiscalDocumentEventsTest.php`: la traza es append-only y el bloqueo es del trigger — **3b / PR9** |
+| 0.3.4 `FiscalIssuanceService` | ✅ | las TRES llamadas al proveedor fuera de la transaccion; la invariante del control se valida antes de consolidar — **3b / PR9** |
+| 0.3.4-T | ✅ | `tests/Feature/Fiscal/FiscalIssuanceServiceTest.php`: tres escenarios de correspondencia — **3b / PR9** |
 
-**38 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 10 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. **La Fase 0.3 arranca cerrada en 0.3.1, 0.3.3 y T1–T3**; 0.3.2 (M22) y 0.3.4–0.3.9 siguen pendientes (PR8).
+**42 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 14 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. **La Fase 0.3** tiene cerradas 0.3.1, 0.3.3, T1–T3 (3a) y 0.3.2 + 0.3.4 (3b); **siguen pendientes** el generador del Nº de Control (0.3.5), el render del comprobante (0.3.6), los documentos derivados (0.3.7), la anulación (0.3.8) y la contingencia en papel (0.3.9) — **3b no está cerrada**.
 
 > **Estado de la cadena tras el 2026-11-02.** El slice **3a-i** está **fusionado** en `main`
 > (PR #14, squash `88e912c`, issue #13 cerrado) y el slice **3a-ii** también (PR #17,
