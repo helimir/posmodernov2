@@ -149,7 +149,11 @@ return new class extends Migration
             $table->unsignedBigInteger('control_range_to')->nullable();
             $table->timestampTz('control_assigned_at')->nullable();
             $table->foreignId('printer_id')->nullable()->index()->constrained('fiscal_providers')->nullOnDelete();
-            $table->string('printer_rif', 50)->nullable();
+            // El identificativo fiscal de la imprenta: RIF, RUC o NIT segun el
+            // pais, asi que la columna es GENERICA. El nombre del plan
+            // (`printer_rif`) era un literal de pais en el esquema, y el
+            // dominio no puede escribirlo (test anti-pais).
+            $table->string('printer_tax_id', 50)->nullable();
             $table->timestamps();
         });
 
