@@ -82,9 +82,9 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 4 | `feat/fase0-04-pais-fiscal-b` | 2b (M02) | M02 + `fiscal_providers` + 7 modelos de perfil fiscal | 767 | PR #8 · issue #7 | **fusionado** `ba28322` |
 | 5 | `feat/fase0-05-pais-fiscal-c` | 2c-a (0.2.4 + 0.2.5) | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genéricos + sustitución de las constantes de PR4 | **773** | PR #10 · issue #9 | **fusionado** `adac1b6` |
 | 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b (0.2.3 + 0.2.6 + 0.2.7) | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | PR #12 · issue #11 | **fusionado** `efbf00d` |
-| 7 | `feat/fase0-07-numeracion-a` | 3a-i | M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnés de concurrencia | **362** | — | implementado (pendiente de PR) |
-| 8 | `feat/fase0-07-numeracion-a` | 3a-ii | `NumberSeries` + reserva atómica + **T1–T3** + artefactos SDD | **512** | — | implementado (pendiente de PR) |
-| 9 | `feat/fase0-08-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render | 630 | — | pendiente |
+| 7 | `feat/fase0-07-numeracion-a` | 3a-i | M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnés de concurrencia | **362** | PR #14 · issue #13 | **fusionado** `88e912c` |
+| 8 | `feat/fase0-08-numeracion-b` | 3a-ii | `NumberSeries` + reserva atómica + **T1–T3** + artefactos SDD | **512** | — | implementado (en esta rama, pendiente de PR) |
+| 9 | `feat/fase0-09-numeracion-b` | 3b | M22 + `FiscalIssuanceService` + generator + render | 630 | — | pendiente |
 | 10 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
 | 11 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
 | 12 | `feat/fase0-11-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
@@ -95,6 +95,14 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 17 | `feat/fase0-16-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | — | pendiente |
 | 18 | `feat/fase0-17-suite` | 9b | `NoCountryLiteralsTest` + tests canónicos | 550 | — | pendiente |
 | 19 | `feat/fase0-18-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | 340 | — | pendiente |
+
+> **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
+> (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
+> fusionar `main` sobre la rama de **3a-ii** ese `NumberSeries` **queda sustituido** por
+> el de 3a-ii: la conexión se **inyecta** (`ConnectionInterface`), y sólo así T2 y T3
+> pueden ejecutar la reserva sobre la **segunda sesión** (`pgsql_b`). La versión de 3a-i
+> (método estático sobre `DB::`) no habría podido sostener T2. El diff de 3a-ii contra
+> `main` muestra por tanto **sólo** `NumberSeries` + T1–T3 + artefactos SDD.
 
 **Reglas operativas de la cadena** (verificadas en la práctica):
 

@@ -36,18 +36,25 @@
 | 0.2.6-T | ✅ **definitivo** | `tests/Feature/Domain/ModelCastsTest.php` cubre los **12** modelos — **PR6** |
 | 0.2.7 `TaxContext` | ✅ | `app/Domain/Tax/TaxContext.php` + `FiscalProfile::taxContext()` — **PR6** |
 | 0.2.7-T | ✅ | `tests/Feature/Domain/TaxContextTest.php` — **PR6** |
-| 0.3.1 Migración M21 | ✅ | `fiscal_series` + `fiscal_document_reservations`; **renombrada** (no recrea `fiscal_providers`, que ya crea M02) — **PR7** |
-| 0.3.1-T | ✅ | `tests/Feature/Fiscal/FiscalSeriesSchemaTest.php` — **PR7** |
-| 0.3.3 `NumberSeries` | ✅ | `app/Domain/Fiscal/NumberSeries.php`: `UPDATE … RETURNING` + traza — **PR7** |
-| 0.3.3-T | ✅ | `tests/Feature/Fiscal/NumberSeriesReservationTest.php` — **PR7** |
-| 0.3.10 T1 (secuencia) | ✅ | `tests/Feature/Fiscal/NumberReservationSequenceTest.php` — **PR7** |
-| 0.3.10-T | ✅ | 50 correlativos consecutivos, sin huecos ni repeticiones — **PR7** |
-| 0.3.11 T2 (bloqueo real) | ✅ | `tests/Feature/Fiscal/NumberReservationLockTest.php` — **PR7** |
-| 0.3.11-T | ✅ | SQLSTATE `55P03` real sobre dos sesiones — **PR7** |
-| 0.3.12 T3 (rollback) | ✅ | `tests/Feature/Fiscal/NumberReservationRollbackTest.php` — **PR7** |
-| 0.3.12-T | ✅ | el número vuelve; se verifica desde `pgsql_b` — **PR7** |
+| 0.3.1 Migración M21 | ✅ | `fiscal_series` + `fiscal_document_reservations`; **renombrada** (no recrea `fiscal_providers`, que ya crea M02) — **3a-i / PR7** |
+| 0.3.1-T | ✅ | `tests/Feature/Fiscal/FiscalSeriesSchemaTest.php` — **3a-i / PR7** |
+| 0.3.3 `NumberSeries` | ✅ | `app/Domain/Fiscal/NumberSeries.php`: `UPDATE … RETURNING` + traza, con la **conexión inyectada** — **3a-ii / PR8** |
+| 0.3.3-T | ✅ | `tests/Feature/Fiscal/NumberSeriesReservationTest.php` — **3a-ii / PR8** |
+| 0.3.10 T1 (secuencia) | ✅ | `tests/Feature/Fiscal/NumberReservationSequenceTest.php` — **3a-ii / PR8** |
+| 0.3.10-T | ✅ | 50 correlativos consecutivos, sin huecos ni repeticiones — **3a-ii / PR8** |
+| 0.3.11 T2 (bloqueo real) | ✅ | `tests/Feature/Fiscal/NumberReservationLockTest.php` — **3a-ii / PR8** |
+| 0.3.11-T | ✅ | SQLSTATE `55P03` real sobre dos sesiones — **3a-ii / PR8** |
+| 0.3.12 T3 (rollback) | ✅ | `tests/Feature/Fiscal/NumberReservationRollbackTest.php` — **3a-ii / PR8** |
+| 0.3.12-T | ✅ | el número vuelve; se verifica desde `pgsql_b` — **3a-ii / PR8** |
 
 **38 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 10 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. **La Fase 0.3 arranca cerrada en 0.3.1, 0.3.3 y T1–T3**; 0.3.2 (M22) y 0.3.4–0.3.9 siguen pendientes (PR8).
+
+> **Estado de la cadena tras el 2026-11-02.** El slice **3a-i** está **fusionado** en `main`
+> (PR #14, squash `88e912c`, issue #13 cerrado). Ese PR mergeó además un `NumberSeries`
+> propio que **queda sustituido** por el de **3a-ii** al fusionar `main` sobre esta rama:
+> la conexión se inyecta (`ConnectionInterface`) y sólo así T2 y T3 pueden ejecutar la
+> reserva sobre la **segunda sesión** (`pgsql_b`). El `NumberSeries` estático del PR #14
+> no habría sostenido T2. El diff de esta rama contra `main` muestra **sólo** 3a-ii.
 
 ## TDD Cycle Evidence
 
@@ -273,6 +280,7 @@
 |---|---|
 | Test focalizado | `php vendor/bin/pest tests/Feature/Fiscal` → **6 passed (71 assertions)** · `--filter="serie_se_distingue"` → 1 passed (31) · `--filter="55p03"` → 1 passed · `--filter="rollback_de_la_reserva"` → 1 passed · suite completa `./vendor/bin/pest` → **49 passed (451 assertions)** (baseline del PR6: 43 passed / 380 assertions) |
 | Harness de runtime | script de integración sobre `pos_moderno_v2_test` con las dos sesiones (`pgsql` + `pgsql_b`): `[T1] primer=100 ultimo=149 consecutivos=1 next_number=150 reservas=50` · `[T2] sqlstate=55P03 elapsed_ms=337 next_number=100` — `SQLSTATE[55P03]: Lock not available: 7 ERROR: canceling statement due to lock timeout` · `[T3] reservado_en_la_transaccion=100 next_number_desde_B=100 reservas_visibles_desde_B=0 siguiente_reserva=100` |
+| Mutación verificada | La mutación que reintroduce la lectura previa (`select "next_number" from "fiscal_series"`) **hace fallar** el test de 0.3.3-T en su assert de cero `SELECT`: el test **fija** la regla, no sólo la acompaña |
 | Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran M21, `NumberSeries` y los 5 ficheros de test. **NUNCA** borrar `fiscal_document_reservations`: el rollback de la emisión es **apagar** (`fiscal.emission_enabled = false`), nunca renumerar |
 | Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `php artisan migrate:fresh --seed --force` → **13 migraciones en verde** · `public/build/manifest.json` presente |
 | Tamaño | **874 líneas** (835 adiciones + 39 borrados): **725** de código y tests + **149** de artefactos SDD — **74 por encima** del techo de 800 ⇒ la work unit se **parte en dos slices encadenados**: **PR7 (3a-i: M21 + test de esquema + arnés, 362 líneas)** y **PR8 (3a-ii: `NumberSeries` + T1–T3 + artefactos SDD, 512 líneas)**. Sin `size:exception` |
@@ -317,4 +325,4 @@
 
 ## Siguiente unidad
 
-**PR8-numeracion-b** (`feat/fase0-08-numeracion-b`): M22 + `FiscalIssuanceService` + generador del control + render + notas derivadas (0.3.2 y 0.3.4–0.3.9). Predecesor: PR7-numeracion-a.
+**PR9-numeracion-b** (`feat/fase0-09-numeracion-b`): M22 + `FiscalIssuanceService` + generador del control + render + notas derivadas (0.3.2 y 0.3.4–0.3.9). Predecesor: PR8 (3a-ii, esta rama).
