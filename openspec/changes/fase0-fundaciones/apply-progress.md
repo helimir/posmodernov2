@@ -36,8 +36,12 @@
 | 0.2.6-T | ✅ **definitivo** | `tests/Feature/Domain/ModelCastsTest.php` cubre los **12** modelos — **PR6** |
 | 0.2.7 `TaxContext` | ✅ | `app/Domain/Tax/TaxContext.php` + `FiscalProfile::taxContext()` — **PR6** |
 | 0.2.7-T | ✅ | `tests/Feature/Domain/TaxContextTest.php` — **PR6** |
+| 0.3.1 Migrations M21 | ✅ | `fiscal_series` + `fiscal_document_reservations`; `fiscal_providers` la crea M02 (PR4) y M21 sólo la referencia — **PR7** |
+| 0.3.1-T | ✅ | `tests/Feature/Fiscal/FiscalSeriesSchemaTest.php` — **PR7** |
+| 0.3.3 `NumberSeries` | ✅ **cerrada** | `app/Domain/Fiscal/NumberSeries.php`: reserva con `UPDATE … RETURNING` + traza — **PR7** |
+| 0.3.3-T | ✅ | `tests/Feature/Fiscal/NumberSeriesReservationTest.php` — **PR7** |
 
-**28 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados.
+**30 de 152 tareas del change marcadas** (14 de Fase 0.1 + 14 de Fase 0.2 + 2 de Fase 0.3). **La Fase 0.2 queda COMPLETA**: 0.2.1–0.2.7 y sus siete tests gemelos están cerrados. La Fase 0.3 queda con su primera unidad (0.3.1 + 0.3.3) cerrada; M22 y el motor de emisión (0.3.4–0.3.12) son de **PR8**.
 
 ## TDD Cycle Evidence
 
@@ -245,6 +249,48 @@
 - El **adaptador real** de un canal: bloqueado por el Manual Técnico (research O1/O4/O6).
 - El **seed** del perfil y del catálogo de impuestos (5 categorías + tasas con `evidence_status`): PR16 (`FiscalProfileSeeder`).
 
+## Work Unit Evidence (PR7-numeracion-a)
+
+> Work unit **3a**: la primera mitad de la numeración fiscal — el esquema de las DOS series (M21) y la **reserva atómica** (`NumberSeries`). La segunda mitad (M22 + motor de emisión + T1–T3) es **PR8-numeracion-b**.
+
+| Evidencia | Valor |
+|---|---|
+| Test focalizado | `./vendor/bin/pest --filter="NumberSeries"` → **1 passed (13 assertions)** · suite completa `./vendor/bin/pest` → **45 passed (424 assertions)** (baseline del PR7: 44 passed / 411 assertions) |
+| Harness de runtime | `php artisan migrate:fresh --force` (BD de test) → **13 migraciones en verde** · `tinker` → 2 reservas seguidas devuelven **100** y **101**, `next_number` queda en **102** y quedan **2** trazas con `series_role='document'` |
+| Mutación verificada | La mutación que reintroduce la lectura previa (`select "next_number" from "fiscal_series" where "id" = ? limit 1`) **hace fallar** el test en el assert de cero `SELECT`: el test **fija** la regla, no sólo la acompaña |
+| Frontera de rollback | `git revert` de los **2** commits del PR (`6742e17` + el de `NumberSeries`) + `migrate:fresh`: se retiran M21, `NumberSeries` y su test. **No toca** M01/M02/M03 (base de la cadena) ni el contrato ni los enums del PR5 |
+| Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `public/build/manifest.json` presente |
+| Tamaño | **232 líneas** en este commit (178 de código y tests + 50 de artefactos SDD); el PR7 completo, con el commit previo de M21 (`6742e17`), suma **590 líneas** en 8 ficheros — dentro del techo de 800 |
+
+## Ficheros de esta unidad (PR7-numeracion-a)
+
+| Fichero | Acción | Qué hace |
+|---|---|---|
+| `database/migrations/2026_11_01_000021_create_fiscal_series_table.php` | Creado | M21: `fiscal_series` (`series_role` canónico, `assigned_by`, rango, `control_identifier`, `sequence_length`) + `fiscal_document_reservations` (traza, `unique(series_id, number)`) |
+| `app/Domain/Fiscal/NumberSeries.php` | Creado | `reserve()`: toma el número con `UPDATE … RETURNING` — la misma sentencia que bloquea la fila — y escribe la traza |
+| `tests/Feature/Fiscal/FiscalSeriesSchemaTest.php` | Creado | 0.3.1-T: la serie se distingue por rol y por autoridad; `series_kind` no es una columna |
+| `tests/Feature/Fiscal/NumberSeriesReservationTest.php` | Creado | 0.3.3-T: el número se entrega en la sentencia que toma el bloqueo, sin ninguna lectura |
+
+## Decisiones de esta unidad (PR7-numeracion-a)
+
+1. **`reserve()` NO abre transacción propia si el llamador ya tiene una.** La reserva es parte de la unidad atómica del checkout (T1) y de la emisión (T2), y el rollback de esa unidad debe **devolver** el número (T3). Abrir una transacción interna rompería el `SET LOCAL lock_timeout` de T2 (que sólo tiene efecto dentro de una transacción) y el rollback de T3. Si el llamador no tiene ninguna, `reserve()` abre una para que el `UPDATE` y su traza no queden separados.
+2. **El número y el rol salen del MISMO `RETURNING`**: `RETURNING next_number - 1 AS reserved_number, series_role`. El rol de la traza se copia de la fila ya bloqueada, sin una segunda lectura — la traza no depende de que la serie cambie después.
+3. **Rango agotado → `RuntimeException`.** El `UPDATE` con `next_number <= to_number` no toca la fila cuando el rango se acaba: no hay número que repartir, el contador no avanza y no queda traza. Se usa `RuntimeException` (SPL) siguiendo la convención ya observada en el dominio (`InvalidArgumentException` en las validaciones de `FiscalProfile`/`TaxRate`), sin añadir una clase de excepción fuera de la lista de ficheros del design.
+4. **El número repartido es `next_number - 1`.** `next_number` guarda el último número repartido; el rango se acota con `next_number <= to_number`, de modo que el primer número de una serie con `next_number = from_number = 100` es el 100.
+5. **`reserved_by` es un parámetro explícito del llamador** (`?int`, la columna admite null). Quien emite decide quién tomó el número; la capa de dominio no lee la sesión.
+
+## Desviaciones del diseño y FKs diferidas (PR7-numeracion-a)
+
+1. **El nombre del fichero de la migración** no es el del plan: `2026_11_01_000021_create_fiscal_providers_and_series_table.php` → `2026_11_01_000021_create_fiscal_series_table.php`. `fiscal_providers` la crea **M02** (PR4, ya fusionado en `main`) y M21 sólo la referencia; recrearla sería un error de migración. Queda justificado en la cabecera de la propia migración.
+2. **`reserved_by` no se ejercita con un usuario real.** Crear un usuario exige un rol (FK `roles.id`) y no aporta a la regla que fija el test; la columna es nullable por diseño y el parámetro del llamador es explícito. La cobertura con usuario real llega con el motor de emisión (PR8).
+3. **La serie de control guarda el espejo local del rango de la imprenta** (`from_number`, `to_number`, `credential_ref`), no una referencia a la fila del proveedor: el rango autorizado es un dato de la serie (C3). La resolución contra la imprenta es del motor de emisión (PR8).
+
+## Fuera de esta unidad (no implementado) — PR7-numeracion-a
+
+- **M22** (`fiscal_documents` + `_taxes` + `_parties` + `_links` + `_events` + `_control_assignments` + `fiscal_periodic_reports` + `fiscal_contingency_forms`): **PR8**.- **`FiscalIssuanceService`** (0.3.4: orquesta `submit()` → `assignControl()` → `issue()`), el generador del Nº de Control (0.3.5), el render del comprobante (0.3.6), los documentos derivados (0.3.7), la anulación (0.3.8) y la contingencia en papel (0.3.9): **PR8**.
+- **T1–T3** (0.3.10 secuencia sin huecos, 0.3.11 bloqueo real `55P03`, 0.3.12 el rollback devuelve el número): **PR8**, junto al código que prueban.
+- **El arnés de concurrencia** (0.9.5: `DatabaseMigrations` con `TRUNCATE … RESTART IDENTITY CASCADE`): **PR17**. Esta unidad se apoya en `WithoutWrappingTransaction` + `TRUNCATE`, que ya es suficiente sin dos sesiones.
+
 ## Siguiente unidad
 
-**PR7-numeracion-a** (`feat/fase0-07-numeracion-a`): M21 (`fiscal_series` + `fiscal_document_reservations`) + `NumberSeries`, con la reserva atómica `UPDATE … RETURNING`. Predecesor: PR6-pais-fiscal-d.
+**PR8-numeracion-b** (`feat/fase0-08-numeracion-b`): M22 (`fiscal_documents` y sus tablas satélite) + `FiscalIssuanceService` (submit → assignControl → issue) + el generador del Nº de Control + el render del comprobante + **T1–T3**. Predecesor: PR7-numeracion-a.
