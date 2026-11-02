@@ -87,6 +87,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 9 | `feat/fase0-09-numeracion-b` | 3b-i | M22 + `FiscalIssuanceService` + tests | **619** | PR #19 · issue #18 | **fusionado** `b7f0c56` |
 | 10 | `feat/fase0-10-numeracion-c` | 3b-ii | `ControlNumberGenerator` + anulación | **310** | PR #21 · issue #20 | **fusionado** ``abb0b3b`` |
 | 11 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
+| 11 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
 | 10 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
 | 11 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
 | 11 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
