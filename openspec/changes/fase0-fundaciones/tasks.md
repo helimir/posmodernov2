@@ -89,15 +89,16 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 11 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
 | 12 | `feat/fase0-12-numeracion-e` | 3b-iv | contingencia en papel + conciliacion D+1 | **238** | PR #25 - issue #24 | **fusionado** `97cd355` |
 | 13 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
-| 14 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
-| 15 | `feat/fase0-11-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
-| 16 | `feat/fase0-12-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | 757 | — | pendiente |
-| 17 | `feat/fase0-13-contabilidad-caja` | 7 | M18–M20 + `LedgerWriter` + `business_date` + saldos | 792 | — | pendiente |
-| 18 | `feat/fase0-14-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | 565 | — | pendiente |
-| 19 | `feat/fase0-15-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | 464 | — | pendiente |
-| 20 | `feat/fase0-16-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | — | pendiente |
-| 21 | `feat/fase0-17-suite` | 9b | `NoCountryLiteralsTest` + tests canónicos | 550 | — | pendiente |
-| 22 | `feat/fase0-18-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | 340 | — | pendiente |
+| 14 | `feat/fase0-10-catalogo-b` | 4a-ii | M10 + 12 modelos + test | **pendiente** | - | pendiente |
+| 15 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
+| 16 | `feat/fase0-11-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
+| 17 | `feat/fase0-12-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | 757 | — | pendiente |
+| 18 | `feat/fase0-13-contabilidad-caja` | 7 | M18–M20 + `LedgerWriter` + `business_date` + saldos | 792 | — | pendiente |
+| 19 | `feat/fase0-14-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | 565 | — | pendiente |
+| 20 | `feat/fase0-15-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | 464 | — | pendiente |
+| 21 | `feat/fase0-16-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | — | pendiente |
+| 22 | `feat/fase0-17-suite` | 9b | `NoCountryLiteralsTest` + tests canónicos | 550 | — | pendiente |
+| 23 | `feat/fase0-18-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | 340 | — | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
