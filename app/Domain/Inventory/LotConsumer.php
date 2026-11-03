@@ -39,6 +39,12 @@ final readonly class LotConsumer
      */
     public function consume(int $productId, int $storeId, int $saleItemId, string $quantity): array
     {
+        // Un SERVICIO no genera lote, no consume stock y no aparece en la
+        // traza: no hay nada que reponer porque nunca salio de un almacen.
+        if ($this->isService($productId)) {
+            return [];
+        }
+
         $wanted = (float) $quantity;
 
         if ($wanted <= 0) {
@@ -115,6 +121,14 @@ final readonly class LotConsumer
         });
 
         return $traza;
+    }
+
+    /**
+     * ¿El producto es un servicio? Un servicio no tiene almacen.
+     */
+    private function isService(int $productId): bool
+    {
+        return $this->connection->table('products')->where('id', $productId)->value('type') === 'service';
     }
 
     /**
