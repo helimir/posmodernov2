@@ -78,27 +78,33 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 |---|---|---|---|---|---|---|
 | 1 | `feat/fase0-01-ciimientos-a` | 1a | M04-M07 + `composer.json` + `pgsql_b` + 3 interruptores + 8 modelos base | **1022** | PR #2 - issue #1 | **fusionado** `65b529d` |
 | 2 | `feat/fase0-02-ciimientos-b` | 1b | M25-M26 + 6 modelos (i18n, outbox SMS, auditoria) | **491** | PR #4 - issue #3 | **fusionado** `a5e5100` |
-| 3 | `feat/fase0-03-pais-fiscal-a` | 2a (M01) | M01 + `Country`/`Currency`/`NumberFormat` | 241 | PR #6 · issue #5 | **fusionado** `8b9c553` |
-| 4 | `feat/fase0-04-pais-fiscal-b` | 2b (M02) | M02 + `fiscal_providers` + 7 modelos de perfil fiscal | 767 | PR #8 · issue #7 | **fusionado** `ba28322` |
-| 5 | `feat/fase0-05-pais-fiscal-c` | 2c-a (0.2.4 + 0.2.5) | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genéricos + sustitución de las constantes de PR4 | **773** | PR #10 · issue #9 | **fusionado** `adac1b6` |
-| 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b (0.2.3 + 0.2.6 + 0.2.7) | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | PR #12 · issue #11 | **fusionado** `efbf00d` |
+| 3 | `feat/fase0-03-pais-fiscal-a` | 2a | M01 + `Country`/`Currency`/`NumberFormat` | **241** | PR #6 - issue #5 | **fusionado** `8b9c553` |
+| 4 | `feat/fase0-04-pais-fiscal-b` | 2b | M02 + `fiscal_providers` + 7 modelos de perfil fiscal | **767** | PR #8 - issue #7 | **fusionado** `ba28322` |
+| 5 | `feat/fase0-05-pais-fiscal-c` | 2c-a | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genericos | **773** | PR #10 - issue #9 | **fusionado** `adac1b6` |
+| 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | PR #12 - issue #11 | **fusionado** `efbf00d` |
 | 7 | `feat/fase0-07-numeracion-a` | 3a-i | M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnes | **362** | PR #14 - issue #13 | **fusionado** `88e912c` |
 | 8 | `feat/fase0-08-numeracion-b` | 3a-ii | `NumberSeries` + reserva atomica + **T1-T3** + artefactos SDD | **512** | PR #17 - issue #16 | **fusionado** `89fa520` |
 | 9 | `feat/fase0-09-numeracion-b` | 3b-i | M22 + `FiscalIssuanceService` + tests | **619** | PR #19 - issue #18 | **fusionado** `b7f0c56` |
 | 10 | `feat/fase0-10-numeracion-c` | 3b-ii | `ControlNumberGenerator` + anulacion que consume el numero | **310** | PR #21 - issue #20 | **fusionado** `abb0b3b` |
 | 11 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
 | 12 | `feat/fase0-12-numeracion-e` | 3b-iv | contingencia en papel + conciliacion D+1 + fix del escaner | **238** | PR #25 - issue #24 | **fusionado** `97cd355` |
-| 13 | `feat/fase0-09-catalogo-a` | 4a | M08–M10 + 12 modelos catálogo/bridge/clientes | 587 | — | pendiente |
-| 14 | `feat/fase0-10-catalogo-b` | 4a-ii | M10 (clientes y proveedores) + FKs diferidas | **158** | PR #31 - issue #30 | **fusionado** `69c1b70` |
-| 15 | `feat/fase0-10-catalogo-b` | 4b | M11–M13 + 13 modelos venta/compra | 626 | — | pendiente |
-| 16 | `feat/fase0-11-stock-lotes` | 5 | M14–M17 + lotes + `LotConsumer`/`LotReturner`/`StockInvariant` | 772 | — | pendiente |
-| 17 | `feat/fase0-12-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | 757 | — | pendiente |
-| 18 | `feat/fase0-13-contabilidad-caja` | 7 | M18–M20 + `LedgerWriter` + `business_date` + saldos | 792 | — | pendiente |
-| 19 | `feat/fase0-14-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | 565 | — | pendiente |
-| 20 | `feat/fase0-15-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | 464 | — | pendiente |
-| 21 | `feat/fase0-16-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | 533 | — | pendiente |
-| 22 | `feat/fase0-17-suite` | 9b | `NoCountryLiteralsTest` + tests canónicos | 550 | — | pendiente |
-| 23 | `feat/fase0-18-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | 340 | — | pendiente |
+| 13 | `feat/fase0-13-numeracion-f` | 3b-v | modelo de plantilla + render del comprobante | **513** | PR #27 - issue #26 | **fusionado** `9c5a467` |
+| 14 | `feat/fase0-09-catalogo-a` | 4a-i | M08 + M09 (los doce bridges) + tests | **299** | PR #29 - issue #28 | **fusionado** `54a3d64` |
+| 15 | `feat/fase0-10-catalogo-b` | 4a-ii | M10 (clientes y proveedores) + FKs diferidas | **158** | PR #31 - issue #30 | **fusionado** `69c1b70` |
+| 16 | `feat/fase0-10-catalogo-b` | 4a-iii | los 13 modelos del catalogo, bridges y clientes | **737** | PR #33 - issue #32 | **fusionado** `01f115a` |
+| 17 | `feat/fase0-11-catalogo-c` | 4a-iv | M11 ventas + M12 extractos + M13 compras | **336** | PR #35 - issue #34 | **fusionado** `8c1fafe` |
+| 18 | `feat/fase0-12-catalogo-d` | 4a-v | los 13 modelos de venta, compra y extractos | **669** | PR #37 - issue #36 | **fusionado** `4c2fbd0` |
+| 19 | `feat/fase0-13-stock-lotes` | 5-i | M14 + `StockInvariant` + tests | **268** | PR #39 - issue #38 | **fusionado** `908a3b6` |
+| 20 | `feat/fase0-14-stock-lotes-b` | 5-ii | `LotConsumer` (FIFO + `SKIP LOCKED`) + `LotReturner` | **409** | PR #41 - issue #40 | **fusionado** `21ac229` |
+| 21 | `feat/fase0-15-stock-lotes-c` | 5-iii | test de concurrencia del stock con dos sesiones | **151** | PR #43 - issue #42 | **fusionado** `b43ca60` |
+| 22 | `feat/fase0-16-stock-lotes-d` | 5-iv | M15 + M17 + el servicio sin lote (0.5.7) | pendiente | - - - | pendiente |
+| 23 | `feat/fase0-17-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | **757** | - - - | pendiente |
+| 24 | `feat/fase0-18-contabilidad-caja` | 7 | M18-M20 + `LedgerWriter` + `business_date` + saldos | **792** | - - - | pendiente |
+| 25 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
+| 26 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
+| 27 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
+| 28 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
+| 29 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
