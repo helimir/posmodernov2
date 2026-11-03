@@ -3,6 +3,9 @@
 use App\Domain\Inventory\LotConsumer;
 use App\Domain\Inventory\LotReturner;
 use App\Domain\Inventory\StockInvariant;
+use App\Models\Product;
+use App\Models\ProductStore;
+use App\Models\Store;
 use Illuminate\Support\Facades\DB;
 use Tests\Concerns\WithoutWrappingTransaction;
 
@@ -31,10 +34,10 @@ afterEach(function () {
  */
 function escenario(): array
 {
-    $store = App\Models\Store::create(['name' => 'Tienda de prueba']);
-    $product = App\Models\Product::create(['code' => 'ZZP-2', 'name' => 'Producto con lotes']);
+    $store = Store::create(['name' => 'Tienda de prueba']);
+    $product = Product::create(['code' => 'ZZP-2', 'name' => 'Producto con lotes']);
 
-    App\Models\ProductStore::create([
+    ProductStore::create([
         'product_id' => $product->id,
         'store_id' => $store->id,
         'purchase_price' => 10,

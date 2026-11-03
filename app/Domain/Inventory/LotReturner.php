@@ -69,7 +69,7 @@ final readonly class LotReturner
                     ->where('id', $consumption->lot_id)
                     ->update([
                         'quantity_returned' => $this->connection->raw(
-                            'quantity_returned + ' . $this->number($taken)
+                            'quantity_returned + '.$this->number($taken)
                         ),
                         'updated_at' => now(),
                     ]);

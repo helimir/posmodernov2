@@ -78,7 +78,7 @@ final readonly class LotConsumer
                     ->where('id', $lot->id)
                     ->update([
                         'quantity_consumed' => $this->connection->raw(
-                            'quantity_consumed + ' . $this->number($taken)
+                            'quantity_consumed + '.$this->number($taken)
                         ),
                         'updated_at' => now(),
                     ]);
