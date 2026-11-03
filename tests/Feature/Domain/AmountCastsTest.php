@@ -1,11 +1,22 @@
 <?php
 
 use App\Models\Customer;
+use App\Models\CustomerLedgerEntry;
 use App\Models\CustomerStore;
 use App\Models\PaymentMethod;
 use App\Models\PosTemplate;
 use App\Models\Product;
 use App\Models\ProductStore;
+use App\Models\PurchaseItem;
+use App\Models\PurchasePayment;
+use App\Models\PurchaseReturn;
+use App\Models\PurchaseReturnItem;
+use App\Models\PurchaseTotal;
+use App\Models\SaleItem;
+use App\Models\SalePayment;
+use App\Models\SaleReturn;
+use App\Models\SaleReturnItem;
+use App\Models\SaleTotal;
 use App\Models\SupplierStore;
 use Tests\Concerns\WithoutWrappingTransaction;
 
@@ -28,6 +39,17 @@ test('test_los_modelos_de_venta_y_compra_no_usan_float_para_importes', function 
         CustomerStore::class => ['balance', 'due'],
         SupplierStore::class => ['balance', 'due'],
         Customer::class => ['credit_limit'],
+        SaleItem::class => ['quantity', 'unit_price', 'discount', 'tax_rate_snapshot', 'tax_amount'],
+        SaleTotal::class => ['sub_total', 'discount', 'tax_total', 'rounding_adjustment', 'grand_total'],
+        SalePayment::class => ['amount'],
+        SaleReturn::class => ['total'],
+        SaleReturnItem::class => ['quantity', 'amount'],
+        PurchaseItem::class => ['quantity', 'unit_price', 'discount', 'tax_rate_snapshot', 'tax_amount'],
+        PurchaseTotal::class => ['sub_total', 'discount', 'tax_total', 'rounding_adjustment', 'grand_total'],
+        PurchasePayment::class => ['amount'],
+        PurchaseReturn::class => ['total'],
+        PurchaseReturnItem::class => ['quantity', 'amount'],
+        CustomerLedgerEntry::class => ['amount', 'balance_after'],
     ];
 
     foreach ($modelos as $modelo => $columnas) {
