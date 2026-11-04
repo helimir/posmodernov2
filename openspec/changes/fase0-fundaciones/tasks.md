@@ -103,13 +103,14 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 25 | `feat/fase0-24-contabilidad-i` | 7-i | M18 (el libro contable) + M19 (gastos) + `LedgerWriter` + los 3 modelos del asiento | **896** | PR #51 - issue #50 | **fusionado** `d23afef` |
 | 26 | `feat/fase0-25-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones + M30 + el resolutor de tasa | **1470** | PR #53 - issue #52 | **fusionado** `44e4740` |
 | 27 | `feat/fase0-26-t2-fiscal` | 6-iii | el T2 fiscal (M31 + `FiscalIssuanceCoordinator`) y el reintento que reutiliza la reserva | **1871** | PR #55 - issue #54 | **fusionado** `23092ff` |
-| 28 | `feat/fase0-24-contabilidad-ii` | 7-ii | M20 (bancos) + `cash_registers` + `income_sources` + `CashRegisterService` + el comando de arranque | ~600 | - - - | pendiente |
-| 29 | `feat/fase0-18-contabilidad-caja` | 7-iii | el resto de 0.7: los modelos contables que faltan y los saldos derivados | ~300 | - - - | pendiente |
-| 30 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
-| 31 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
-| 32 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
-| 33 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
-| 34 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
+| 28 | `feat/fase0-27-caja` | 7-ii-a | M20 + M28 + M32 (caja e ingresos) + los 7 modelos contables | **1136** | PR #56 - issue #55 | **en curso** |
+| 29 | `feat/fase0-27-caja-b` | 7-ii-b | el `CashRegisterService` (caja por fecha de negocio) + el comando `ops:check-opening-balances` | ~500 | - - - | pendiente |
+| 30 | `feat/fase0-18-contabilidad-caja` | 7-iii | los bridges que faltan como modelo + los saldos derivados | ~300 | - - - | pendiente |
+| 31 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
+| 32 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
+| 33 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
+| 34 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
+| 35 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
@@ -326,18 +327,18 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 
 - [x] **0.7.1** Migración **M18** `2026_11_01_000018_create_ledger_tables.php`: `ledger_entry_types` (catálogo sembrado que sustituye los **21 flags** de `income_sources`/`expense_categorys`), `ledger_entries` (`entry_type` explícito; absorbe `bank_transaction_info`/`_price`; `bank_transaction_price` 1:1 se disuelve en `ledger_entries.amount`) y `ledger_lines` (asientos por cuenta, permite reparar un movimiento entre varias cuentas). Dep: 0.4.4, 0.4.5. Aceptación: **ninguna** tabla de catálogo expone banderas booleanas contables.
 - [x] **0.7.1-T** Test: `test_cada_movimiento_contable_tiene_un_unico_entry_type_y_ninguna_bandera_dispersa` — regla que fija: *un movimiento contable tiene un tipo, no once banderas*.
-- [ ] **0.7.2** Migración **M19** `2026_11_01_000019_create_expenses_cash_registers_opening_balances_table.php`: `expenses` (**fuente de verdad del gasto**), `expense_categories` (se eliminan los 10 flags contables; `is_hide` → `is_active`, que es UI), `income_sources` (se eliminan los 11 flags contables), `cash_registers` (apertura/cierre por tienda con **`business_date`** — el legacy filtra por `DAY()/MONTH()/YEAR()`, trampa 62) y `opening_balances` (`certified_at` + `certified_by`). Dep: 0.1.4. Aceptación: `cash_registers.business_date` es `date`; `opening_balances` exige `certified_at` y `certified_by` para el arranque.
-- [ ] **0.7.2-T** Test: `test_el_gasto_nace_en_expenses_y_el_movimiento_bancario_no_lo_inventa` — regla que fija: *el gasto nace en `expenses`, no en el banco*.
-- [ ] **0.7.3** Migración **M20** `2026_11_01_000020_create_bank_accounts_table.php`: `bank_accounts` **sin** `total_deposit`/`total_withdraw`/`total_transfer_from_other`/`total_transfer_to_other` (derivados) y con `opening_balance` congelado. Dep: 0.7.2. Aceptación: los saldos de cuenta se derivan de `ledger_entries`.
-- [ ] **0.7.3-T** Test: `test_el_saldo_de_cuenta_se_deriva_de_los_asientos_y_no_de_un_contador_almacenado` — regla que fija: *los saldos de cuenta se derivan, no se cuentan dos veces*.
+- [x] **0.7.2** Migración **M19** `2026_11_01_000019_create_expenses_cash_registers_opening_balances_table.php`: `expenses` (**fuente de verdad del gasto**), `expense_categories` (se eliminan los 10 flags contables; `is_hide` → `is_active`, que es UI), `income_sources` (se eliminan los 11 flags contables), `cash_registers` (apertura/cierre por tienda con **`business_date`** — el legacy filtra por `DAY()/MONTH()/YEAR()`, trampa 62) y `opening_balances` (`certified_at` + `certified_by`). Dep: 0.1.4. Aceptación: `cash_registers.business_date` es `date`; `opening_balances` exige `certified_at` y `certified_by` para el arranque.
+- [ ] **0.7.2-T** Test: `test_el_gasto_nace_en_expenses_y_el_movimiento_bancario_no_lo_inventa` (PENDIENTE: el nombre canonico no esta implementado; el test de 7-i cubre la regla con el nombre de 0.7.4-T) — regla que fija: *el gasto nace en `expenses`, no en el banco*.
+- [x] **0.7.3** Migración **M20** `2026_11_01_000020_create_bank_accounts_table.php`: `bank_accounts` **sin** `total_deposit`/`total_withdraw`/`total_transfer_from_other`/`total_transfer_to_other` (derivados) y con `opening_balance` congelado. Dep: 0.7.2. Aceptación: los saldos de cuenta se derivan de `ledger_entries`.
+- [x] **0.7.3-T** Test: `test_el_saldo_de_cuenta_se_deriva_de_los_asientos_y_no_de_un_contador_almacenado` — regla que fija: *los saldos de cuenta se derivan, no se cuentan dos veces*.
 - [x] **0.7.4** `app/Domain/Accounting/LedgerWriter.php`: escribe `ledger_entries` (`entry_type` del catálogo sembrado) + `ledger_lines` en una sola transacción, y es el único pathway que genera el asiento de un gasto. Dep: 0.7.1. Aceptación: ningún asiento se crea sin `entry_type`.
 - [x] **0.7.4-T** Test: `test_el_asiento_de_un_gasto_se_genera_desde_el_gasto_y_no_desde_el_movimiento_bancario` — regla que fija: *un gasto registrado sin movimiento bancario sigue siendo gasto*.
 - [ ] **0.7.5** Caja por fecha de negocio: `app/Domain/Accounting/CashRegisterService.php` abre/cierra caja por tienda con `business_date` y asocia cada movimiento al registro de caja de **su** fecha de negocio. Dep: 0.7.2. Aceptación: una operación registrada cerca del cambio de día queda en el registro correcto; **no** se filtra por día/mes/año calculados.
 - [ ] **0.7.5-T** Test: `test_el_movimiento_cerca_del_cambio_de_dia_queda_en_el_registro_de_caja_de_su_fecha_de_negocio` — regla que fija: *la caja se filtra por fecha de negocio, no por día/mes/año*.
 - [ ] **0.7.6** Comando `php artisan ops:check-opening-balances`: **bloquea el arranque operativo** si no hay saldos de apertura certificados (stock por tienda y producto; saldo y deuda por cliente y proveedor; saldo de caja por cuenta y tienda) con `certified_at` + `certified_by`. Dep: 0.7.2. Aceptación: el comando sale con código ≠ 0 y mensaje explícito mientras falte la certificación.
 - [ ] **0.7.6-T** Test: `test_el_arranque_operativo_queda_bloqueado_hasta_que_exista_un_saldo_certificado` — regla que fija: *sin saldos de apertura firmados no hay cifras defendibles*.
-- [ ] **0.7.7** Modelos contables: `app/Models/LedgerEntryType.php`, `LedgerEntry.php`, `LedgerLine.php`, `Expense.php`, `ExpenseCategory.php`, `IncomeSource.php`, `CashRegister.php`, `OpeningBalance.php`, `BankAccount.php`. Dep: 0.7.1–0.7.3. Aceptación: casts exactos; `entry_type` es FK al catálogo sembrado.
-- [ ] **0.7.7-T** Test: `test_el_tipo_de_asiento_se_toma_del_catalogo_y_no_de_un_literal` — regla que fija: *la clasificación se consulta, no se desparrama en el código*.
+- [x] **0.7.7** Modelos contables: `app/Models/LedgerEntryType.php`, `LedgerEntry.php`, `LedgerLine.php`, `Expense.php`, `ExpenseCategory.php`, `IncomeSource.php`, `CashRegister.php`, `OpeningBalance.php`, `BankAccount.php`. Dep: 0.7.1–0.7.3. Aceptación: casts exactos; `entry_type` es FK al catálogo sembrado.
+- [ ] **0.7.7-T** Test: `test_el_tipo_de_asiento_se_toma_del_catalogo_y_no_de_un_literal` (PENDIENTE: el nombre canonico no esta implementado; el `LedgerWriter` ya consulta el catalogo, pero el test con este nombre no existe) — regla que fija: *la clasificación se consulta, no se desparrama en el código*.
 
 ---
 

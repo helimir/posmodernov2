@@ -510,3 +510,58 @@ El reintento vuelve a llamar a `submit()` del proveedor. Si el proveedor publico
 ### Siguiente unidad
 
 **7-ii** - M20 (`bank_accounts`), `cash_registers`, `income_sources`, el `CashRegisterService` (caja por fecha de negocio), el comando `ops:check-opening-balances` y los modelos contables que faltan. Y **0.6.4**: el IVA retenido como documento PROPIO.
+
+---
+
+## PR53-caja - 7-ii-a: el esquema contable que faltaba y sus modelos (2026-11-04)
+
+- **Estado**: entregado en el PR #56 (rama `feat/fase0-27-caja`).
+- **Tareas cerradas**: 0.7.2, 0.7.3, 0.7.3-T y 0.7.7.
+- **Ficheros**: `database/migrations/2026_11_01_000020_add_opening_balance_to_bank_accounts_table.php`, `2026_11_01_000028_add_store_country_fk_and_opening_balance_constraints.php`, `2026_11_01_000032_create_cash_registers_and_income_sources_tables.php`, `app/Models/{BankAccount,BankAccountStore,CashRegister,Expense,ExpenseCategory,IncomeSource,OpeningBalance}.php`, `tests/Feature/Domain/{AccountingSchemaTest,AccountingModelCastsTest}.php`.
+- **Evidencia**: `pest` 98 passed (1358 assertions), con `main` en 88 passed (1177 assertions); `pint` limpio; `php -l` limpio en los 12 ficheros. Las tres migraciones aplican, revierten y vuelven a aplicar.
+
+### Tres migraciones, y por que no son las que decia el plan
+
+1. **M20 es un ALTER, no un CREATE**: `bank_accounts` **ya existia** desde M10. Y `bank_account_stores` **no tenia** `deposit` ni `withdraw`: el propio M09 lo decia ("los contadores globales por cuenta duplicaban el saldo real"), asi que la prohibicion de la spec ya se cumplia. M20 solo anade `opening_balance`.
+2. **M28** cierra la FK `stores.country_id` -> `countries.id` (M04 la promised para M27, y M27 resulto ser la de `opening_balances`: nunca se cerro) y anade los **cuatro CHECK de coherencia** de `opening_balances` (el `kind` exige SU entidad y prohibe las otras tres) y los **cuatro indices unicos parciales** por tipo.
+3. **M32** crea `cash_registers` y `income_sources`.
+
+### Se elimina `bank_accounts.account_type_id`
+
+Era una FK a una tabla `account_types` que **no existe en el repo**: una relacion rota. La spec `esquema-dominio` exige que toda relacion tenga FK real, asi que la columna desaparece en vez de quedar colgando. No la sustituye nada: el tipo de cuenta no lo necesita el modelo actual.
+
+### Los saldos: congelados al principio, DERIVADOS despues
+
+- `bank_accounts.opening_balance` y `bank_account_stores.opening_balance`: el saldo de PARTIDA, congelado. La granularidad real es por cuenta **y** tienda.
+- `cash_registers.opening_balance`: el saldo de partida de la caja de esa fecha de negocio. El saldo **en curso** se deriva de los asientos (`ledger_entries` con ese `business_date`), nunca de un contador. `closing_balance` es lo que se observo al cerrar.
+- `business_date` es un **DATO del llamante**, nunca un `DAY()/MONTH()/YEAR()` calculado: es la trampa 62 del legacy.
+
+### `income_sources` es un CATALOGO, y las once banderas desaparecen
+
+El legacy tenia nueve booleanos (`for_sell`, `for_purchase_return`, `for_due_collection`, `for_loan`, `for_giftcard_sell`, `for_topup`, `for_stock_transfer`, `for_purchase_delete`, `for_expense_delete`) mas dos enums `yes`/`no` (`profitable`, `show_in_income`): **once banderas**. Una bandera no se puede consultar, y dos banderas activas a la vez no significan nada.
+
+El `type` (`credit`/`debit`) **tambien** desaparece del catalogo: el tipo de movimiento se consulta en `ledger_entry_types`, que es el unico sitio donde se clasifica un movimiento. El ingreso se enlaza a su asiento por `ledger_entries.reference_type`/`reference_id`.
+
+### Un nombre canonico que no existia
+
+El nombre canonico de **0.7.3-T** (`test_el_saldo_de_cuenta_se_deriva_de_los_asientos_y_no_de_un_contador_almacenado`) **no estaba implementado en ningun test del repo** (71 tests, ninguno con ese nombre). Ahora si, y por eso 0.7.3-T queda cerrada.
+
+Siguen **ABIERTAS** y anotadas en `tasks.md`, porque sus nombres canonicos no estan implementados: **0.7.2-T** (`test_el_gasto_nace_en_expenses_y_el_movimiento_bancario_no_lo_inventa`; la regla la cubre el test de 7-i, pero con el nombre de 0.7.4-T) y **0.7.7-T** (`test_el_tipo_de_asiento_se_toma_del_catalogo_y_no_de_un_literal`).
+
+### SEIS relaciones rotas, no una
+
+El test `test_ningun_modelo_declara_una_relacion_a_una_clase_que_no_existe` barre `app/Models/` y encontro **seis** relaciones que apuntan a clases inexistentes: `Sale::fiscalDocument()`, `Brand::stores()`, `Box::stores()`, `Unit::stores()`, `PaymentMethod::stores()` y `PosTemplate::stores()`. Los bridges existen como **tablas** (M09) pero no como **modelos**: `ProductStore`, `CustomerStore` y `SupplierStore` si existen, los otros seis no.
+
+Cada una revienta con `Error: Class "..." not found` la primera vez que alguien **usa** la relacion, no al declararla. El test los lleva en una lista explicita de conocidos (un trinquete: si se arregla uno, hay que quitarlo de la lista). Quedan para **7-iii**.
+
+### Un error mio corregido
+
+Encarge los tests en ingles y el subagente los escribio en ingles: **mi peticion estaba mal**. Toda la suite del repo nombra los tests en espanol, y los nombres canonicos del plan estan en espanol. Se renombraron.
+
+### Un hallazgo sobre el rollback
+
+`migrate:rollback --step=3` **no** revierte las tres ultimas migraciones: Laravel revierte las tres del **ultimo lote**, y todas estan en el lote 1, asi que revirtio M32, M31 y M30. Para verificar exactamente las tres de esta unidad hay que usar `migrate:rollback --batch=1 --path=...`.
+
+### Siguiente unidad
+
+**7-ii-b** - el `CashRegisterService` (abre y cierra caja por tienda con `business_date`, y asocia cada movimiento al registro de caja de **su** fecha de negocio) y el comando `ops:check-opening-balances`, que **bloquea el arranque operativo** con codigo de salida distinto de cero mientras falte la certificacion de los saldos de apertura.
