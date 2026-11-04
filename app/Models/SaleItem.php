@@ -21,6 +21,9 @@ class SaleItem extends Model
         'tax_rate_id',
         'tax_rate_snapshot',
         'tax_amount',
+        'base_amount',
+        'line_total',
+        'evidence_status',
     ];
 
     protected function casts(): array
@@ -31,6 +34,9 @@ class SaleItem extends Model
             'discount' => 'decimal:4',
             'tax_rate_snapshot' => 'decimal:4',
             'tax_amount' => 'decimal:4',
+            'base_amount' => 'decimal:4',
+            'line_total' => 'decimal:4',
+            'evidence_status' => 'string',
             'sale_id' => 'integer',
             'product_id' => 'integer',
             'store_id' => 'integer',
