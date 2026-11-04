@@ -101,7 +101,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 23 | `feat/fase0-17-stock-lotes-e` | 5-v | el servicio sin lote + la transferencia con una sola cabecera | **224** | PR #47 - issue #46 | **fusionado** `5e53603` |
 | 24 | `feat/fase0-18-impuestos` | 6-i | `TaxCalculator` puro + sus value objects + el test del motor | **360** | PR #49 - issue #48 | **fusionado** `4e773c9` |
 | 25 | `feat/fase0-24-contabilidad-i` | 7-i | M18 (el libro contable) + M19 (gastos) + `LedgerWriter` + los 3 modelos del asiento | **896** | PR #51 - issue #50 | **fusionado** `d23afef` |
-| 26 | `feat/fase0-25-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones + M30 + el resolutor de tasa | **1470** | PR #53 - issue #52 | **en curso** |
+| 26 | `feat/fase0-25-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones + M30 + el resolutor de tasa | **1470** | PR #53 - issue #52 | **fusionado** `44e4740` |
 | 27 | `feat/fase0-24-contabilidad-ii` | 7-ii | M20 (bancos) + `cash_registers` + `income_sources` + `CashRegisterService` + el comando de arranque | ~600 | - - - | pendiente |
 | 28 | `feat/fase0-18-contabilidad-caja` | 7-iii | el resto de 0.7: los modelos contables que faltan y los saldos derivados | ~300 | - - - | pendiente |
 | 29 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
