@@ -565,3 +565,45 @@ Encarge los tests en ingles y el subagente los escribio en ingles: **mi peticion
 ### Siguiente unidad
 
 **7-ii-b** - el `CashRegisterService` (abre y cierra caja por tienda con `business_date`, y asocia cada movimiento al registro de caja de **su** fecha de negocio) y el comando `ops:check-opening-balances`, que **bloquea el arranque operativo** con codigo de salida distinto de cero mientras falte la certificacion de los saldos de apertura.
+
+---
+
+## PR54-caja-servicio - 7-ii-b: la caja por fecha de negocio y el arranque bloqueado (2026-11-04)
+
+- **Estado**: entregado en el PR #58 (rama `feat/fase0-27-caja-b`).
+- **Tareas cerradas**: 0.7.5, 0.7.5-T, 0.7.6 y 0.7.6-T.
+- **Ficheros**: `app/Domain/Accounting/CashRegisterService.php`, `app/Console/Commands/CheckOpeningBalancesCommand.php`, `database/migrations/2026_11_01_000033_add_opened_by_to_cash_registers_table.php`, `tests/Feature/Accounting/{CashRegisterServiceTest,CheckOpeningBalancesCommandTest}.php`, y `app/Models/CashRegister.php`.
+- **Evidencia**: `pest` 105 passed (1402 assertions), con `main` en 98 passed (1358 assertions); `pint` limpio; `php -l` limpio; la migracion aplica, revierte y vuelve a aplicar.
+
+### La caja se resuelve por la FECHA DE NEGOCIO, no por la de hoy
+
+`CashRegisterService::registerFor($storeId, $businessDate)` devuelve el registro de ESA fecha de negocio. Un movimiento cae en el registro de **su** fecha, no en el de "hoy": el legacy filtraba por `DAY()/MONTH()/YEAR()` calculados (la trampa 62), que parten el dia a la medianoche del servidor y no del negocio.
+
+**La asociacion del movimiento con la caja es por la CLAVE NATURAL** (`store_id`, `business_date`): `ledger_entries` ya tiene las dos columnas y `cash_registers` tiene UNIQUE sobre ellas. **No se anadio `cash_register_id`**: seria una columna redundante que puede desincronizarse de la clave natural.
+
+Los saldos: `opening_balance` es el saldo de partida que **se cuenta a mano** (un dato), `closing_balance` el saldo **observado** al cerrar (el conteo fisico es un hecho, no una cuenta que se derivar), y el saldo **en curso** se deriva de los asientos.
+
+### El arranque operativo queda bloqueado
+
+`php artisan ops:check-opening-balances` es de **solo lectura** y no certifica nada: la certificacion es un **acto humano** (fecha y responsable nominal, `certified_at` + `certified_by`). Comprueba los cuatro tipos de saldo del plan (stock por tienda y producto; saldo y deuda por cliente y proveedor; saldo de caja por cuenta y tienda) y sale con codigo **distinto de cero** mientras falte alguna certificacion, nombrando que falta.
+
+Este es el mecanismo que hace operativa la dependencia **B1**: el codigo puede **frenar** una decision humana, no sustituirla. Y el `opening_balance` de una cuenta se exige por **FILA** de `bank_account_stores`, aunque la cuenta valga cero: una cuenta bancaria nueva en una tienda exige su saldo certificado antes de poder arrancar.
+
+### El hueco que cerro el subagente: `opened_by`
+
+`cash_registers` tenia `closed_by` pero **no** `opened_by`, asi que el responsable de la apertura no se podia registrar en ninguna parte: `closed_by` sin `opened_by` es media confianza. **M33** anade `opened_by` (FK real a `users`, nullable, `nullOnDelete`) y `open()` lo persiste. Los dos pueden faltar, y cuando faltan **el hueco se ve**, porque no se inventa un valor.
+
+### Mutacion testing en los dos caminos
+
+- El comando devolviendo `SUCCESS` siempre: **falla** el test canonico y el del codigo de error.
+- `registerFor()` devolviendo el registro mas reciente en vez del de SU fecha: **falla** el test canonico (`2026-11-04` frente a `2026-11-05`).
+
+### Lo que esta unidad NO toca (deuda anotada)
+
+- **El checkout todavia no exige la caja abierta**: el `CashRegisterService` existe y esta verificado, pero el `CheckoutService` no lo consulta todavia. Es el siguiente enganche.
+- Los seis bridges que faltan como modelo (`BrandStore`, `BoxStore`, `UnitStore`, `PaymentMethodStore`, `PosTemplateStore`, `FiscalDocument`): **7-iii**.
+- El typo preexistente del modelo `CashRegister` ("saldo EN CURNO" por "EN CURSO"): revertido a proposito para que el diff del modelo sea estrictamente el de `opened_by`.
+
+### Siguiente unidad
+
+**7-iii** - los bridges que faltan como modelo y el enganche del checkout con la caja. Y **0.6.4**: el IVA retenido como documento PROPIO.
