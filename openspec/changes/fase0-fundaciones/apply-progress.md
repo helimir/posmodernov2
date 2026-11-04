@@ -458,3 +458,55 @@ El test canonico verifica desde la **segunda sesion** (`pgsql_b`): es la unica f
 **0.6.6** - T2 fiscal y el reintento: la llamada HTTP al proveedor ocurre FUERA de la transaccion; si falla, la venta queda `sales.status='fiscal_failed'` y el reintento **reutiliza la misma reserva**, sin quemar numeros nuevos.
 
 > **Aviso para 0.6.6**: `fiscal_document_reservations` no tiene ninguna columna que apunte a la venta, asi que el T2 no puede encontrar la reserva de una venta por la venta. Habra que anadir un enlace (o resolverlo por la traza de `sales.fiscal_document_id`).
+
+---
+
+## PR52-t2-fiscal - 6-iii: el T2 fiscal y su reintento (2026-11-04)
+
+- **Estado**: entregado en el PR #54 (rama `feat/fase0-26-t2-fiscal`).
+- **Tareas cerradas**: 0.6.6 y 0.6.6-T.
+- **Ficheros**: `app/Domain/Fiscal/FiscalIssuanceCoordinator.php`, `app/Domain/Sales/SalePaymentStatus.php`, `database/migrations/2026_11_01_000031_link_fiscal_documents_and_sales.php`, `tests/Fixtures/FakeInvoiceProvider.php`, `tests/Feature/Fiscal/{FiscalIssuanceCoordinatorTest,FiscalIssuanceControlAssignmentTest,FiscalDocumentLinkSchemaTest}.php`, y los cambios en `app/Domain/{Checkout/CheckoutService,Fiscal/FiscalIssuanceService,Fiscal/NumberSeries}.php`.
+- **Evidencia**: `pest` 88 passed (1177 assertions), con `main` en 76 passed (1081 assertions); `pint` limpio; `php -l` limpio. Mutation testing en los tres caminos.
+
+### El T2 y el reintento son el MISMO metodo
+
+`FiscalIssuanceCoordinator::issue()` es a la vez la emision y el reintento: lo unico que cambia es si la venta ya tiene un `fiscal_documents` en `draft` de un intento anterior. No hay dos caminos, y por eso no pueden divergir.
+
+El reintento **reutiliza la reserva**: se busca por el ENLACE (`reference_type='sale'` + `reference_id`), no por la serie, porque el reintento tiene que encontrar la reserva que YA tiene y no la ultima de la serie. Una venta sin reserva no se puede emitir, y **jamas** se reserva un numero nuevo para suplirla: el numero puede haberse publicado en la autoridad, y devolverlo entregaria DOS veces el mismo numero.
+
+### Los tres huecos que M31 cierra
+
+1. **La FK `sales.fiscal_document_id` -> `fiscal_documents.id` NO existia.** M11 la declaro sin `->constrained()` y su comentario decia que la cerraba M27, pero M27 resulto ser la de `opening_balances`. **Nunca se cerro**, y la spec de `esquema-dominio` exige que toda relacion tenga FK real.
+2. **La FK `fiscal_documents.customer_id` -> `customers.id`**, por el mismo motivo.
+3. **El enlace venta -> reserva**: `fiscal_document_reservations` gana `reference_type` y `reference_id` (el mismo patron que ya usa `ledger_entries`). Sin el, el T2 no puede encontrar la reserva de una venta por la venta: era el aviso que dejo la unidad 6-ii.
+
+Y una **decision de NO hacer**: `fiscal_document_taxes.line_id` **no** lleva FK, porque es **polimorfico** (apunta a `sale_items` en una venta o a `purchase_items` en una compra, segun el `document_type`). Una FK ahi habria sido incorrecta para la mitad de los documentos. El porque queda como `COMMENT ON COLUMN` en PostgreSQL, que es donde se lee de verdad.
+
+### La guarda que evita la doble emision
+
+Si un intento anterior dejo el documento ya en `status='issued'` (porque el proveedor emitio y lo que fallo fue una escritura posterior), el reintento **NO vuelve a llamar al proveedor**: solo reconcilia el estado de la venta. Una doble emision ante la autoridad **no se puede deshacer**: devolver el numero no deshace un comprobante ya publicado.
+
+Esa guarda la anadio el orquestador, y el subagente detecto su efecto colateral: dejaba **sin test** el fix del `FiscalIssuanceService` (leer la asignacion de control antes de insertar). Se cerro con un test que llama al servicio DOS VECES sobre el mismo documento y comprueba que sobrevive, que queda **UNA** asignacion, que el control publicado **no se reasigna** y que la diferencia queda auditada como `control_distinto_al_publicado`.
+
+### `fiscal_failed` pisa el estado de pago
+
+`sales.status` es un unico enum (draft|confirmed|paid|cancelled|fiscal_failed), asi que `fiscal_failed` **machaca** el estado de pago. Al reintentar con exito hay que **recalcular** el estado desde `sale_payments`, no restaurarlo: el estado anterior ya no existe. Para que T1 y T2 no diverjan, la regla vive ahora en un sitio compartido, `SalePaymentStatus`, y el `CheckoutService` la usa tambien.
+
+### El secuencing que respeta el diseno
+
+- La LECTURA y la PREPARACION del documento, fuera de toda transaccion: son lecturas y no deben abrir un bloqueo de fila.
+- La llamada al proveedor, **fuera** de la transaccion: es I/O externo, y mantener un bloqueo de fila durante un HTTP puede agotar el `lock_timeout` de la caja.
+- La escritura, en unidades atomicas por fase: el borrador y su enlace con la venta van juntos; el documento, el evento y la asignacion de control van juntos.
+
+### Lo que el plan NO decia y esta unidad decidio
+
+- **Que estado lleva la venta tras una emision exitosa**: el plan solo dice que el fallo deja `fiscal_failed`. Decision: vuelve al estado que le corresponde por su pago (`paid` o `confirmed`), recalculado.
+- **Que pasa si el documento ya esta emitido**: decision del orquestador, la guarda de arriba.
+
+### Riesgo residual, NO resuelto aqui
+
+El reintento vuelve a llamar a `submit()` del proveedor. Si el proveedor publico el comprobante y la respuesta se perdio, la reemision puede **publicar dos veces** ante la autoridad. La idempotencia ante el proveedor real depende del **Manual Tecnico del art. 41** (bloqueado) y de la clave de idempotencia que definira el adaptador real: hoy no hay adaptador HTTP (`ElectronicInvoiceProvider` solo tiene la interfaz y los fakes). Queda anotado, no resuelto.
+
+### Siguiente unidad
+
+**7-ii** - M20 (`bank_accounts`), `cash_registers`, `income_sources`, el `CashRegisterService` (caja por fecha de negocio), el comando `ops:check-opening-balances` y los modelos contables que faltan. Y **0.6.4**: el IVA retenido como documento PROPIO.

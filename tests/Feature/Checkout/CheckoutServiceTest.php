@@ -9,6 +9,7 @@ use App\Domain\Fiscal\ControlNumberGenerator;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Inventory\LotConsumer;
 use App\Domain\Inventory\StockInvariant;
+use App\Domain\Sales\SalePaymentStatus;
 use App\Domain\Tax\TaxRateResolver;
 use App\Models\Country;
 use App\Models\Currency;
@@ -226,6 +227,7 @@ function servicioCheckout(): CheckoutService
         new TaxRateResolver($connection),
         new LotConsumer($connection, new StockInvariant($connection)),
         new LedgerWriter($connection),
+        new SalePaymentStatus($connection),
     );
 }
 
@@ -387,6 +389,46 @@ test('test_sin_stock_suficiente_la_venta_falla_y_tambien_vuelve_el_numero_de_con
         ->and((int) $otra->table('fiscal_series')
             ->where('id', $escenario['control_series_id'])->value('next_number'))->toBe(1)
         ->and($otra->table('fiscal_document_reservations')->count())->toBe(0);
+});
+
+/**
+ * 0.6.6 — la venta ENLAZA su reserva con el numero de documento.
+ *
+ * Regla que fija: *la reserva del numero sabe a que venta pertenece*. Sin
+ * ese enlace, el reintento de la emision fiscal (T2) no puede encontrar la
+ * reserva que ya tiene y tendria que reservar un numero NUEVO: quemando un
+ * correlativo por un fallo de la red.
+ *
+ * El enlace se ve desde la SEGUNDA sesion (`pgsql_b`), que no ve lo no
+ * confirmado: asi se prueba que es real y no solo visible en la sesion que
+ * reservo.
+ */
+test('test_la_venta_enlaza_su_reserva_de_documento_con_su_numero_de_venta', function () {
+    $escenario = escenarioCheckout();
+    $service = servicioCheckout();
+
+    $result = $service->checkout(ventaCheckout($escenario));
+
+    $otra = DB::connection('pgsql_b');
+
+    // 1. La reserva del DOCUMENTO apunta a la venta.
+    $reserva = $otra->table('fiscal_document_reservations')
+        ->where('series_id', $escenario['document_series_id'])
+        ->first();
+
+    expect($reserva)->not->toBeNull()
+        ->and($reserva->reference_type)->toBe('sale')
+        ->and((int) $reserva->reference_id)->toBe($result->saleId);
+
+    // 2. Y la del CONTROL NO se enlaza: T2 no la necesita, y el control
+    //    compuesto no se puede deducir del texto.
+    $control = $otra->table('fiscal_document_reservations')
+        ->where('series_id', $escenario['control_series_id'])
+        ->first();
+
+    expect($control)->not->toBeNull()
+        ->and($control->reference_type)->toBeNull()
+        ->and($control->reference_id)->toBeNull();
 });
 
 /**

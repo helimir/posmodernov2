@@ -102,13 +102,14 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 24 | `feat/fase0-18-impuestos` | 6-i | `TaxCalculator` puro + sus value objects + el test del motor | **360** | PR #49 - issue #48 | **fusionado** `4e773c9` |
 | 25 | `feat/fase0-24-contabilidad-i` | 7-i | M18 (el libro contable) + M19 (gastos) + `LedgerWriter` + los 3 modelos del asiento | **896** | PR #51 - issue #50 | **fusionado** `d23afef` |
 | 26 | `feat/fase0-25-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones + M30 + el resolutor de tasa | **1470** | PR #53 - issue #52 | **fusionado** `44e4740` |
-| 27 | `feat/fase0-24-contabilidad-ii` | 7-ii | M20 (bancos) + `cash_registers` + `income_sources` + `CashRegisterService` + el comando de arranque | ~600 | - - - | pendiente |
-| 28 | `feat/fase0-18-contabilidad-caja` | 7-iii | el resto de 0.7: los modelos contables que faltan y los saldos derivados | ~300 | - - - | pendiente |
-| 29 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
-| 30 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
-| 31 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
-| 32 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
-| 33 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
+| 27 | `feat/fase0-26-t2-fiscal` | 6-iii | el T2 fiscal (M31 + `FiscalIssuanceCoordinator`) y el reintento que reutiliza la reserva | **1871** | PR #55 - issue #54 | **en curso** |
+| 28 | `feat/fase0-24-contabilidad-ii` | 7-ii | M20 (bancos) + `cash_registers` + `income_sources` + `CashRegisterService` + el comando de arranque | ~600 | - - - | pendiente |
+| 29 | `feat/fase0-18-contabilidad-caja` | 7-iii | el resto de 0.7: los modelos contables que faltan y los saldos derivados | ~300 | - - - | pendiente |
+| 30 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
+| 31 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
+| 32 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
+| 33 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
+| 34 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
@@ -310,8 +311,8 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 - [ ] **0.6.4-T** Test: `test_el_iva_retenido_se_emite_como_documento_propio_y_no_como_linea_de_la_venta` — regla que fija: *el IVA retenido es crédito del comprador, con documento propio*.
 - [x] **0.6.5** `app/Domain/Checkout/CheckoutService.php` — **T1 dominio**, una única transacción: reserva del nº de documento y del nº de control (`NumberSeries`), consumo FIFO, `TaxCalculator`, `sales`/`sale_items`/`sale_totals`/`sale_payments`, asientos contables y pago. Dep: 0.3.3, 0.5.4, 0.6.2, 0.7.4. Aceptación: si la segunda reserva (control) falla, **el nº de documento también vuelve** (`ROLLBACK`); ningún número se quema.
 - [x] **0.6.5-T** Test: `test_un_fallo_intermedio_no_deja_cabecera_ni_cambio_de_stock_persistidos` — regla que fija: *toda escritura es una unidad atómica con bloqueo de fila*.
-- [ ] **0.6.6** **T2 fiscal** y reintento (C5): la llamada HTTP al proveedor (`submit` → `assignControl`) ocurre **fuera** de la transacción de BD; si falla, la venta queda `sales.status='fiscal_failed'` y el reintento **reutiliza la misma reserva** (`fiscal_document_reservations`), sin quemar números nuevos. Dep: 0.3.4, 0.6.5. Aceptación: ningún número se libera tras un fallo de emisión (el número puede haberse publicado).
-- [ ] **0.6.6-T** Test: `test_un_reintento_de_emision_reutiliza_la_reserva_y_no_quema_numeros_nuevos` — regla que fija: *el número reservado no se libera ni se duplica por un fallo de emisión*.
+- [x] **0.6.6** **T2 fiscal** y reintento (C5): la llamada HTTP al proveedor (`submit` → `assignControl`) ocurre **fuera** de la transacción de BD; si falla, la venta queda `sales.status='fiscal_failed'` y el reintento **reutiliza la misma reserva** (`fiscal_document_reservations`), sin quemar números nuevos. Dep: 0.3.4, 0.6.5. Aceptación: ningún número se libera tras un fallo de emisión (el número puede haberse publicado).
+- [x] **0.6.6-T** Test: `test_un_reintento_de_emision_reutiliza_la_reserva_y_no_quema_numeros_nuevos` — regla que fija: *el número reservado no se libera ni se duplica por un fallo de emisión*.
 - [ ] **0.6.7** Dominio de crédito, cuotas y transferencias: saldo del cliente derivado de `customer_ledger_entries` (un cobro reduce deuda), cuota con interés simple sobre el `payable` calculada en servidor y repartida entre `installment_schedules`, y transferencia con 1 cabecera. Dep: 0.5.2, 0.4.5. Aceptación: el saldo nunca se almacena desnormalizado.
 - [ ] **0.6.7-T** Test: `test_un_cobro_reduce_la_deuda_del_cliente_y_el_saldo_se_deriva_de_sus_movimientos` — regla que fija: *el saldo del cliente se deriva de sus movimientos*.
 - [ ] **0.6.8** Test de la cuota: interés simple sobre el `payable`, calculado en el servidor y repartido entre las cuotas. Dep: 0.6.7. Aceptación: la suma de las cuotas reproduce el total con el redondeo declarado.

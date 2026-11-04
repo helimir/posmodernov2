@@ -61,7 +61,7 @@ final class FiscalIssuanceService
         $data = $this->provider->issue($draft, $control);
 
         // 3. La persistencia, en UNA transaccion.
-        $this->connection->transaction(function () use ($documentId, $data, $control, $actorId, $discrepancy, $receipt): void {
+        $this->connection->transaction(function () use ($documentId, $data, $control, $actorId, $receipt, &$discrepancy): void {
             $this->connection->table('fiscal_documents')->where('id', $documentId)->update([
                 'status' => 'issued',
                 'native_status_code' => $data->status,
@@ -74,17 +74,33 @@ final class FiscalIssuanceService
 
             // El control tiene una UNICA sede: la tabla de asignaciones, 1:1
             // con el documento. No se duplica en la cabecera.
+            //
+            // Y esa unicidad es la que obliga a leer ANTES de insertar: una
+            // reemision sobre el mismo documento (el reintento de la
+            // emision) encontraria la fila existente y la UNIQUE de
+            // `fiscal_document_id` abortaria la sentencia. El control ya
+            // PUBLICADO se conserva: no se devuelve ni se reasigna. Solo se
+            // registra la DISCREPANCIA cuando el control devuelto es
+            // DISTINTO del ya publicado.
             if ($control !== null && $discrepancy === null) {
-                $this->connection->table('fiscal_document_control_assignments')->insert([
-                    'fiscal_document_id' => $documentId,
-                    'control_number' => $control->controlNumber,
-                    'control_range_from' => $this->asNumber($control->controlRangeFrom),
-                    'control_range_to' => $this->asNumber($control->controlRangeTo),
-                    'control_assigned_at' => $control->assignedAt,
-                    'printer_tax_id' => $control->printerTaxId,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                $existing = $this->connection->table('fiscal_document_control_assignments')
+                    ->where('fiscal_document_id', $documentId)
+                    ->first();
+
+                if ($existing === null) {
+                    $this->connection->table('fiscal_document_control_assignments')->insert([
+                        'fiscal_document_id' => $documentId,
+                        'control_number' => $control->controlNumber,
+                        'control_range_from' => $this->asNumber($control->controlRangeFrom),
+                        'control_range_to' => $this->asNumber($control->controlRangeTo),
+                        'control_assigned_at' => $control->assignedAt,
+                        'printer_tax_id' => $control->printerTaxId,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                } elseif ((string) $existing->control_number !== $control->controlNumber) {
+                    $discrepancy = 'control_distinto_al_publicado';
+                }
             }
 
             $this->connection->table('fiscal_document_events')->insert([

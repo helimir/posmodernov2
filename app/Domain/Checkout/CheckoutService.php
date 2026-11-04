@@ -6,6 +6,7 @@ use App\Domain\Accounting\LedgerWriter;
 use App\Domain\Fiscal\ControlNumberGenerator;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Inventory\LotConsumer;
+use App\Domain\Sales\SalePaymentStatus;
 use App\Domain\Tax\TaxCalculator;
 use App\Domain\Tax\TaxDocumentInput;
 use App\Domain\Tax\TaxDocumentResult;
@@ -48,6 +49,7 @@ final readonly class CheckoutService
         private TaxRateResolver $taxRateResolver,
         private LotConsumer $lotConsumer,
         private LedgerWriter $ledgerWriter,
+        private SalePaymentStatus $paymentStatus,
     ) {}
 
     /**
@@ -142,7 +144,7 @@ final readonly class CheckoutService
 
             // 7. LA CABECERA. `fiscal_document_id` queda en `null`: lo cierra
             //    T2, la emision fiscal.
-            $status = $this->paymentStatus($input->payments, $result->grandTotal);
+            $status = $this->paymentStatus->status($input->payments, $result->grandTotal);
 
             $saleId = (int) $this->connection->table('sales')->insertGetId([
                 'store_id' => $input->storeId,
@@ -154,6 +156,20 @@ final readonly class CheckoutService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            // 7 bis. EL ENLACE de la reserva con la venta, DENTRO de la misma
+            //    transaccion: si el enlace falla, revierte T1 entera.
+            //
+            //    Es lo que permite que el reintento de la emision (T2)
+            //    ENCUENTRE la reserva que ya tiene, en vez de reservar un
+            //    numero nuevo y quemarlo.
+            //
+            //    La reserva del numero de CONTROL NO se enlaza: T2 no la
+            //    necesita (la asignacion de control la crea el propio
+            //    proveedor) y el `ControlAssignment` solo expone el control
+            //    COMPUESTO (`00-00000001`), no el numero suelto: deducirlo
+            //    del texto seria frágil.
+            $this->numberSeries->link($input->documentSeriesId, $documentNumber, 'sale', $saleId);
 
             // 8. LOS ITEMS. El total y la base de la linea salen del motor,
             //    linea a linea y en el MISMO orden.
@@ -295,22 +311,6 @@ final readonly class CheckoutService
             "El producto {$line->productId} no tiene categoria fiscal en la tienda {$storeId}: "
             .'no se cobra en silencio una linea sin tratamiento fiscal.'
         );
-    }
-
-    /**
-     * El estado del pago: `paid` si los pagos cubren el total, `confirmed`
-     * si no.
-     */
-    private function paymentStatus(array $payments, string $grandTotal): string
-    {
-        $cobrado = BigDecimal::zero()->toScale(4);
-        $total = BigDecimal::of($grandTotal)->toScale(4, RoundingMode::HALF_UP);
-
-        foreach ($payments as $payment) {
-            $cobrado = $cobrado->plus(BigDecimal::of($payment->amount)->toScale(4, RoundingMode::HALF_UP));
-        }
-
-        return $cobrado->isEqualTo($total) ? 'paid' : 'confirmed';
     }
 
     /**
