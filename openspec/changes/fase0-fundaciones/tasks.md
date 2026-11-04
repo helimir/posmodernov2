@@ -103,7 +103,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 25 | `feat/fase0-24-contabilidad-i` | 7-i | M18 (el libro contable) + M19 (gastos) + `LedgerWriter` + los 3 modelos del asiento | **896** | PR #51 - issue #50 | **fusionado** `d23afef` |
 | 26 | `feat/fase0-25-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones + M30 + el resolutor de tasa | **1470** | PR #53 - issue #52 | **fusionado** `44e4740` |
 | 27 | `feat/fase0-26-t2-fiscal` | 6-iii | el T2 fiscal (M31 + `FiscalIssuanceCoordinator`) y el reintento que reutiliza la reserva | **1871** | PR #55 - issue #54 | **fusionado** `23092ff` |
-| 28 | `feat/fase0-27-caja` | 7-ii-a | M20 + M28 + M32 (caja e ingresos) + los 7 modelos contables | **1136** | PR #57 - issue #56 | **en curso** |
+| 28 | `feat/fase0-27-caja` | 7-ii-a | M20 + M28 + M32 (caja e ingresos) + los 7 modelos contables | **1136** | PR #57 - issue #56 | **fusionado** `e25d6a1` |
 | 29 | `feat/fase0-27-caja-b` | 7-ii-b | el `CashRegisterService` (caja por fecha de negocio) + el comando `ops:check-opening-balances` | ~500 | - - - | pendiente |
 | 30 | `feat/fase0-18-contabilidad-caja` | 7-iii | los bridges que faltan como modelo + los saldos derivados | ~300 | - - - | pendiente |
 | 31 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
