@@ -405,3 +405,56 @@ La tarea 0.6.5 (el `CheckoutService`) declara `Dep: ... 0.7.4`, y el propio graf
 ### Siguiente unidad
 
 **6-ii** - el `CheckoutService` (0.6.5): el checkout de dos transacciones, con la reserva del numero de documento y del numero de control, el consumo FIFO, el asiento contable y el pago. Si la segunda reserva falla, el numero de documento tambien vuelve.
+
+---
+
+## PR51-impuestos-b - 6-ii: el CheckoutService (2026-11-04)
+
+- **Estado**: entregado en el PR #52 (rama `feat/fase0-25-impuestos-b`).
+- **Tareas cerradas**: 0.6.5 y 0.6.5-T.
+- **Ficheros**: `app/Domain/Checkout/{CheckoutService,CheckoutInput,CheckoutLineInput,CheckoutPaymentInput,CheckoutResult}.php`, `app/Domain/Tax/TaxRateResolver.php`, `database/migrations/2026_11_01_000030_add_amounts_and_evidence_to_sales.php`, `tests/Feature/Checkout/CheckoutServiceTest.php`, `tests/Feature/Tax/TaxRateResolverTest.php`, y `app/Models/{SaleItem,SaleTotal}.php`.
+- **Evidencia**: `pest` 76 passed (1081 assertions), con `main` en 71 passed (979 assertions); `pint` limpio; `php -l` sin errores en los 13 ficheros.
+
+### La venta es UNA unidad atomica
+
+TODO el cuerpo del `checkout()` vive dentro de UNA transaccion: la reserva del numero de documento, la del numero de control, el consumo FIFO, la cabecera, las lineas, los totales, el asiento contable y los pagos. Si algo falla a mitad, no queda nada escrito y **ningun numero se quema**.
+
+La reserva del numero de CONTROL va dentro de la MISMA transaccion que la del documento. Si el rango de control esta agotado, la excepcion revierte T1 entera y **el numero del documento tambien vuelve**: el documento y su control son un solo hecho, no dos.
+
+### Las tres decisiones que el subagenteCerillo
+
+1. **La evidencia de la cabecera**: si todas las lineas comparten una evidencia, esa; si discrepan, `null`. La cabecera no afirma una evidencia que el documento no tiene.
+2. **Las lineas del asiento a cero se omiten**: el libro no admite una linea a cero en los dos sentidos, y una venta con tasa 0 % (categoria exenta) es un caso normal, no un error.
+3. **La cuarta linea del asiento puede ser un DEBITO**: si `grand_total - sub_total - tax_total` es negativa, la diferencia va como debito de `revenue`. Asi el asiento CUADRA en los dos signos.
+
+### La invariante real del documento (correccion importante)
+
+La relacion que se cumple NO es `grand_total = sub_total - discount + tax_total + rounding_adjustment`. El motor acumula `subtotal` como la suma de las bases YA NETAS del descuento de documento prorrateado, y `rounding_adjustment` es `grand_total - suma de los line_total`.
+
+La invariante que SI se cumple, y que es la que hay que auditar, es:
+
+```
+suma de los line_total de los items + rounding_adjustment = grand_total
+```
+
+`sub_total` y `tax_total` son las sumas SIN redondear, y `sale_totals.discount` es INFORMATIVO: el descuento ya esta restado del `sub_total`. Quien lea esa tabla sin saberlo no la va a cuadrar, y por eso la invariante se audita sobre los items.
+
+### Lo que se cerro por el camino
+
+- **M30**: `sale_items` gana `base_amount`, `line_total` y `evidence_status`; `sale_totals` gana `evidence_status`. Sin el `line_total` redondeado, ni el total ni el ajuste son reconstruibles y el documento dependeria del perfil vigente. Y `design.md:315` exigia congelar la evidencia por linea y por cabecera: solo existia en `fiscal_document_taxes`.
+- **El resolutor de tasa vigente** (`TaxRateResolver`): no existia. Ahora la tasa se CONSULTA (vigencia, `priority`, `valid_from`, `id`) y se congela en el documento.
+- **Los modelos `SaleItem` y `SaleTotal`** se han puesto al dia con el esquema.
+
+### El test canonico no detectaba una mutacion
+
+`test_un_fallo_intermedio_no_deja_cabecera_ni_cambio_de_stock_persistidos` (0.6.5-T) prueba que **ningun numero se quema**, pero no detectaba que la reserva del control estuviera FUERA de T1: con la serie agotada la excepcion salta antes de abrir la transaccion, no se escribe nada y no se quema numero, y todas sus aserciones siguen cumpliendose.
+
+Se ha añadido `test_sin_stock_suficiente_la_venta_falla_y_tambien_vuelve_el_numero_de_control`, que si la detecta. Las dos filas de la tabla de fallos de `design.md` §B.1 quedan cubiertas.
+
+El test canonico verifica desde la **segunda sesion** (`pgsql_b`): es la unica forma de probar que el numero volvió de verdad y no solo en la vista de quien reservo.
+
+### Siguiente unidad
+
+**0.6.6** - T2 fiscal y el reintento: la llamada HTTP al proveedor ocurre FUERA de la transaccion; si falla, la venta queda `sales.status='fiscal_failed'` y el reintento **reutiliza la misma reserva**, sin quemar numeros nuevos.
+
+> **Aviso para 0.6.6**: `fiscal_document_reservations` no tiene ninguna columna que apunte a la venta, asi que el T2 no puede encontrar la reserva de una venta por la venta. Habra que anadir un enlace (o resolverlo por la traza de `sales.fiscal_document_id`).

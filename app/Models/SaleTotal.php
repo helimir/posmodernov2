@@ -17,6 +17,7 @@ class SaleTotal extends Model
         'tax_total',
         'rounding_adjustment',
         'grand_total',
+        'evidence_status',
     ];
 
     protected function casts(): array
@@ -27,6 +28,7 @@ class SaleTotal extends Model
             'tax_total' => 'decimal:4',
             'rounding_adjustment' => 'decimal:4',
             'grand_total' => 'decimal:4',
+            'evidence_status' => 'string',
             'sale_id' => 'integer',
         ];
     }
