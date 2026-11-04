@@ -363,7 +363,7 @@ Los snapshots viajan congelados: el documento persiste la tasa con la que se emi
 
 ### Dos correcciones durante el trabajo
 
-- `BigDecimal::roundToScale()` no existe en brick/math 0.14: el metodo es `toScale(, )`.
+- `BigDecimal::roundToScale()` no existe en brick/math 0.14: el metodo es `toScale($escala, $modo)`.
 - `TaxMethod` solo tiene `Inclusive` y `Exclusive`: el IVA retenido NO es un metodo de linea, sino un **documento fiscal PROPIO** con su numeracion y su serie (0.6.4).
 
 ### Siguiente unidad
