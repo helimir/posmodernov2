@@ -577,7 +577,7 @@ Encarge los tests en ingles y el subagente los escribio en ingles: **mi peticion
 
 ### La caja se resuelve por la FECHA DE NEGOCIO, no por la de hoy
 
-`CashRegisterService::registerFor(, )` devuelve el registro de ESA fecha de negocio. Un movimiento cae en el registro de **su** fecha, no en el de "hoy": el legacy filtraba por `DAY()/MONTH()/YEAR()` calculados (la trampa 62), que parten el dia a la medianoche del servidor y no del negocio.
+`CashRegisterService::registerFor($storeId, $businessDate)` devuelve el registro de ESA fecha de negocio. Un movimiento cae en el registro de **su** fecha, no en el de "hoy": el legacy filtraba por `DAY()/MONTH()/YEAR()` calculados (la trampa 62), que parten el dia a la medianoche del servidor y no del negocio.
 
 **La asociacion del movimiento con la caja es por la CLAVE NATURAL** (`store_id`, `business_date`): `ledger_entries` ya tiene las dos columnas y `cash_registers` tiene UNIQUE sobre ellas. **No se anadio `cash_register_id`**: seria una columna redundante que puede desincronizarse de la clave natural.
 
