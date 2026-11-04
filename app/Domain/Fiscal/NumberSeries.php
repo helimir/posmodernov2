@@ -62,4 +62,37 @@ final class NumberSeries
 
         return $number;
     }
+
+    /**
+     * Enlaza la reserva con el hecho que la origino.
+     *
+     * La reserva sabe a que venta (o a que compra, o a que nota) pertenece:
+     * sin ese enlace, el reintento de la emision fiscal no puede ENCONTRAR la
+     * reserva que ya tiene, y tendria que reservar un numero NUEVO y
+     * quemarlo.
+     *
+     * La reserva se localiza por (`series_id`, `number`), que es UNIQUE: un
+     * numero no se repite dentro de una serie.
+     *
+     * @param  string  $referenceType  Que hecho origina la reserva (`sale`).
+     * @param  int  $referenceId  El id de ese hecho.
+     *
+     * @throws RuntimeException Cuando la reserva no existe.
+     */
+    public function link(int $seriesId, int $number, string $referenceType, int $referenceId): void
+    {
+        $updated = $this->connection->update(
+            'UPDATE fiscal_document_reservations
+                SET reference_type = ?, reference_id = ?, updated_at = now()
+              WHERE series_id = ? AND number = ?',
+            [$referenceType, $referenceId, $seriesId, $number]
+        );
+
+        if ($updated === 0) {
+            throw new RuntimeException(
+                "The fiscal series {$seriesId} has no reservation for the number {$number}: "
+                .'the reservation cannot be linked.'
+            );
+        }
+    }
 }
