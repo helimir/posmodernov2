@@ -97,14 +97,16 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 19 | `feat/fase0-13-stock-lotes` | 5-i | M14 + `StockInvariant` + tests | **268** | PR #39 - issue #38 | **fusionado** `908a3b6` |
 | 20 | `feat/fase0-14-stock-lotes-b` | 5-ii | `LotConsumer` (FIFO + `SKIP LOCKED`) + `LotReturner` | **409** | PR #41 - issue #40 | **fusionado** `21ac229` |
 | 21 | `feat/fase0-15-stock-lotes-c` | 5-iii | test de concurrencia del stock con dos sesiones | **151** | PR #43 - issue #42 | **fusionado** `b43ca60` |
-| 22 | `feat/fase0-16-stock-lotes-d` | 5-iv | M15 + M17 + el servicio sin lote (0.5.7) | pendiente | - - - | pendiente |
-| 23 | `feat/fase0-17-impuestos-checkout` | 6 | `TaxCalculator` + checkout de dos transacciones | **757** | - - - | pendiente |
-| 24 | `feat/fase0-18-contabilidad-caja` | 7 | M18-M20 + `LedgerWriter` + `business_date` + saldos | **792** | - - - | pendiente |
-| 25 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
-| 26 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
-| 27 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
-| 28 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
-| 29 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
+| 22 | `feat/fase0-16-stock-lotes-d` | 5-iv | M15 + M17 + el servicio sin lote (0.5.7) | **331** | PR #45 - issue #44 | **fusionado** `1fd23d0` |
+| 23 | `feat/fase0-17-stock-lotes-e` | 5-v | el servicio sin lote + la transferencia con una sola cabecera | **224** | PR #47 - issue #46 | **fusionado** `5e53603` |
+| 24 | `feat/fase0-18-impuestos` | 6-i | `TaxCalculator` puro + sus value objects + el test del motor | **360** | PR #49 - issue #48 | **fusionado** `4e773c9` |
+| 25 | `feat/fase0-18-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones | ~400 | - - - | pendiente |
+| 26 | `feat/fase0-18-contabilidad-caja` | 7 | M18-M20 + `LedgerWriter` + `business_date` + saldos | **792** | - - - | pendiente |
+| 27 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
+| 28 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
+| 29 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
+| 30 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
+| 31 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
