@@ -336,3 +336,36 @@
 ## Siguiente unidad
 
 **PR9-numeracion-b** (`feat/fase0-09-numeracion-b`): M22 + `FiscalIssuanceService` + generador del control + render + notas derivadas (0.3.2 y 0.3.4–0.3.9). Predecesor: PR8 (3a-ii, esta rama).
+
+---
+
+## PR48-impuestos - 6-i: el motor de impuestos puro (2026-11-03)
+
+> Este archivo estaba congelado en el PR9. A partir de aqui se registra
+> el avance real de cada unidad de trabajo.
+
+- **Estado**: entregado en el PR #49 (rama `feat/fase0-18-impuestos`).
+- **Tareas cerradas**: 0.6.1, 0.6.2 y 0.6.3.
+- **Ficheros**: `app/Domain/Tax/TaxCalculator.php`, `TaxLineInput.php`, `TaxDocumentInput.php`, `TaxDocumentResult.php` y `tests/Unit/Tax/TaxCalculatorTest.php`.
+- **Evidencia**: `pest` 68 passed (930 assertions), con `main` en 67 passed (914 assertions); `pint` limpio; 324 lineas en 6 ficheros.
+
+### Las tres decisiones que definen el motor
+
+1. **El motor es PURO**: sin base de datos, sin red, sin locale y sin reloj. El perfil, las categorias y las tasas se resuelven ANTES y entran como datos, por `TaxContext` y `TaxLineInput`. La misma entrada da siempre el mismo resultado.
+2. **La base es el precio COBRADO** (`net = unitPrice x quantity - lineDiscount`), no el de catalogo: el legacy multiplicaba el impuesto por el precio de catalogo, de modo que cuando el POS cobraba otro precio el impuesto era incorrecto (defecto P0 #13).
+3. **El ajuste de redondeo es VISIBLE y EXACTO**: la suma de las lineas mas el ajuste da el total redondeado, hasta el ultimo decimal. El redondeo es un dato (`line` o `total`), half-up por defecto.
+
+Los snapshots viajan congelados: el documento persiste la tasa con la que se emitio, su categoria, su tasa y el estado de su evidencia, de modo que un cambio posterior de la tasa en vigor no altera un documento ya emitido.
+
+### La aritmetica
+
+`BigDecimal` de brick/math: escala 6 en el calculo y escala 4 en la persistencia, que es la de las columnas `numeric(25,4)`. Un `float` no es dinero.
+
+### Dos correcciones durante el trabajo
+
+- `BigDecimal::roundToScale()` no existe en brick/math 0.14: el metodo es `toScale($escala, $modo)`.
+- `TaxMethod` solo tiene `Inclusive` y `Exclusive`: el IVA retenido NO es un metodo de linea, sino un **documento fiscal PROPIO** con su numeracion y su serie (0.6.4).
+
+### Siguiente unidad
+
+**6-ii** - el `CheckoutService` (0.6.5): el checkout de dos transacciones, con la reserva del numero de documento y del numero de control, el consumo FIFO, los asientos contables y el pago. Si la segunda reserva falla, el numero de documento tambien vuelve.
