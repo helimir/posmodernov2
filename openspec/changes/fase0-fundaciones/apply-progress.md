@@ -369,3 +369,39 @@ Los snapshots viajan congelados: el documento persiste la tasa con la que se emi
 ### Siguiente unidad
 
 **6-ii** - el `CheckoutService` (0.6.5): el checkout de dos transacciones, con la reserva del numero de documento y del numero de control, el consumo FIFO, los asientos contables y el pago. Si la segunda reserva falla, el numero de documento tambien vuelve.
+
+---
+
+## PR50-contabilidad-i - 7-i: el libro contable y el LedgerWriter (2026-11-04)
+
+- **Estado**: entregado en el PR #51 (rama `feat/fase0-24-contabilidad-i`).
+- **Tareas cerradas**: 0.7.1 y 0.7.4, con sus gemelas de test.
+- **0.7.2 NO se cierra**: M19 trae 2 de sus 5 tablas (`expense_categories` y `expenses`). `cash_registers`, `income_sources` y el resto van en 7-ii. `opening_balances` ya existia desde M27.
+- **Ficheros**: `app/Domain/Accounting/LedgerWriter.php`, `app/Models/{LedgerEntryType,LedgerEntry,LedgerLine}.php`, `database/migrations/2026_11_01_000018_create_ledger_tables.php`, `database/migrations/2026_11_01_000019_create_expense_tables.php`, `tests/Feature/Accounting/LedgerWriterTest.php`.
+- **Evidencia**: `pest` 71 passed (979 assertions), con `main` en 68 passed (930 assertions); `pint` limpio.
+
+### Por que esta unidad va ANTES que 6-ii
+
+La tarea 0.6.5 (el `CheckoutService`) declara `Dep: ... 0.7.4`, y el propio grafo del plan lo dice en la linea 463: `0.7 -> 0.6 | LedgerWriter | el checkout escribe asientos dentro de T1`. La tabla de work units tenia 0.7 despues de 0.6, lo que contradecia su propio grafo. Con el checkout antes, la venta se habria escrito sin su asiento contable: un agujero silencioso.
+
+### Lo que fija el LedgerWriter
+
+1. El tipo del asiento se TOMA DEL CATALOGO `ledger_entry_types`, y solo si esta activo. El codigo nunca se escribe como literal en la cabecera.
+2. Una linea es de UNA cuenta: no puede ser debito y credito a la vez, ni los dos a cero, ni negativa. El esquema lo garantiza con tres CHECK, no la confianza en el codigo.
+3. El asiento CUADRA: la suma de debitos es igual a la suma de creditos, sin tolerancia.
+4. Cabecera y lineas van en UNA transaccion. Si el llamante ya esta dentro (el checkout lo estara), Laravel anida con SAVEPOINT y el rollback del llamante se lleva el asiento entero.
+
+### Dos decisiones del orquestador, sobre el trabajo del subagente
+
+- **La cabecera guarda su descripcion**: la firma inicial no la admitia y la escribia siempre en `null`. El checkout necesita describir el asiento ("Venta #123"), asi que `write()` ahora acepta `?string $description`.
+- **El importe se rechaza si es float y se redondea HALF-UP**: `bcadd` TRUNCA, y truncar `10.00505` deja medio centimo menos de lo que se cobro. Ahora el importe se normaliza con `BigDecimal::toScale(4, HALF_UP)`, igual que el motor de impuestos, y un `float` se RECHAZA con un `RuntimeException` explicito.
+
+### Tres descubrimientos sobre el repositorio
+
+- `Schema::getColumnType($tabla, $columna)` con dos argumentos devuelve el `typname` interno de PostgreSQL (`bool`), NO `boolean`. Un test de esquema que compare solo contra `boolean` pasa EN VERDE sobre una tabla llena de banderas. Con el tercer argumento `true` devuelve la definicion completa (`boolean`).
+- `foreignId` es `bigint` en PostgreSQL, no `integer`.
+- Laravel anida `transaction()` con SAVEPOINT, no con rollback total: un fallo del writer deja VIVA la transaccion del llamante con sus demas escrituras. Es justo lo que necesita el checkout, y lo garantiza el framework.
+
+### Siguiente unidad
+
+**6-ii** - el `CheckoutService` (0.6.5): el checkout de dos transacciones, con la reserva del numero de documento y del numero de control, el consumo FIFO, el asiento contable y el pago. Si la segunda reserva falla, el numero de documento tambien vuelve.

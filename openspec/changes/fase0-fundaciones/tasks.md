@@ -100,13 +100,15 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 22 | `feat/fase0-16-stock-lotes-d` | 5-iv | M15 + M17 + el servicio sin lote (0.5.7) | **331** | PR #45 - issue #44 | **fusionado** `1fd23d0` |
 | 23 | `feat/fase0-17-stock-lotes-e` | 5-v | el servicio sin lote + la transferencia con una sola cabecera | **224** | PR #47 - issue #46 | **fusionado** `5e53603` |
 | 24 | `feat/fase0-18-impuestos` | 6-i | `TaxCalculator` puro + sus value objects + el test del motor | **360** | PR #49 - issue #48 | **fusionado** `4e773c9` |
-| 25 | `feat/fase0-18-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones | ~400 | - - - | pendiente |
-| 26 | `feat/fase0-18-contabilidad-caja` | 7 | M18-M20 + `LedgerWriter` + `business_date` + saldos | **792** | - - - | pendiente |
-| 27 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
-| 28 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
-| 29 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
-| 30 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
-| 31 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
+| 25 | `feat/fase0-24-contabilidad-i` | 7-i | M18 (el libro contable) + M19 (gastos) + `LedgerWriter` + los 3 modelos del asiento | **896** | PR #51 - issue #50 | **en curso** |
+| 26 | `feat/fase0-18-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones | ~600 | - - - | pendiente |
+| 27 | `feat/fase0-24-contabilidad-ii` | 7-ii | M20 (bancos) + `cash_registers` + `income_sources` + `CashRegisterService` + el comando de arranque | ~600 | - - - | pendiente |
+| 28 | `feat/fase0-18-contabilidad-caja` | 7-iii | el resto de 0.7: los modelos contables que faltan y los saldos derivados | ~300 | - - - | pendiente |
+| 29 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
+| 30 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
+| 31 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
+| 32 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
+| 33 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
@@ -321,14 +323,14 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 
 ## Fase 0.7 — Contabilidad y caja
 
-- [ ] **0.7.1** Migración **M18** `2026_11_01_000018_create_ledger_tables.php`: `ledger_entry_types` (catálogo sembrado que sustituye los **21 flags** de `income_sources`/`expense_categorys`), `ledger_entries` (`entry_type` explícito; absorbe `bank_transaction_info`/`_price`; `bank_transaction_price` 1:1 se disuelve en `ledger_entries.amount`) y `ledger_lines` (asientos por cuenta, permite reparar un movimiento entre varias cuentas). Dep: 0.4.4, 0.4.5. Aceptación: **ninguna** tabla de catálogo expone banderas booleanas contables.
-- [ ] **0.7.1-T** Test: `test_cada_movimiento_contable_tiene_un_unico_entry_type_y_ninguna_bandera_dispersa` — regla que fija: *un movimiento contable tiene un tipo, no once banderas*.
+- [x] **0.7.1** Migración **M18** `2026_11_01_000018_create_ledger_tables.php`: `ledger_entry_types` (catálogo sembrado que sustituye los **21 flags** de `income_sources`/`expense_categorys`), `ledger_entries` (`entry_type` explícito; absorbe `bank_transaction_info`/`_price`; `bank_transaction_price` 1:1 se disuelve en `ledger_entries.amount`) y `ledger_lines` (asientos por cuenta, permite reparar un movimiento entre varias cuentas). Dep: 0.4.4, 0.4.5. Aceptación: **ninguna** tabla de catálogo expone banderas booleanas contables.
+- [x] **0.7.1-T** Test: `test_cada_movimiento_contable_tiene_un_unico_entry_type_y_ninguna_bandera_dispersa` — regla que fija: *un movimiento contable tiene un tipo, no once banderas*.
 - [ ] **0.7.2** Migración **M19** `2026_11_01_000019_create_expenses_cash_registers_opening_balances_table.php`: `expenses` (**fuente de verdad del gasto**), `expense_categories` (se eliminan los 10 flags contables; `is_hide` → `is_active`, que es UI), `income_sources` (se eliminan los 11 flags contables), `cash_registers` (apertura/cierre por tienda con **`business_date`** — el legacy filtra por `DAY()/MONTH()/YEAR()`, trampa 62) y `opening_balances` (`certified_at` + `certified_by`). Dep: 0.1.4. Aceptación: `cash_registers.business_date` es `date`; `opening_balances` exige `certified_at` y `certified_by` para el arranque.
 - [ ] **0.7.2-T** Test: `test_el_gasto_nace_en_expenses_y_el_movimiento_bancario_no_lo_inventa` — regla que fija: *el gasto nace en `expenses`, no en el banco*.
 - [ ] **0.7.3** Migración **M20** `2026_11_01_000020_create_bank_accounts_table.php`: `bank_accounts` **sin** `total_deposit`/`total_withdraw`/`total_transfer_from_other`/`total_transfer_to_other` (derivados) y con `opening_balance` congelado. Dep: 0.7.2. Aceptación: los saldos de cuenta se derivan de `ledger_entries`.
 - [ ] **0.7.3-T** Test: `test_el_saldo_de_cuenta_se_deriva_de_los_asientos_y_no_de_un_contador_almacenado` — regla que fija: *los saldos de cuenta se derivan, no se cuentan dos veces*.
-- [ ] **0.7.4** `app/Domain/Accounting/LedgerWriter.php`: escribe `ledger_entries` (`entry_type` del catálogo sembrado) + `ledger_lines` en una sola transacción, y es el único pathway que genera el asiento de un gasto. Dep: 0.7.1. Aceptación: ningún asiento se crea sin `entry_type`.
-- [ ] **0.7.4-T** Test: `test_el_asiento_de_un_gasto_se_genera_desde_el_gasto_y_no_desde_el_movimiento_bancario` — regla que fija: *un gasto registrado sin movimiento bancario sigue siendo gasto*.
+- [x] **0.7.4** `app/Domain/Accounting/LedgerWriter.php`: escribe `ledger_entries` (`entry_type` del catálogo sembrado) + `ledger_lines` en una sola transacción, y es el único pathway que genera el asiento de un gasto. Dep: 0.7.1. Aceptación: ningún asiento se crea sin `entry_type`.
+- [x] **0.7.4-T** Test: `test_el_asiento_de_un_gasto_se_genera_desde_el_gasto_y_no_desde_el_movimiento_bancario` — regla que fija: *un gasto registrado sin movimiento bancario sigue siendo gasto*.
 - [ ] **0.7.5** Caja por fecha de negocio: `app/Domain/Accounting/CashRegisterService.php` abre/cierra caja por tienda con `business_date` y asocia cada movimiento al registro de caja de **su** fecha de negocio. Dep: 0.7.2. Aceptación: una operación registrada cerca del cambio de día queda en el registro correcto; **no** se filtra por día/mes/año calculados.
 - [ ] **0.7.5-T** Test: `test_el_movimiento_cerca_del_cambio_de_dia_queda_en_el_registro_de_caja_de_su_fecha_de_negocio` — regla que fija: *la caja se filtra por fecha de negocio, no por día/mes/año*.
 - [ ] **0.7.6** Comando `php artisan ops:check-opening-balances`: **bloquea el arranque operativo** si no hay saldos de apertura certificados (stock por tienda y producto; saldo y deuda por cliente y proveedor; saldo de caja por cuenta y tienda) con `certified_at` + `certified_by`. Dep: 0.7.2. Aceptación: el comando sale con código ≠ 0 y mensaje explícito mientras falte la certificación.
