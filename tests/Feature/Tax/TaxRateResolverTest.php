@@ -1,6 +1,6 @@
 <?php
 
-use App\Domain\Tax\TaxRateResolver;
+use App\Domain\Fiscal\TaxRateResolver;
 use App\Models\Country;
 use App\Models\Currency;
 use App\Models\FiscalProfile;

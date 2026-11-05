@@ -2,11 +2,17 @@
 
 use App\Models\BankAccount;
 use App\Models\BankAccountStore;
+use App\Models\BoxStore;
+use App\Models\BrandStore;
 use App\Models\CashRegister;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
+use App\Models\FiscalDocument;
 use App\Models\IncomeSource;
 use App\Models\OpeningBalance;
+use App\Models\PaymentMethodStore;
+use App\Models\PosTemplateStore;
+use App\Models\UnitStore;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Schema;
@@ -27,7 +33,8 @@ use Illuminate\Support\Facades\Schema;
  */
 
 /**
- * Los modelos de la unidad de contabilidad y caja.
+ * Los modelos de la unidad de contabilidad y caja, mas los bridges que
+ * faltaban y el comprobante fiscal.
  *
  * @return array<int, class-string<Model>>
  */
@@ -36,11 +43,17 @@ function modelos_contables(): array
     return [
         BankAccount::class,
         BankAccountStore::class,
+        BoxStore::class,
+        BrandStore::class,
         CashRegister::class,
         Expense::class,
         ExpenseCategory::class,
+        FiscalDocument::class,
         IncomeSource::class,
         OpeningBalance::class,
+        PaymentMethodStore::class,
+        PosTemplateStore::class,
+        UnitStore::class,
     ];
 }
 
@@ -169,27 +182,20 @@ test('test_las_relaciones_de_los_modelos_contables_apuntan_a_modelos_que_existen
 });
 
 test('test_ningun_modelo_declara_una_relacion_a_una_clase_que_no_existe', function () {
-    // DEFECTOS CONOCIDOS. Un modelo puede declarar una relacion a una clase
-    // que todavia no existe: la relacion revienta en el momento de USARLA, no
-    // en el de declararla, y por eso nadie lo ve hasta que alguien la usa.
+    // DEFECTOS CONOCIDOS: ninguno. Un modelo puede declarar una relacion a
+    // una clase que todavia no existe: la relacion revienta en el momento de
+    // USARLA, no en el de declararla, y por eso nadie lo ve hasta que alguien
+    // la usa.
     //
-    // `Sale::fiscalDocument()` apunta a `App\Models\FiscalDocument`, que no
-    // existe. Los maestros `Brand`, `Box`, `Unit`, `PaymentMethod` y
-    // `PosTemplate` declaran su `stores()` sobre el bridge, y los modelos de
-    // esos bridges (`BrandStore`, `BoxStore`, `UnitStore`,
-    // `PaymentMethodStore`, `PosTemplateStore`) tampoco existen: las TABLAS
-    // si (M09), los modelos no. Esta unidad lo REPORTA, no lo arregla.
+    // Los seis que habia ya NO estan rotos: `Sale::fiscalDocument()` apunta
+    // a `App\Models\FiscalDocument`, y los maestros `Brand`, `Box`, `Unit`,
+    // `PaymentMethod` y `PosTemplate` declaran su `stores()` sobre bridges
+    // que ahora tienen modelo (`BrandStore`, `BoxStore`, `UnitStore`,
+    // `PaymentMethodStore`, `PosTemplateStore`).
     //
-    // Cuando se arregle, hay que borrar la entrada de aqui Y la asercion
-    // del final de este test.
-    $conocidas = [
-        'App\Models\Sale::fiscalDocument()' => 'La clase App\Models\FiscalDocument no existe.',
-        'App\Models\Brand::stores()' => 'La clase App\Models\BrandStore no existe.',
-        'App\Models\Box::stores()' => 'La clase App\Models\BoxStore no existe.',
-        'App\Models\Unit::stores()' => 'La clase App\Models\UnitStore no existe.',
-        'App\Models\PaymentMethod::stores()' => 'La clase App\Models\PaymentMethodStore no existe.',
-        'App\Models\PosTemplate::stores()' => 'La clase App\Models\PosTemplateStore no existe.',
-    ];
+    // Cuando aparezca uno nuevo, hay que anadirlo a la lista de conocidos Y
+    // anadir su asercion al final de este test.
+    $conocidas = [];
 
     $rotas = [];
 
@@ -201,12 +207,6 @@ test('test_ningun_modelo_declara_una_relacion_a_una_clase_que_no_existe', functi
     expect(array_diff_key($rotas, $conocidas))
         ->toBe([], 'Hay una relacion nueva que apunta a una clase que no existe.');
 
-    // Y el defecto conocido sigue siendo el unico: si aparece otro, el test
-    // de arriba lo detecta; si se arregla este, hay que quitar la entrada.
-    expect($rotas)->toHaveKey('App\Models\Sale::fiscalDocument()')
-        ->and($rotas)->toHaveKey('App\Models\Brand::stores()')
-        ->and($rotas)->toHaveKey('App\Models\Box::stores()')
-        ->and($rotas)->toHaveKey('App\Models\Unit::stores()')
-        ->and($rotas)->toHaveKey('App\Models\PaymentMethod::stores()')
-        ->and($rotas)->toHaveKey('App\Models\PosTemplate::stores()');
+    // Y no queda NINGUN defecto conocido por arreglar.
+    expect($rotas)->toBe([]);
 });

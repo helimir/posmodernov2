@@ -607,3 +607,41 @@ Este es el mecanismo que hace operativa la dependencia **B1**: el codigo puede *
 ### Siguiente unidad
 
 **7-iii** - los bridges que faltan como modelo y el enganche del checkout con la caja. Y **0.6.4**: el IVA retenido como documento PROPIO.
+
+---
+
+## PR55-bridges - 7-iii: los bridges como modelo y los nombres canonicos (2026-11-04)
+
+- **Estado**: entregado en el PR #60 (rama `feat/fase0-28-bridges`).
+- **Tareas cerradas**: 0.4.4-T, 0.4.5-T, 0.5.1-T, 0.5.3-T, 0.5.4-T, 0.5.5-T, 0.5.6, 0.5.6-T, 0.5.8-T, 0.6.1-T, 0.6.2-T, 0.6.3-T, 0.7.2-T y 0.7.7-T. Catorce, de un golpe.
+- **Ficheros**: `app/Models/{BrandStore,BoxStore,UnitStore,PaymentMethodStore,PosTemplateStore,FiscalDocument}.php`, `app/Domain/Fiscal/TaxRateResolver.php` (movido), `tests/Feature/Domain/QuotationOrderSchemaTest.php`, y los tests renombrados o ampliados.
+- **Evidencia**: `pest` 112 passed (1617 assertions), con `main` en 105 passed (1402 assertions); `pint` limpio; `php -l` limpio. Los trece nombres canonicos aparecen **exactamente una vez** cada uno.
+
+### Las seis relaciones rotas: cerradas
+
+`Sale::fiscalDocument()`, `Brand::stores()`, `Box::stores()`, `Unit::stores()`, `PaymentMethod::stores()` y `PosTemplate::stores()` apuntaban a clases que **no existian**: los bridges estaban como tablas (M09) pero no como modelos. Cada una reventaba con `Error: Class not found` la primera vez que alguien **usaba** la relacion. Los seis modelos existen ahora, y el test `test_ningun_modelo_declara_una_relacion_a_una_clase_que_no_existe` **ya no lista ninguna**: no queda ninguna relacion rota en `app/Models/`.
+
+Los modelos que **siguen sin existir** (y por eso esas relaciones NO se declaran): `FiscalSeries`, `FiscalDocumentControlAssignment` y los de `fiscal_document_taxes`/`fiscal_document_events`. Declarar una relacion hacia una clase inexistente es el defecto que estamos corrigiendo: no se repite.
+
+### El motor de impuestos es PURO DE ESTRUCTURA
+
+El test canonico de 0.6.1-T ya no se conforma con el determinismo: **escanea la carpeta `app/Domain/Tax/`** y falla si algun fichero referencia `DB::`, `Http::`, `file_get_contents`, `curl_`, `now()` o `date(`. Y exige ademas que **ningun** fichero de la carpeta inyecte una `Connection`: sin conexion no hay consulta que hacer.
+
+Para que eso sea verdad hubo que **mover el `TaxRateResolver` a `app/Domain/Fiscal/`**: resolvia la tasa vigente (LEE la base de datos) y convivia en la carpeta del motor. La carpeta `app/Domain/Tax/` es ahora el motor y **solo** el motor.
+
+### Los nombres canonicos: cinco renombrados, ocho escritos
+
+Cinco tests cubrian la regla pero con **otro** nombre, asi que la tarea quedaba abierta: 0.4.4-T, 0.5.1-T, 0.5.4-T, 0.5.6-T y 0.6.1-T se renombraron al canonico exacto. Los otros ocho se escribieron nuevos, entre ellos:
+
+- **0.6.3-T**: tras la venta se cambia la tasa vigente (16 % -> 20 %) y la evidencia de la categoria; el documento emitido **no se mueve**.
+- **0.6.2-T**: dos lineas de 10.005 suman 23.2200 y el total redondeado es 23.2100: la diferencia es el **ajuste visible** persistido, y `lineas + ajuste = total` exacto.
+- **0.7.7-T**: un tipo de asiento **nuevo** en el catalogo es un asiento valido **sin tocar codigo**: la clasificacion se consulta, no se desparrama.
+
+### Dos decisiones que el subagente dejo a mi criterio
+
+1. **0.5.6-T prometia mas de lo que probaba**: su nombre dice "y no se sobrevende bajo concurrencia", y su cuerpo solo comprobaba la primera mitad (cache = suma de lotes). Se **amplio** con la mitad que faltaba (dos sesiones, `SKIP LOCKED`, sin sobreventa y la invariante cumpliendose) y el nombre ahora es verdad.
+2. **0.5.8-T seguia divergente**: `test_dos_ventas_concurrentes_no_sobrevenden_el_stock` paso a llamarse `test_dos_ventas_concurrentes_sobre_stock_limitado_no_se_sobrevenden`, su canonico exacto.
+
+### Siguiente unidad
+
+**Fase 0.8** - impresion LAN (M23, el `EscposRenderer`, los cinco endpoints del agente, la maquina de estados de `print_jobs`) y el adaptador del sync legacy (M24, el verificador v2, el traductor y el aplicador de lotes). Y **0.6.4**: el IVA retenido como documento PROPIO.

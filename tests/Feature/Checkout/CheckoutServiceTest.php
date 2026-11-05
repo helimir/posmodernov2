@@ -7,10 +7,10 @@ use App\Domain\Checkout\CheckoutPaymentInput;
 use App\Domain\Checkout\CheckoutService;
 use App\Domain\Fiscal\ControlNumberGenerator;
 use App\Domain\Fiscal\NumberSeries;
+use App\Domain\Fiscal\TaxRateResolver;
 use App\Domain\Inventory\LotConsumer;
 use App\Domain\Inventory\StockInvariant;
 use App\Domain\Sales\SalePaymentStatus;
-use App\Domain\Tax\TaxRateResolver;
 use App\Models\Country;
 use App\Models\Currency;
 use App\Models\Customer;
@@ -638,4 +638,138 @@ test('test_el_redondeo_que_no_cuadra_va_al_ingreso_y_el_asiento_sigue_cuadrando'
     expect(bccomp($debe, $haber, 4))->toBe(0)
         ->and(bccomp($debe, '11.6100', 4))->toBe(0)
         ->and(DB::table('sales')->where('id', $result->saleId)->value('status'))->toBe('paid');
+});
+
+/**
+ * 0.6.2-T — la suma de las lineas mas el ajuste de redondeo es el total
+ * redondeado.
+ *
+ * Regla que fija: *el ajuste de redondeo es visible en el total*. Con dos
+ * lineas cuyo redondeo no cuadra, la suma de las lineas NO es el total: la
+ * diferencia es el AJUSTE, y se PERSISTE en `sale_totals.rounding_adjustment`
+ * en vez de esconderse.
+ */
+test('test_la_suma_de_lineas_mas_el_ajuste_de_redondeo_iguala_el_total_redondeado', function () {
+    $escenario = escenarioCheckout();
+    $service = servicioCheckout();
+
+    // Dos lineas de 10.005: cada una redondea a 11.61, y el total redondeado
+    // del documento es 23.21. La suma de las lineas da 23.22: no cuadra, y la
+    // diferencia es el ajuste.
+    $input = new CheckoutInput(
+        storeId: $escenario['store_id'],
+        customerId: null,
+        documentSeriesId: $escenario['document_series_id'],
+        controlSeriesId: $escenario['control_series_id'],
+        lines: [
+            new CheckoutLineInput(
+                productId: $escenario['product_id'],
+                quantity: '1',
+                unitPrice: '10.005',
+            ),
+            new CheckoutLineInput(
+                productId: $escenario['product_id'],
+                quantity: '1',
+                unitPrice: '10.005',
+            ),
+        ],
+        payments: [
+            new CheckoutPaymentInput(
+                paymentMethodId: $escenario['payment_method_id'],
+                amount: '23.2100',
+            ),
+        ],
+        accounts: cuentasCheckout(),
+        issuedAt: new DateTimeImmutable('2026-11-04T10:15:00-04:00'),
+        businessDate: new DateTimeImmutable('2026-11-04T00:00:00-04:00'),
+    );
+
+    $result = $service->checkout($input);
+
+    $items = DB::table('sale_items')->where('sale_id', $result->saleId)->orderBy('id')->get();
+    $totals = DB::table('sale_totals')->where('sale_id', $result->saleId)->first();
+
+    // 1. Las dos lineas, con su redondeo.
+    expect($items)->toHaveCount(2)
+        ->and((string) $items[0]->line_total)->toBe('11.6100')
+        ->and((string) $items[1]->line_total)->toBe('11.6100');
+
+    $sumaLineas = '0';
+
+    foreach ($items as $linea) {
+        $sumaLineas = bcadd($sumaLineas, (string) $linea->line_total, 4);
+    }
+
+    // 2. La suma NO es el total: la diferencia es el ajuste, y el ajuste es
+    //    VISIBLE (no vale cero y no se esconde).
+    expect($sumaLineas)->toBe('23.2200')
+        ->and((string) $totals->grand_total)->toBe('23.2100')
+        ->and((string) $totals->rounding_adjustment)->toBe('-0.0100');
+
+    // 3. Y la identidad se cumple EXACTA: las lineas mas el ajuste dan el
+    //    total redondeado.
+    expect(bcadd($sumaLineas, (string) $totals->rounding_adjustment, 4))
+        ->toBe((string) $totals->grand_total);
+});
+
+/**
+ * 0.6.3-T — un documento emitido conserva la tasa, la categoria y el estado
+ * de evidencia CONGELADOS.
+ *
+ * Regla que fija: *el impuesto se persiste, no se recalcula*. El documento
+ * emitido guarda el porcentaje, la categoria y la evidencia que se le
+ * aplicaron; un cambio posterior de la tasa vigente NO lo altera.
+ */
+test('test_un_documento_emitido_conserva_la_tasa_la_categoria_y_el_estado_de_evidencia_congelados', function () {
+    $escenario = escenarioCheckout();
+    $service = servicioCheckout();
+
+    $result = $service->checkout(ventaCheckout($escenario));
+
+    $item = DB::table('sale_items')->where('sale_id', $result->saleId)->first();
+    $totals = DB::table('sale_totals')->where('sale_id', $result->saleId)->first();
+
+    // 1. El documento emitido lleva CONGELADOS la tasa, la categoria y la
+    //    evidencia.
+    expect((string) $item->tax_rate_snapshot)->toBe('16.0000')
+        ->and((int) $item->tax_rate_id)->toBe($escenario['tax_rate_id'])
+        ->and((int) $item->tax_category_id)->toBe($escenario['tax_category_id'])
+        ->and((string) $item->evidence_status)->toBe('verified')
+        ->and((string) $item->tax_amount)->toBe('8.0000')
+        ->and((string) $totals->evidence_status)->toBe('verified')
+        ->and((string) $totals->tax_total)->toBe('8.0000');
+
+    // 2. Ahora cambia el CATALOGO: la tasa vigente cambia de porcentaje y de
+    //    estado de evidencia, y la categoria tambien.
+    DB::table('tax_rates')->where('id', $escenario['tax_rate_id'])->update([
+        'percentage' => 20,
+        'evidence_status' => 'pending_confirmation',
+        'updated_at' => now(),
+    ]);
+
+    DB::table('tax_categories')->where('id', $escenario['tax_category_id'])->update([
+        'evidence_status' => 'pending_confirmation',
+        'updated_at' => now(),
+    ]);
+
+    // 3. El cambio es REAL: el catalogo ya no dice lo mismo.
+    $tasa = DB::table('tax_rates')->where('id', $escenario['tax_rate_id'])->first();
+    $categoria = DB::table('tax_categories')->where('id', $escenario['tax_category_id'])->first();
+
+    expect((string) $tasa->percentage)->toBe('20.000000')
+        ->and((string) $tasa->evidence_status)->toBe('pending_confirmation')
+        ->and((string) $categoria->evidence_status)->toBe('pending_confirmation');
+
+    // 4. Y el documento emitido NO se movio: el impuesto se persiste, no se
+    //    recalcula.
+    $item = DB::table('sale_items')->where('sale_id', $result->saleId)->first();
+    $totals = DB::table('sale_totals')->where('sale_id', $result->saleId)->first();
+
+    expect((string) $item->tax_rate_snapshot)->toBe('16.0000')
+        ->and((int) $item->tax_rate_id)->toBe($escenario['tax_rate_id'])
+        ->and((int) $item->tax_category_id)->toBe($escenario['tax_category_id'])
+        ->and((string) $item->evidence_status)->toBe('verified')
+        ->and((string) $item->tax_amount)->toBe('8.0000')
+        ->and((string) $totals->evidence_status)->toBe('verified')
+        ->and((string) $totals->tax_total)->toBe('8.0000');
 });
