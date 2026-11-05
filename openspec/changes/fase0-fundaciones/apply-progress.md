@@ -645,3 +645,54 @@ Cinco tests cubrian la regla pero con **otro** nombre, asi que la tarea quedaba 
 ### Siguiente unidad
 
 **Fase 0.8** - impresion LAN (M23, el `EscposRenderer`, los cinco endpoints del agente, la maquina de estados de `print_jobs`) y el adaptador del sync legacy (M24, el verificador v2, el traductor y el aplicador de lotes). Y **0.6.4**: el IVA retenido como documento PROPIO.
+
+---
+
+## PR56-impresion - 8-i: el esquema de impresion y los bytes ESC/POS (2026-11-05)
+
+- **Estado**: entregado en el PR #62 (rama `feat/fase0-29-impresion`).
+- **Tareas cerradas**: 0.8.1, 0.8.1-T, 0.8.3 y 0.8.3-T.
+- **Ficheros**: `database/migrations/2026_11_01_000023_create_print_tables.php`, `app/Models/{Printer,PrintTarget,PrintAgent,PrintJob}.php`, `app/Print/{PrintPayload,RenderedPayload,BufferPrintConnector,EscposRenderer,PrintJobDispatcher}.php`, `app/Casts/Bytea.php`, `config/print.php`, `tests/Feature/Print/{PrintTargetSchemaTest,EscposRendererTest}.php`.
+- **Evidencia**: `pest` 114 passed (1644 assertions), con `main` en 112 passed (1617 assertions); `pint` limpio en los paths tocados; `php -l` limpio; la migracion aplica, revierte y vuelve a aplicar.
+
+### La premisa del diseno venia de la v3 de la libreria
+
+El diseno decia "`mike42/escpos-php`" y anadia "CP850 por defecto, CP858 no codificable". En la **v5** (la instalada) **no existen** las clases `EscposText` ni `EscposQRCode` (eran v3), **ni** las constantes `CHARSET_*` de `Printer`: la API esta en `Printer` (`text()`, `qrCode()`, `selectCharacterTable()`) y las codepaginas son los **66 ids de codificacion** del JSON de capacidades del perfil.
+
+El diseno de fondo se confirma con evidencia de la v5: `CP850` es codificable (`isEncodable() === true`) y **`CP858` NO lo es** (no tiene `iconv` ni `data`). Como el perfil `default` declara `CP858` sin lanzar excepcion, **la guarda la pone el SERVIDOR**, no la libreria: es el servidor quien rechaza un ticket no representable antes de enviarlo.
+
+Y el **numero de tabla de la codepagina es DATO del perfil**, no una constante del codigo: una tabla fija en el codigo seria un fork por modelo de impresora.
+
+### El "perfil de impresora" del legacy NO EXISTIA
+
+El legacy `_inc/print.php` imprimia por USB o por navegador, y su endpoint esta **roto**: un `dd()` corta la ejecucion antes de generar ESC/POS. No habia perfiles de impresora modelados.
+
+Resolucion: `print_targets.printer_profile` es el **id de perfil de `mike42/escpos-php`** (`default`, `simple`, `TM-T88II`, `TM-P80`, ...). Es dato, no codigo: el destino lo declara y el servidor consulta el perfil. Un perfil inexistente falla con un error explicito.
+
+Lo que si tiene el legacy es `store_settings.char_per_line` (42 por defecto): **no se ha migrado** a `print_targets.char_per_line`, porque el mapeo del dato de tienda es de otra unidad. `char_per_line` nace con 32.
+
+### Tres trampas de PostgreSQL que corrompen en silencio
+
+1. **PDO devuelve `bytea` como RECURSO**: un cast `'string'` de Eloquent daria `"Resource id #525"`, y los bytes del ticket se vuelven texto basura. De ahi `app/Casts/Bytea.php`.
+2. **El constructor de consultas trunca los bytes en el NUL**: `1b401b42` se guardaba como `1b401b42`. Se escribe con `decode(?, 'hex')`.
+3. **El flujo hay que rebobinarlo**: la segunda lectura del atributo salia vacia. Fijado con una asercion en el test canonico.
+
+### El USB directo se rechaza por partida doble
+
+`transport` es un enum de Laravel, asi que en PostgreSQL es `varchar(255) check (col in (...))` y **`usb` no esta**: la primera barrera. Y un `server_socket` o un `lan_agent` con un endpoint que no sea `tcp://host:9100` ni una impresora compartida de Windows lo rechaza el **CHECK**: la segunda. Y el `browser` exige `endpoint IS NULL`, porque renderiza HTML/PDF desde el mismo modelo de plantilla.
+
+El recurso UNC se detecta con `chr(92)`, no con barras invertidas literales: `\\` en SQL tiene tres niveles de escape (PHP -> SQL -> ERE) y el CHECK no puede romperse por como PostgreSQL interprete la cadena.
+
+### La firma de impresion, congelada
+
+`payload` (jsonb) es el **modelo** del ticket; `payload_bytes` (bytea) son los **bytes ya generados** y `payload_sha256` su hash. El agente no interpreta el ticket: lo recibe hecho (design D11). Y el dispatcher **genera los bytes antes de escribir el trabajo**: si la generacion falla, no queda ningun `print_jobs` a medias.
+
+### Lo que queda para otras unidades
+
+- Los **cinco endpoints** del agente LAN (0.8.4) y la **maquina de estados** de `print_jobs` con la reimpresion (0.8.5): `reason` y `reprint_of_job_id` quedan siempre a null desde este dispatcher, porque la firma `dispatch()` no los admite.
+- El `EscposRenderer` **no corta el papel**: el corte no estaba en el encargo y es un byte que el agente escribiria en la impresora equivocada si el destino no soporta corte parcial.
+- `print_agents` no tiene `instance_id`, que el research menciona para detectar un segundo agente con el mismo token.
+
+### Siguiente unidad
+
+**8-ii** - los cinco endpoints del `PrintAgentController` (auth por token + `X-Agent-Id`, la tienda se resuelve desde el `agent_id`, la respuesta a un `result` repetido es idempotente) y la maquina de estados de `print_jobs` (`queued` -> `claimed` -> `printing` -> `printed`; `failed` reintentable; `cancelled` terminal; `lease_expires_at` devuelve a `queued` con `attempts++`) con la reimpresion (0 reservas nuevas, 0 cambios en `fiscal_documents`).
