@@ -864,3 +864,36 @@ Se partio del fichero **sano** (`246aba2`) y se reaplicaron los cambios de la un
 **Todo script que edite un artefacto compartido tiene que三重-verificar**: localizar el punto por contenido unico (nunca por indice), comprobar el tamano y la estructura ANTES de escribir, y **abortar** si no encaja. El `array_splice` con un indice mal calculado no falla: escribe. Un script que edita un artefacto de 500 lineas es un editor de texto con permiso de destruir.
 
 El mismo patron ya habia mordido dos veces en esta sesion por la interpolacion de PHP en cadenas con comillas dobles (`$data`, `$deadline`, `$fillable`): **usar nowdoc, o concatenar**.
+
+---
+
+## PR60-sync-traductor - 8-iv-b: el traductor de sentencias (2026-11-05)
+
+- **Estado**: entregado en el PR #70 (rama `feat/fase0-34-sync-traductor`).
+- **Tareas cerradas**: 0.8.7 y 0.8.7-T.
+- **Ficheros**: `app/Sync/Legacy/LegacyStatementTranslator.php`, `tests/Feature/Sync/LegacyStatementTranslatorTest.php`.
+- **Evidencia**: `pest` 151 passed (1909 assertions), con `main` en 146 passed (1843 assertions); `pint` limpio; `php -l` limpio; mutation testing en los dos caminos.
+
+### Un lote es TODO o NADA
+
+El traductor acepta las **tres** formas que el legacy emite (`INSERT`, `UPDATE`, `DELETE` con `WHERE` de igualdades simples) y **cualquier otra cosa rechaza el lote entero**: una sentencia apilada, un `DELETE ... LIMIT 1`, un `SET col = col - ?`, un `OR` en el `WHERE`, una tabla fuera del mapa. Y una **columna** que no esta en el mapa se **descarta**; si la sentencia la usa para **filtrar**, el lote falla entero: no se puede filtrar por algo que no existe.
+
+### Tres decisiones del subagente que importan
+
+1. **`resolve_ref:<tabla legacy>`**: el parametro es la TABLA, no la columna, porque `invoice_id` existe en `selling_info` **y** en `selling_item`: con columna seria ambiguo.
+2. **Una fila de tabla con `new_table` a NULL descarta la operacion** (con aviso al log) en vez de rechazar el lote: es la unica forma que tiene el esquema de expresar "aqui no existe", y rechazarla **congelaria al terminal**, que es el fallo S1 que el ADR-0006 existe para tapar. Una tabla **sin** fila si rechaza el lote entero.
+3. **El `OR` se rechaza**: la salida `where` es un mapa (una conjuncion) y aplanar un `OR` a `AND` cambiaria la semantica. Se verifico que **ningun** INSERT/UPDATE/DELETE del legacy usa `OR`.
+
+### Tres riesgos que quedan ABIERTOS
+
+1. **La columna `transform` es `string(50)` y no cabe**: `cast_enum:paid:paid:due:confirmed:partial:confirmed` son 51 caracteres. **El seeder del mapa (0.9.2) necesita ensancharla**; si no, los conjuntos de enum largos no se pueden declarar.
+2. **`inject_*` sustituye el valor de una columna que el legacy ya envia, pero no puede ANADIR una columna que el legacy no envia** (el mapa no tiene forma de declararlo). Consecuencia: `gift_cards.store_id` (NOT NULL en el destino, inexistente en la tabla legacy) hoy **no se puede inyectar**.
+3. **El legacy real emite `SET col = col + ?` / `col = col - ?`**, `LIMIT 1` en DELETEs y UPDATEs, y un `WHERE` dinamico (`_inc/ajax.php:154`). Todo eso **rechaza el lote entero**: con el diseno de fallo cerrado del ADR-0006, esos terminales quedarian **congelados con el log creciendo**. Hay que decidir: ampliar el mapa a un delta calculado, o confirmar que se descartan a proposito (el stock, por ejemplo, es un **cache derivado** de los lotes en el destino y no se traslada).
+
+### La tension de `resolve_ref` con el aplicador
+
+El traductor resuelve contra el estado **actual** de la base, asi que un lote que **crea** la venta y luego la **referencia** no se puede traducir de una vez: la venta todavia no existe. La unidad 8-iv-c tiene que resolverlo (traducir y aplicar operacion a operacion, o dos fases).
+
+### Siguiente unidad
+
+**8-iv-c** - el `LegacyBatchApplier` y el job idempotente por `sync_batches`: el lote se aplica en una transaccion, y un reenvio identico responde exito sin reaplicar. Tendra que resolver la tension de `resolve_ref` y el `WHERE` dinamico del legacy.
