@@ -1,7 +1,7 @@
 # Apply progress — fase0-fundaciones
 
 **Change**: `fase0-fundaciones` · **Unidades aplicadas**: PR1-ciimientos-a · PR2-ciimientos-b · PR3-pais-fiscal-a · PR4-pais-fiscal-b · PR5-pais-fiscal-c · PR6-pais-fiscal-d · **PR7-numeracion-a (esta)**
-**Mode**: Strict TDD (`$data`, `$deadline`, `$fillable`): strict_tdd: true`, runner `./vendor/bin/pest` sobre PostgreSQL 17 `pos_moderno_v2_test`)
+**Mode**: Strict TDD (`strict_tdd: true`, runner `./vendor/bin/pest` sobre PostgreSQL 17 `pos_moderno_v2_test`)
 **Chain strategy**: `stacked-to-main` · **Presupuesto**: 800 líneas por PR
 
 ## Estado
@@ -61,8 +61,8 @@
 > (PR #14, squash `88e912c`, issue #13 cerrado) y el slice **3a-ii** también (PR #17,
 > squash `89fa520`, issue #16 cerrado). Ese PR mergeó además un `NumberSeries` propio que
 > **queda sustituido** por el de **3a-ii** al fusionar `main` sobre la rama: la conexión se
-> inyecta (`$data`, `$deadline`, `$fillable`): ConnectionInterface`) y sólo así T2 y T3 pueden ejecutar la reserva sobre la
-> **segunda sesión** (`$data`, `$deadline`, `$fillable`): pgsql_b`). El `NumberSeries` estático del PR #14 no habría
+> inyecta (`ConnectionInterface`) y sólo así T2 y T3 pueden ejecutar la reserva sobre la
+> **segunda sesión** (`pgsql_b`). El `NumberSeries` estático del PR #14 no habría
 > sostenido T2. El work unit siguiente es **3b** (M22 + motor de emisión), en la rama
 > `feat/fase0-09-numeracion-b`.
 
@@ -73,22 +73,22 @@
 | 0.1.1-T | ❌ `Failed asserting that false is true` (BigDecimal y Printer ausentes) | ✅ `composer require brick/math mike42/escpos-php` → 1 passed (3 assertions) | — |
 | 0.1.2-T | ❌ `Failed asserting that null is identical to 'pos_moderno_v2_test'` | ✅ `pgsql_b` en `config/database.php` → 1 passed (2 assertions) | — |
 | 0.1.3-T | ❌ `BindingResolutionException: Target class [config] does not exist` | ✅ 3 configs + `.env.example` → 1 passed (3 assertions) | el test se movió de `tests/Unit` a `tests/Feature` |
-| 0.1.4-T | ❌ `Failed asserting that true is true` (`$data`, `$deadline`, `$fillable`): store_settings` inexistente) | ✅ M04 + M05 → 1 passed (21 assertions) | — |
-| 0.1.5-T | ❌ `Failed asserting that false is true` (`$data`, `$deadline`, `$fillable`): user_settings` inexistente) | ✅ M06 + M07 + edición de `users` → 1 passed (16 assertions) | — |
+| 0.1.4-T | ❌ `Failed asserting that true is true` (`store_settings` inexistente) | ✅ M04 + M05 → 1 passed (21 assertions) | — |
+| 0.1.5-T | ❌ `Failed asserting that false is true` (`user_settings` inexistente) | ✅ M06 + M07 + edición de `users` → 1 passed (16 assertions) | — |
 | 0.1.6-T | ❌ `Failed asserting that an array contains 'credential_env_prefix'` | ✅ M25 + M26 → 1 passed (18 assertions) | — |
 | 0.1.7-T | ❌ `Class "App\Models\Language" not found` | ✅ 5 modelos de i18n/outbox + `AuditLog` (M25–M26) → 1 passed (66 assertions) | `AuditLog` declara además `action`/`entity_type`/`ip_address` como `string` (los casts de PR1 eran incompletos) |
-| 0.2.1-T | ❌ `Failed asserting that false is true` (`$data`, `$deadline`, `$fillable`): number_formats` no existe) | ✅ M01 + `Country`/`Currency`/`NumberFormat` → 1 passed (12 assertions) | triangulación: dos países con formatos distintos conviven a la vez |
+| 0.2.1-T | ❌ `Failed asserting that false is true` (`number_formats` no existe) | ✅ M01 + `Country`/`Currency`/`NumberFormat` → 1 passed (12 assertions) | triangulación: dos países con formatos distintos conviven a la vez |
 | 0.2.2-T | ❌ `Class "App\Models\FiscalProfile" not found` | ✅ M02 + los 7 modelos fiscales → 1 passed (7 assertions) | la aserción de `uuid` se acota a las tablas de negocio: `failed_jobs.uuid` es de la cola |
 | 0.2.6-T (PR3/PR4) | ❌ `Class "App\Models\FiscalProfile" not found` | ✅ los 10 modelos de país/perfil → 1 passed (81 assertions) | casts: se declaran los tipos con significado (FK, booleanos, fechas, conjuntos cerrados) |
 | Conjuntos cerrados | ❌ `InvalidArgumentException` no se lanzaba | ✅ validación en `saving` de `FiscalProfile`/`FiscalProfileEnvironment`/`FiscalProvider` **contra los enums genéricos** → 1 passed (6 assertions) | — |
 | C4 (token de serie) | ❌ `Class "App\Models\FiscalProfileField" not found` | ✅ catálogo `fiscal_profile_fields` con `key`/`value` → 1 passed (5 assertions) | — |
-| **0.2.3-T** | ❌ `Class "App\Models\TaxCategory" not found` | ✅ M03 + `TaxCategory`/`TaxRate` → 1 passed (8 assertions) | la aserción del esquema (`$data`, `$deadline`, `$fillable`): tax_categories` sin `percentage`, `tax_rates` con `percentage`) hace verificable la aceptación sin esperar a M08 |
-| **0.2.4-T** | ❌ `Class "App\Domain\Fiscal\Contracts\ElectronicInvoiceProvider` not found` | ✅ contrato + 9 value objects → 1 passed (16 assertions) | el test cubre los **tres** pasos en orden y el canal sin control (`$data`, `$deadline`, `$fillable`): null`) con el MISMO proveedor |
+| **0.2.3-T** | ❌ `Class "App\Models\TaxCategory" not found` | ✅ M03 + `TaxCategory`/`TaxRate` → 1 passed (8 assertions) | la aserción del esquema (`tax_categories` sin `percentage`, `tax_rates` con `percentage`) hace verificable la aceptación sin esperar a M08 |
+| **0.2.4-T** | ❌ `Class "App\Domain\Fiscal\Contracts\ElectronicInvoiceProvider` not found` | ✅ contrato + 9 value objects → 1 passed (16 assertions) | el test cubre los **tres** pasos en orden y el canal sin control (`null`) con el MISMO proveedor |
 | **0.2.5-T** | ❌ `Class "App\Domain\Fiscal\Enums\ProviderKind" not found` | ✅ 5 enums + sustitución de las constantes → 1 passed (12 assertions) | el escáner de literales **no es vacuo**: un fixture con un código de país prueba que DETECTA |
 | **0.2.6-T (cierre)** | ❌ `Exception "InvalidArgumentException" not thrown` (regla de redondeo inválida) | ✅ validación en cascada de `TaxRate.rounding_rule` → 1 passed (108 assertions) | `ModelCastsTest` pasa a ser **definitivo** con los 12 modelos |
 | **0.2.7-T** | ❌ `BadMethodCallException: Call to undefined method App\Models\FiscalProfile::taxContext()` | ✅ `TaxContext` + `FiscalProfile::taxContext()` → 1 passed (11 assertions) | el test comprueba además que el fichero del dominio **no** contiene el literal del token |
-| **0.3.1-T** | ❌ `Failed asserting that an array contains 'series_role'` (la tabla no existía) | ✅ M21 (`$data`, `$deadline`, `$fillable`): fiscal_series` + `fiscal_document_reservations`) → 1 passed (31 assertions) | el conjunto cerrado de rol y autoridad lo hace cumplir el **esquema** (`$data`, `$deadline`, `$fillable`): enum` → `CHECK` de PostgreSQL), no una constante del código |
-| **0.3.3-T** | ❌ `Class "App\Domain\Fiscal\NumberSeries" not found` | ✅ `NumberSeries` (`$data`, `$deadline`, `$fillable`): UPDATE … RETURNING`) → 1 passed (+ 1 de triangulación) | la traza se escribe con `INSERT … SELECT`: copia el rol de la fila bloqueada y **no** mete un literal de rol en el dominio |
+| **0.3.1-T** | ❌ `Failed asserting that an array contains 'series_role'` (la tabla no existía) | ✅ M21 (`fiscal_series` + `fiscal_document_reservations`) → 1 passed (31 assertions) | el conjunto cerrado de rol y autoridad lo hace cumplir el **esquema** (`enum` → `CHECK` de PostgreSQL), no una constante del código |
+| **0.3.3-T** | ❌ `Class "App\Domain\Fiscal\NumberSeries" not found` | ✅ `NumberSeries` (`UPDATE … RETURNING`) → 1 passed (+ 1 de triangulación) | la traza se escribe con `INSERT … SELECT`: copia el rol de la fila bloqueada y **no** mete un literal de rol en el dominio |
 | **0.3.10-T (T1)** | ❌ `Class "App\Domain\Fiscal\NumberSeries" not found` | ✅ 50 reservas consecutivas → 1 passed | — |
 | **0.3.11-T (T2)** | ❌ `Class "App\Domain\Fiscal\NumberSeries" not found` | ✅ dos sesiones + `SET LOCAL lock_timeout` → 1 passed | el mensaje de PostgreSQL nombra la condición en lenguaje natural ("Lock not available"); el test afirma el **SQLSTATE `55P03`**, que es la forma verificable |
 | **0.3.12-T (T3)** | ❌ `Class "App\Domain\Fiscal\NumberSeries" not found` | ✅ rollback verificado desde `pgsql_b` → 1 passed | — |
@@ -106,7 +106,7 @@
 
 | Fichero | Acción | Qué hace |
 |---|---|---|
-| `database/migrations/2026_11_01_000025_create_languages_and_messages_table.php` | Creado | M25: i18n (`$data`, `$deadline`, `$fillable`): languages`, `language_translations`) + mensajería (`$data`, `$deadline`, `$fillable`): sms_providers` con `credential_env_prefix`, `message_templates`, `sms_messages` como outbox con `status`/`sent_at`) |
+| `database/migrations/2026_11_01_000025_create_languages_and_messages_table.php` | Creado | M25: i18n (`languages`, `language_translations`) + mensajería (`sms_providers` con `credential_env_prefix`, `message_templates`, `sms_messages` como outbox con `status`/`sent_at`) |
 | `database/migrations/2026_11_01_000026_create_audit_logs_table.php` | Creado | M26: auditoría de **negocio** (actor, acción, entidad, payload), distinta de la fiscal append-only `fiscal_document_events` |
 | `app/Models/{Language,LanguageTranslation,MessageTemplate,SmsMessage,SmsProvider}.php` | Creado | Modelos con casts exactos y relaciones con FK; `SmsProvider::credential()` resuelve el secreto desde el entorno |
 | `app/Models/AuditLog.php` | Modificado | La tabla de M26 ya existe: docblock actualizado y casts `action`/`entity_type`/`ip_address` declarados |
@@ -119,9 +119,9 @@
 2. **FK `users.group_id → roles.id` añadida en M06** (PR1): la migración base de `users` no puede declarar la FK porque `roles` no existe todavía.
 3. **`password_reset_tokens` se crea en M06** (PR1) y se retira de la migración base de `users`, como fija el diseño.
 4. **La aserción de relación usa `$model->rel()` y no `$model->rel`** (PR1): en Laravel 12 `getRelationshipFromMethod()` devuelve el resultado de la consulta.
-5. **`message_templates` conserva los TAGS del legacy, no el cuerpo del mensaje.** `mail_sms_tag` guardaba `tagname` + `type`; el legacy no guardaba cuerpos, así que la tabla destino es el catálogo de marcadores `{{…}}` (`$data`, `$deadline`, `$fillable`): tag_name` + `type`).
-6. **La resolución del secreto vive en el modelo, no en un servicio.** `SmsProvider::credential($variable)` lee `PREFIX_VARIABLE` del entorno (`$data`, `$deadline`, `$fillable`): Illuminate\Support\Env`): es el mínimo que hace verificable la regla de 0.1.6-T sin adelantar el job de envío de Fase 2.
-7. **`language_translations` no conserva `key_type`** (`$data`, `$deadline`, `$fillable`): specific`/`default` del legacy). El contrato que fija la tarea es `lang_key`/`lang_value`/`lang_id`, y ninguna regla del change usa `key_type`.
+5. **`message_templates` conserva los TAGS del legacy, no el cuerpo del mensaje.** `mail_sms_tag` guardaba `tagname` + `type`; el legacy no guardaba cuerpos, así que la tabla destino es el catálogo de marcadores `{{…}}` (`tag_name` + `type`).
+6. **La resolución del secreto vive en el modelo, no en un servicio.** `SmsProvider::credential($variable)` lee `PREFIX_VARIABLE` del entorno (`Illuminate\Support\Env`): es el mínimo que hace verificable la regla de 0.1.6-T sin adelantar el job de envío de Fase 2.
+7. **`language_translations` no conserva `key_type`** (`specific`/`default` del legacy). El contrato que fija la tarea es `lang_key`/`lang_value`/`lang_id`, y ninguna regla del change usa `key_type`.
 8. **`timestamptz` en el outbox y en la auditoría.** `sms_messages.sent_at`/`scheduled_at` y `audit_logs.created_at`/`updated_at` son `timestamptz` (design §A.2: "timestamptz para auditoría"); el resto de M25 usa `timestamp`, como las tablas de M04–M07.
 
 ## Work Unit Evidence (PR3-pais-fiscal-a)
@@ -129,23 +129,23 @@
 | Evidencia | Valor |
 |---|---|
 | Test focalizado | `php vendor/bin/pest --filter="formato_del_correlativo"` → **1 passed (12 assertions)** · `--filter="referencia_de_verificacion"` → **1 passed (7)** · `--filter="conjuntos_cerrados"` → **1 passed (4)** · `--filter="prefijo_de_serie"` → **1 passed (5)** · `--filter="capa_de_pais_y_fiscal"` → **1 passed (81)**; suite completa `./vendor/bin/pest` → **39 passed (301 assertions)** (baseline del PR2: 34 passed / 193 assertions) |
-| Harness de runtime | `php artisan migrate:fresh --seed --force` → **11 migraciones en verde** (base×3 + M01–M02 + M04–M07 + M25–M26) · `tinker` → 8 tablas pobladas y relaciones resueltas (`$data`, `$deadline`, `$fillable`): correlativo=000-00000000`, `environment_provider=Imprenta de prueba`, `field=serie`, `vocab=issued`), `hash_algorithm=NULL`, `signature_scheme=NULL`, y un `signer_model` fuera del conjunto cerrado **rechazado** por el dominio |
+| Harness de runtime | `php artisan migrate:fresh --seed --force` → **11 migraciones en verde** (base×3 + M01–M02 + M04–M07 + M25–M26) · `tinker` → 8 tablas pobladas y relaciones resueltas (`correlativo=000-00000000`, `environment_provider=Imprenta de prueba`, `field=serie`, `vocab=issued`), `hash_algorithm=NULL`, `signature_scheme=NULL`, y un `signer_model` fuera del conjunto cerrado **rechazado** por el dominio |
 | Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran M01, M02, los 10 modelos y los 3 ficheros de test. No toca M04–M07 ni M25–M26 (base de la cadena) ni ninguna tabla de PR4–PR16 |
 | Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `public/build/manifest.json` presente |
 
 ## Decisiones de esta unidad (PR3-pais-fiscal-a)
 
 1. **`fiscal_providers` se crea en M02.** El plan no asignaba ninguna migración a esa tabla y `fiscal_profile_environments.provider_id` la referencia. Es una tabla de la capa fiscal (el actor intermedio) y M02 es su migración natural: se crea **antes** que `fiscal_profile_environments` y con FK real a `fiscal_profiles`. El modelo `FiscalProvider` entra en 0.2.6.
-2. **`signer_model` y `role` NO son enums todavía.** Son columnas string con **validación en el dominio**: `FiscalProfile::SIGNER_MODELS`, `FiscalProfileEnvironment::ROLES` y `FiscalProvider::KINDS` son conjuntos cerrados comprobados en el evento `saving` (`$data`, `$deadline`, `$fillable`): InvalidArgumentException`). Los enums genéricos (`$data`, `$deadline`, `$fillable`): SignerModel`, `EnvironmentRole`, `ProviderKind`) son de 0.2.5 (PR5): sustituirlos es cambiar la fuente de la constante, sin migración ni ruptura.
+2. **`signer_model` y `role` NO son enums todavía.** Son columnas string con **validación en el dominio**: `FiscalProfile::SIGNER_MODELS`, `FiscalProfileEnvironment::ROLES` y `FiscalProvider::KINDS` son conjuntos cerrados comprobados en el evento `saving` (`InvalidArgumentException`). Los enums genéricos (`SignerModel`, `EnvironmentRole`, `ProviderKind`) son de 0.2.5 (PR5): sustituirlos es cambiar la fuente de la constante, sin migración ni ruptura.
 3. **La referencia de verificación se guarda como valor + esquema.** `fiscal_profiles.authority_reference_scheme` guarda el esquema (dato del país) y el valor viaja con el documento en `fiscal_documents.authority_reference` (M22, PR8). **No** hay columna `uuid`: el test barre el esquema y falla si aparece una en una tabla de negocio.
-4. **M01 aterriza antes que M04.** Por timestamp (`$data`, `$deadline`, `$fillable`): 2026_11_01_000001` < `2026_11_01_000004`), la FK `stores.country_id → countries.id` podría declararse ya en M04; se mantiene **diferida a M27** (decisión de PR1) para no ensuciar el diff de este PR.
+4. **M01 aterriza antes que M04.** Por timestamp (`2026_11_01_000001` < `2026_11_01_000004`), la FK `stores.country_id → countries.id` podría declararse ya en M04; se mantiene **diferida a M27** (decisión de PR1) para no ensuciar el diff de este PR.
 
 ## Ficheros de esta unidad (PR3-pais-fiscal-a)
 
 | Fichero | Acción | Qué hace |
 |---|---|---|
 | `database/migrations/2026_11_01_000001_create_countries_currencies_number_formats_table.php` | Creado | M01: `countries`/`currencies` (decimales + separadores)/`number_formats` (número, fecha y **formato del correlativo**) |
-| `database/migrations/2026_11_01_000002_create_fiscal_profiles_table.php` | Creado | M02: `fiscal_profiles` + `fiscal_providers` + 5 satélites (`$data`, `$deadline`, `$fillable`): document_types`, `environments`, `fields`, `tax_schemes`, `status_vocabularies`) |
+| `database/migrations/2026_11_01_000002_create_fiscal_profiles_table.php` | Creado | M02: `fiscal_profiles` + `fiscal_providers` + 5 satélites (`document_types`, `environments`, `fields`, `tax_schemes`, `status_vocabularies`) |
 | `app/Models/{Country,Currency,NumberFormat}.php` | Creado | Capa de país: catálogo, moneda y formato como datos |
 | `app/Models/{FiscalProfile,FiscalProfileDocumentType,FiscalProfileEnvironment,FiscalProfileField,FiscalTaxScheme,FiscalStatusVocabulary,FiscalProvider}.php` | Creado | Capa fiscal: casts, relaciones FK y validación de los conjuntos cerrados |
 | `tests/Feature/Domain/NumberFormatAsDataTest.php` | Creado | 0.2.1-T: el formato del correlativo se cambia insertando una fila |
@@ -155,14 +155,14 @@
 ## Desviaciones y FKs diferidas (PR3-pais-fiscal-a)
 
 1. **`fiscal_profiles.authority_reference_scheme` no figuraba en el diseño** (decisión 3): sin una columna que guarde el esquema, la mitad "valor + esquema" de 0.2.2-T no era verificable hasta M22.
-2. **Los booleanos de la capa fiscal llevan valor por defecto `false`** salvo `holes_allowed` (`$data`, `$deadline`, `$fillable`): true`, como fija la investigación) e `is_active` (`$data`, `$deadline`, `$fillable`): true`); `is_testing`/`is_production` son nullable (un ambiente puede no ser ni de prueba ni de producción). La investigación no fijó la nulabilidad: `false` = "no afirmado".
-3. **Los casts de sólo presentación no se declaran** (`$data`, `$deadline`, `$fillable`): name`, `label`, `base_url`, separadores): un `varchar` ya vuelve como string y el patrón dominante del proyecto (`$data`, `$deadline`, `$fillable`): Store`, `StoreSetting`) no los declara. Se castean FK, booleanos, fechas y los campos de conjunto cerrado.
+2. **Los booleanos de la capa fiscal llevan valor por defecto `false`** salvo `holes_allowed` (`true`, como fija la investigación) e `is_active` (`true`); `is_testing`/`is_production` son nullable (un ambiente puede no ser ni de prueba ni de producción). La investigación no fijó la nulabilidad: `false` = "no afirmado".
+3. **Los casts de sólo presentación no se declaran** (`name`, `label`, `base_url`, separadores): un `varchar` ya vuelve como string y el patrón dominante del proyecto (`Store`, `StoreSetting`) no los declara. Se castean FK, booleanos, fechas y los campos de conjunto cerrado.
 4. **`fiscal_profiles.status_vocabulary_id` no se crea.** La investigación lo listaba, pero el perfil y el vocabulario se referenciaban mutuamente (FK circular, resoluble sólo con un parche `Schema::table`). El puntero es redundante: el vocabulario de un perfil se obtiene por `fiscal_status_vocabularies.fiscal_profile_id` y el estado genérico se busca por `native_code`. Así se evita la FK circular y el vocabulario admite más de un juego nativo por perfil.
 5. **FKs diferidas por no existir todavía**: `stores.country_id → countries.id` → **M27** (decisión de PR1) · `fiscal_documents.authority_reference` (el valor de la referencia) → **M22** (PR8) · `products.tax_category_id → tax_categories.id` → **M03** (PR5) · `fiscal_series.fiscal_profile_id` / `fiscal_providers` → **M21** (PR6). **Ninguna** FK a una tabla de M03/M21/M22 se declara en esta unidad.
 
 ## Work Unit Evidence (PR4-pais-fiscal-b) — *registro añadido en PR5*
 
-> PR4 (`$data`, `$deadline`, `$fillable`): ba28322`, fusionado) **no dejó su propia sección** en este artefacto: el
+> PR4 (`ba28322`, fusionado) **no dejó su propia sección** en este artefacto: el
 > fichero iba una unidad por detrás (su commit registró la evidencia de PR3).
 > Se completa aquí para que el artefacto cubra **todas** las unidades aplicadas.
 
@@ -175,7 +175,7 @@
 | Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran M02, los 7 modelos y el test de la capa fiscal. No toca M01 (base de la cadena) ni M04–M07, M25–M26 |
 | Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes** (ninguno de la unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio |
 
-**Decisiones de PR4 que esta unidad sustituye.** `signer_model`, `role` y `kind` se dejaron como **cadenas validadas en el dominio** (`$data`, `$deadline`, `$fillable`): FiscalProfile::SIGNER_MODELS`, `FiscalProfileEnvironment::ROLES`, `FiscalProvider::KINDS`) a propósito, porque los enums genéricos son de 0.2.5. **PR5 los sustituye** por `SignerModel`/`EnvironmentRole`/`ProviderKind` sin cambiar el esquema ni los valores aceptados.
+**Decisiones de PR4 que esta unidad sustituye.** `signer_model`, `role` y `kind` se dejaron como **cadenas validadas en el dominio** (`FiscalProfile::SIGNER_MODELS`, `FiscalProfileEnvironment::ROLES`, `FiscalProvider::KINDS`) a propósito, porque los enums genéricos son de 0.2.5. **PR5 los sustituye** por `SignerModel`/`EnvironmentRole`/`ProviderKind` sin cambiar el esquema ni los valores aceptados.
 
 ## Work Unit Evidence (PR5-pais-fiscal-c)
 
@@ -187,7 +187,7 @@
 | Harness de runtime | `php artisan migrate:fresh --seed --force` → **11 migraciones en verde** (base×3 + M01–M02 + M04–M07 + M25–M26) · `tinker` → un `signer_model`, un `role` y un `kind` fuera del conjunto cerrado **rechazados** por el dominio, y las filas ya sembradas siguen siendo válidas (la sustitución es sólo código: no hay migración) |
 | Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran el contrato, los 9 value objects, los 5 enums y los 2 ficheros de test nuevos. **No toca** M01/M02 (base de la cadena) ni M04–M07, M25–M26, y **no toca ninguna tabla**: la unidad no lleva migración |
 | Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `public/build/manifest.json` presente |
-| Tamaño | **773 líneas** (686 adiciones + 87 borrados): **597** de código y tests + **176** de artefactos SDD (`$data`, `$deadline`, `$fillable`): tasks.md` + `apply-progress.md`) — **dentro** del techo de 800 |
+| Tamaño | **773 líneas** (686 adiciones + 87 borrados): **597** de código y tests + **176** de artefactos SDD (`tasks.md` + `apply-progress.md`) — **dentro** del techo de 800 |
 
 ## Ficheros de esta unidad (PR5-pais-fiscal-c)
 
@@ -204,27 +204,27 @@
 
 ## Decisiones de esta unidad (PR5-pais-fiscal-c)
 
-1. **Las constantes se sustituyen, no se duplican.** `FiscalProfile::SIGNER_MODELS`, `FiscalProfileEnvironment::ROLES` y `FiscalProvider::KINDS` **desaparecen**: la validación pasa a usar `SignerModel::tryFrom()`, `EnvironmentRole::tryFrom()` y `ProviderKind::tryFrom()`. Los enums aceptan **exactamente** los mismos valores (`$data`, `$deadline`, `$fillable`): authority`/`psp`/`printer`/`legal_signature`, `issuer`/`printer`, `printer`/`pac`/`portal`), de modo que **las filas ya sembradas siguen siendo válidas sin tocar el esquema**. El mensaje de error conserva el formato ("must be one of: …").
+1. **Las constantes se sustituyen, no se duplican.** `FiscalProfile::SIGNER_MODELS`, `FiscalProfileEnvironment::ROLES` y `FiscalProvider::KINDS` **desaparecen**: la validación pasa a usar `SignerModel::tryFrom()`, `EnvironmentRole::tryFrom()` y `ProviderKind::tryFrom()`. Los enums aceptan **exactamente** los mismos valores (`authority`/`psp`/`printer`/`legal_signature`, `issuer`/`printer`, `printer`/`pac`/`portal`), de modo que **las filas ya sembradas siguen siendo válidas sin tocar el esquema**. El mensaje de error conserva el formato ("must be one of: …").
 2. **`CancellationReceipt` se añade como noveno value object.** El plan enumeraba ocho; el diseño §C.1 firma `cancel(): CancellationReceipt`, y un contrato sin tipo de retorno no es un contrato. El enum `ProviderStatus` se reserva para el estado genérico que devuelve el actor.
-3. **El contrato no depende de los enums, pero los enums sí se apoyan en el plan de 0.2.4.** `ElectronicInvoiceProvider` y sus 9 value objects no referencian ningún enum: son datos puros (`$data`, `$deadline`, `$fillable`): string`, `int`, `DateTimeImmutable`). Por eso esta unidad es la **primera** del corte: 0.2.5 declara `Dep: 0.2.4` en el plan y el enums `RoundingRule` lo usa ya `TaxRate` en el PR6.
+3. **El contrato no depende de los enums, pero los enums sí se apoyan en el plan de 0.2.4.** `ElectronicInvoiceProvider` y sus 9 value objects no referencian ningún enum: son datos puros (`string`, `int`, `DateTimeImmutable`). Por eso esta unidad es la **primera** del corte: 0.2.5 declara `Dep: 0.2.4` en el plan y el enums `RoundingRule` lo usa ya `TaxRate` en el PR6.
 
 ## Desviaciones del diseño y FKs diferidas (PR5-pais-fiscal-c)
 
 1. **1.052 líneas (1.203 con los artefactos SDD): la work unit se parte en dos PRs, sin `size:exception`.** El presupuesto por PR es de 800 y la work unit lo excede en 252 (código y tests) o 403 (con `tasks.md` y `apply-progress.md`). **No se ha recortado código para encajar**: el contenido es el mínimo que exige el alcance más lo que el forecast no contabilizó (la sustitución en cascada de las constantes de PR4, la extensión del test de conjuntos cerrados, el escáner de literales con su fixture y los docblocks del dominio). El corte es por **dependencias reales**, no por presupuesto: **PR5 = 0.2.4 + 0.2.5** (contrato + value objects + enums, sin tabla ni modelo nuevo) y **PR6 = 0.2.3 + 0.2.6 + 0.2.7** (M03 + los dos modelos que faltan + `TaxContext`), que es donde vive `TaxRate`, que ya usa `RoundingRule`.
-2. **Riesgo para PR17 (`$data`, `$deadline`, `$fillable`): NoCountryLiteralsTest`)**: el escáner de este PR **extrae literales de cadena** y descarta comentarios antes de comparar. Un escáner que haga `str_contains($código, 'serie')` produciría un **falso positivo** con `series_prefix_required_token` (clave de `fiscal_profile_fields` y, en el PR6, propiedad de `TaxContext`). El escáner de PR17 debe comparar **literales**, no subcadenas, y necesita un **fixture con un literal prohibido** que demuestre que **detecta** (aquí: `tests/Fixtures/CountryLiteralFixture.php`).
+2. **Riesgo para PR17 (`NoCountryLiteralsTest`)**: el escáner de este PR **extrae literales de cadena** y descarta comentarios antes de comparar. Un escáner que haga `str_contains($código, 'serie')` produciría un **falso positivo** con `series_prefix_required_token` (clave de `fiscal_profile_fields` y, en el PR6, propiedad de `TaxContext`). El escáner de PR17 debe comparar **literales**, no subcadenas, y necesita un **fixture con un literal prohibido** que demuestre que **detecta** (aquí: `tests/Fixtures/CountryLiteralFixture.php`).
 
 ## Fuera de esta unidad (no implementado) — PR5-pais-fiscal-c
 
 - El **catálogo fiscal** (M03: `tax_categories` + `tax_rates`) y los dos modelos que faltan: 0.2.3 y el cierre de 0.2.6, en el **PR6**.
-- El **contexto fiscal** (`$data`, `$deadline`, `$fillable`): TaxContext` + `FiscalProfile::taxContext()`): 0.2.7, en el **PR6**.
-- El **motor de impuestos** (`$data`, `$deadline`, `$fillable`): TaxCalculator`, `TaxLineInput`, `TaxDocumentInput`, `TaxDocumentResult`): 0.6.1 (PR12).
-- El **motor de emisión** (`$data`, `$deadline`, `$fillable`): FiscalIssuanceService`, que orquesta `submit()` → `assignControl()` → `issue()`): 0.3.4 (PR8). Aquí sólo existe el **contrato**.
+- El **contexto fiscal** (`TaxContext` + `FiscalProfile::taxContext()`): 0.2.7, en el **PR6**.
+- El **motor de impuestos** (`TaxCalculator`, `TaxLineInput`, `TaxDocumentInput`, `TaxDocumentResult`): 0.6.1 (PR12).
+- El **motor de emisión** (`FiscalIssuanceService`, que orquesta `submit()` → `assignControl()` → `issue()`): 0.3.4 (PR8). Aquí sólo existe el **contrato**.
 - El **adaptador real** de un canal: bloqueado por el Manual Técnico (research O1/O4/O6).
-- El **seed** del perfil y del catálogo de impuestos (5 categorías + tasas con `evidence_status`): PR16 (`$data`, `$deadline`, `$fillable`): FiscalProfileSeeder`).
+- El **seed** del perfil y del catálogo de impuestos (5 categorías + tasas con `evidence_status`): PR16 (`FiscalProfileSeeder`).
 
 ## Siguiente unidad tras PR5-pais-fiscal-c
 
-**PR6-pais-fiscal-d** (`$data`, `$deadline`, `$fillable`): feat/fase0-06-pais-fiscal-d`): M03 (`$data`, `$deadline`, `$fillable`): tax_categories` + `tax_rates`) + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()`/`categories()`, con el cierre de 0.2.6 y 0.2.7. Predecesor: PR5-pais-fiscal-c.
+**PR6-pais-fiscal-d** (`feat/fase0-06-pais-fiscal-d`): M03 (`tax_categories` + `tax_rates`) + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()`/`categories()`, con el cierre de 0.2.6 y 0.2.7. Predecesor: PR5-pais-fiscal-c.
 
 ## Work Unit Evidence (PR6-pais-fiscal-d)
 
@@ -236,7 +236,7 @@
 | Harness de runtime | `php artisan migrate:fresh --seed --force` → **12 migraciones en verde** (base×3 + M01–M07 + M25–M26) · `tinker` → 5 categorías con `iva_retenido` como única de retención, 1 tasa `pending_confirmation` leída como `16.000000`, token leído `serie` con `requiresSeriesPrefix('serie-001')=true` y `('001')=false`, método `Exclusive` y redondeo `Line` resueltos desde las filas, y una `rounding_rule` inválida **rechazada** por el dominio |
 | Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran M03, `TaxContext`, los 2 modelos y los 2 ficheros de test nuevos. **No toca** M01/M02 (base de la cadena) ni M04–M07, M25–M26, y **no toca** el contrato ni los enums del PR5 |
 | Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `public/build/manifest.json` presente |
-| Tamaño | **559 líneas** (533 adiciones + 26 borrados): **461** de código y tests + **98** de artefactos SDD (`$data`, `$deadline`, `$fillable`): tasks.md` + `apply-progress.md`) — **dentro** del techo de 800 |
+| Tamaño | **559 líneas** (533 adiciones + 26 borrados): **461** de código y tests + **98** de artefactos SDD (`tasks.md` + `apply-progress.md`) — **dentro** del techo de 800 |
 
 ## Ficheros de esta unidad (PR6-pais-fiscal-d)
 
@@ -253,7 +253,7 @@
 
 ## Decisiones de esta unidad (PR6-pais-fiscal-d)
 
-1. **`tax_categories` es un catálogo POR PERFIL** (`$data`, `$deadline`, `$fillable`): fiscal_profile_id`), como en exploration §4.2 y como pide la spec («el perfil venezolano MUST sembrarse con sus tipos de documento, **categorías de IVA** y vocabulario»). Las 5 categorías son por tanto `gravable`, `exento`, `no_gravado`, `exonerado` e `iva_retenido` —**sólo** `iva_retenido` lleva `is_withholding = true`.
+1. **`tax_categories` es un catálogo POR PERFIL** (`fiscal_profile_id`), como en exploration §4.2 y como pide la spec («el perfil venezolano MUST sembrarse con sus tipos de documento, **categorías de IVA** y vocabulario»). Las 5 categorías son por tanto `gravable`, `exento`, `no_gravado`, `exonerado` e `iva_retenido` —**sólo** `iva_retenido` lleva `is_withholding = true`.
 2. **`tax_rates` NO tiene columna `method`.** El método del impuesto lo decide `fiscal_profiles.tax_inclusive_default` (design §C.2, aceptación de 0.4.5): dos fuentes de verdad violarían el requisito «una sola fuente de verdad por dato». El enum `TaxMethod` vive en el dominio y `TaxContext::taxMethod()` lo deriva del booleano del perfil.
 3. **`TaxContext` no depende de ningún modelo.** Es un contenedor puro de 6 datos; la lectura de las filas vive en `FiscalProfile::taxContext()` (el modelo lee `fiscal_profile_fields` por clave). Así el motor de impuestos (0.6.1) sigue siendo puro (D9) y el dominio no conoce ni el esquema ni las claves del catálogo.
 4. **`requiresSeriesPrefix()` compara contra el valor leído** (C4): `str_contains($prefix, $this->seriesPrefixRequiredToken)`. El test comprueba además que `app/Domain/Tax/TaxContext.php` **no contiene** el literal del token.
@@ -263,19 +263,19 @@
 ## Desviaciones del diseño y FKs diferidas (PR6-pais-fiscal-d)
 
 1. **La work unit "pais/fiscal c" se parte en dos PRs, sin `size:exception`** (ver §Desviaciones de PR5, punto 1). El corte lo dictan las **dependencias reales**: `TaxRate` usa el enum `RoundingRule` (PR5) y sus propias tablas (M03, aquí), y `FiscalProfile::taxContext()` usa `TaxContext` (aquí) — de ahí que el contrato + enums sean la primera mitad y el catálogo + contexto la segunda. Ninguna tabla ni clase queda pendiente en ninguna de las dos mitades.
-2. **Códigos de las categorías**: `tasks.md` fija `gravable`/`exento`/`no_gravado`/`exonerado`/`iva_retenido`; exploration §4.2 usaba el prefijo `iva_` (`$data`, `$deadline`, `$fillable`): iva_gravable`…). Se sigue el plan (es el artefacto que fija la tarea); **el seeder de PR16 debe sembrar estos mismos códigos**.
+2. **Códigos de las categorías**: `tasks.md` fija `gravable`/`exento`/`no_gravado`/`exonerado`/`iva_retenido`; exploration §4.2 usaba el prefijo `iva_` (`iva_gravable`…). Se sigue el plan (es el artefacto que fija la tarea); **el seeder de PR16 debe sembrar estos mismos códigos**.
 3. **La clave del catálogo para la frase del contribuyente formal** es `formal_contributor_phrase` (en `fiscal_profile_fields`). El diseño la situaba en una columna de `fiscal_profiles` que M02 no creó; al no haber migración disponible, vive en el catálogo de claves. El seeder de PR16 debe sembrar esa clave.
-4. **El modo de redondeo (`$data`, `$deadline`, `$fillable`): half-up`) no tiene columna.** `RoundingRule` cubre el ALCANCE (`$data`, `$deadline`, `$fillable`): line`/`total`); el modo ("half-up" por defecto) no tiene sede en M02/M03 y lo necesita 0.6.2. Queda como fila de `fiscal_profile_fields` (o columna nueva) — decisión de la unidad de motor de impuestos.
+4. **El modo de redondeo (`half-up`) no tiene columna.** `RoundingRule` cubre el ALCANCE (`line`/`total`); el modo ("half-up" por defecto) no tiene sede en M02/M03 y lo necesita 0.6.2. Queda como fila de `fiscal_profile_fields` (o columna nueva) — decisión de la unidad de motor de impuestos.
 5. **FKs diferidas por no existir todavía**: `products.tax_category_id → tax_categories.id` → **M08** (work unit 4a, PR9: `products` no existe todavía) · `stores.country_id → countries.id` → **M27** (decisión de PR1) · `fiscal_documents.authority_reference` (el valor de la referencia) → **M22** (PR8) · `fiscal_series.fiscal_profile_id` / `fiscal_providers` → **M21** (PR7). **Ninguna** FK a una tabla de M08/M21/M22 se declara en esta unidad.
 6. **`applies_to` no es un conjunto cerrado validado**: `'sale'|'purchase'|'both'` queda como dato libre de la fila; no hay enum para él en el alcance de 0.2.5 y `direction` ya cubre el eje compra/venta en `fiscal_profile_document_types`.
 
 ## Fuera de esta unidad (no implementado) — PR6-pais-fiscal-d
 
 - El **documento propio de retención** (numeración `AAAAMMSSSSSSSS`, período de imposición, referencia al original): la **categoría** `iva_retenido` existe; el documento llega con M21/M22 (PR7–PR8).
-- El **motor de impuestos** (`$data`, `$deadline`, `$fillable`): TaxCalculator`, `TaxLineInput`, `TaxDocumentInput`, `TaxDocumentResult`): 0.6.1 (PR12).
-- El **motor de emisión** (`$data`, `$deadline`, `$fillable`): FiscalIssuanceService`, que orquesta `submit()` → `assignControl()` → `issue()`): 0.3.4 (PR8). El contrato ya existe desde el PR5.
+- El **motor de impuestos** (`TaxCalculator`, `TaxLineInput`, `TaxDocumentInput`, `TaxDocumentResult`): 0.6.1 (PR12).
+- El **motor de emisión** (`FiscalIssuanceService`, que orquesta `submit()` → `assignControl()` → `issue()`): 0.3.4 (PR8). El contrato ya existe desde el PR5.
 - El **adaptador real** de un canal: bloqueado por el Manual Técnico (research O1/O4/O6).
-- El **seed** del perfil y del catálogo de impuestos (5 categorías + tasas con `evidence_status`): PR16 (`$data`, `$deadline`, `$fillable`): FiscalProfileSeeder`).
+- El **seed** del perfil y del catálogo de impuestos (5 categorías + tasas con `evidence_status`): PR16 (`FiscalProfileSeeder`).
 
 ## Work Unit Evidence (PR7-numeracion-a)
 
@@ -289,9 +289,9 @@
 | Evidencia | Valor |
 |---|---|
 | Test focalizado | `php vendor/bin/pest tests/Feature/Fiscal` → **6 passed (71 assertions)** · `--filter="serie_se_distingue"` → 1 passed (31) · `--filter="55p03"` → 1 passed · `--filter="rollback_de_la_reserva"` → 1 passed · suite completa `./vendor/bin/pest` → **49 passed (451 assertions)** (baseline del PR6: 43 passed / 380 assertions) |
-| Harness de runtime | script de integración sobre `pos_moderno_v2_test` con las dos sesiones (`$data`, `$deadline`, `$fillable`): pgsql` + `pgsql_b`): `[T1] primer=100 ultimo=149 consecutivos=1 next_number=150 reservas=50` · `[T2] sqlstate=55P03 elapsed_ms=337 next_number=100` — `SQLSTATE[55P03]: Lock not available: 7 ERROR: canceling statement due to lock timeout` · `[T3] reservado_en_la_transaccion=100 next_number_desde_B=100 reservas_visibles_desde_B=0 siguiente_reserva=100` |
-| Mutación verificada | La mutación que reintroduce la lectura previa (`$data`, `$deadline`, `$fillable`): select "next_number" from "fiscal_series"`) **hace fallar** el test de 0.3.3-T en su assert de cero `SELECT`: el test **fija** la regla, no sólo la acompaña |
-| Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran M21, `NumberSeries` y los 5 ficheros de test. **NUNCA** borrar `fiscal_document_reservations`: el rollback de la emisión es **apagar** (`$data`, `$deadline`, `$fillable`): fiscal.emission_enabled = false`), nunca renumerar |
+| Harness de runtime | script de integración sobre `pos_moderno_v2_test` con las dos sesiones (`pgsql` + `pgsql_b`): `[T1] primer=100 ultimo=149 consecutivos=1 next_number=150 reservas=50` · `[T2] sqlstate=55P03 elapsed_ms=337 next_number=100` — `SQLSTATE[55P03]: Lock not available: 7 ERROR: canceling statement due to lock timeout` · `[T3] reservado_en_la_transaccion=100 next_number_desde_B=100 reservas_visibles_desde_B=0 siguiente_reserva=100` |
+| Mutación verificada | La mutación que reintroduce la lectura previa (`select "next_number" from "fiscal_series"`) **hace fallar** el test de 0.3.3-T en su assert de cero `SELECT`: el test **fija** la regla, no sólo la acompaña |
+| Frontera de rollback | `git revert` del commit + `php artisan migrate:fresh`: se retiran M21, `NumberSeries` y los 5 ficheros de test. **NUNCA** borrar `fiscal_document_reservations`: el rollback de la emisión es **apagar** (`fiscal.emission_enabled = false`), nunca renumerar |
 | Puertas de calidad | `vendor/bin/pint --test` → **8 ficheros preexistentes**, idéntico al baseline de `main` (ninguno de esta unidad) · `npm run lint:check` → limpio · `npm run typecheck` → limpio · `php artisan migrate:fresh --seed --force` → **13 migraciones en verde** · `public/build/manifest.json` presente |
 | Tamaño | **874 líneas** (835 adiciones + 39 borrados): **725** de código y tests + **149** de artefactos SDD — **74 por encima** del techo de 800 ⇒ la work unit se **parte en dos slices encadenados**: **PR7 (3a-i: M21 + test de esquema + arnés, 362 líneas)** y **PR8 (3a-ii: `NumberSeries` + T1–T3 + artefactos SDD, 512 líneas)**. Sin `size:exception` |
 
@@ -311,31 +311,31 @@
 
 ## Decisiones de esta unidad (PR7-numeracion-a)
 
-1. **M21 NO recrea `fiscal_providers`.** La tabla ya existe (la crea M02, PR4, fusionado en `main`): recrearla sería un error de migración. M21 se **renombra** a `2026_11_01_000021_create_fiscal_series_table.php` y sólo la **referencia** (`$data`, `$deadline`, `$fillable`): provider_id` → `fiscal_providers.id`). El test 0.3.1-T lo verifica: sólo M02 crea esa tabla.
-2. **El conjunto cerrado de rol y autoridad vive en el ESQUEMA** (`$data`, `$deadline`, `$fillable`): enum` → `varchar CHECK (…)` de PostgreSQL), no en una constante de PHP: una tabla nueva no necesita un modelo para que su dominio no se pueda violar por SQL directo. `fiscal_providers.kind` y `fiscal_profiles.signer_model` siguen con validación en el dominio (PR5), porque sus tablas ya existían.
+1. **M21 NO recrea `fiscal_providers`.** La tabla ya existe (la crea M02, PR4, fusionado en `main`): recrearla sería un error de migración. M21 se **renombra** a `2026_11_01_000021_create_fiscal_series_table.php` y sólo la **referencia** (`provider_id` → `fiscal_providers.id`). El test 0.3.1-T lo verifica: sólo M02 crea esa tabla.
+2. **El conjunto cerrado de rol y autoridad vive en el ESQUEMA** (`enum` → `varchar CHECK (…)` de PostgreSQL), no en una constante de PHP: una tabla nueva no necesita un modelo para que su dominio no se pueda violar por SQL directo. `fiscal_providers.kind` y `fiscal_profiles.signer_model` siguen con validación en el dominio (PR5), porque sus tablas ya existían.
 3. **El rol de la reserva se copia de la fila bloqueada, no de un literal.** La traza se escribe con `INSERT … SELECT`: `series_role` sale de `fiscal_series`, así que `app/Domain/` no contiene ningún literal de rol ni de país.
-4. **La conexión se inyecta en `NumberSeries`.** Es lo que permite a T2 y T3 usar la segunda sesión (`$data`, `$deadline`, `$fillable`): pgsql_b`) con `SET LOCAL lock_timeout` DENTRO de su transacción; la reserva no abre transacción propia (la del llamante).
+4. **La conexión se inyecta en `NumberSeries`.** Es lo que permite a T2 y T3 usar la segunda sesión (`pgsql_b`) con `SET LOCAL lock_timeout` DENTRO de su transacción; la reserva no abre transacción propia (la del llamante).
 5. **`UNIQUE (series_id, number)`** en la traza: última línea de defensa contra la colisión del legacy. Una anulación deja la fila con `voided_at` ⇒ el número queda consumido y no se puede volver a repartir.
 6. **El arnés de T1–T3 no usa `DatabaseMigrations`**: usa el trait `WithoutWrappingTransaction`, que vacía la lista de conexiones que `RefreshDatabase` transacciona. El efecto buscado por el diseño es el mismo (filas commiteadas, visibles para `pgsql_b`) y se evita un `migrate:fresh` por test. El aislamiento lo da el `TRUNCATE … RESTART IDENTITY CASCADE` del `afterEach`.
 7. **`fiscal_series` referencia `stores` y `fiscal_profiles`** (FK reales): el correlativo es por tienda (P7) y la serie pertenece a un perfil fiscal. Cierra las dos FKs que PR3 y PR6 habían diferido a M21.
 
 ## Desviaciones del diseño y FKs diferidas (PR7-numeracion-a)
 
-1. **Nombre de la migración**: el plan (`$data`, `$deadline`, `$fillable`): tasks.md` 0.3.1) pedía `2026_11_01_000021_create_fiscal_providers_and_series_table.php`. Se renombra porque `fiscal_providers` ya existe (M02). El contenido previsto (`$data`, `$deadline`, `$fillable`): fiscal_series` + la traza) se entrega íntegro.
-2. **Sin modelos Eloquent** (`$data`, `$deadline`, `$fillable`): FiscalSeries`, `FiscalDocumentReservation`): ninguna tarea asignada los exige y la unidad debe caber en el techo de 800. La capa de modelos de la numeración llega con PR8, donde el servicio de emisión los consume; `NumberSeries` habla con las tablas por el query builder.
+1. **Nombre de la migración**: el plan (`tasks.md` 0.3.1) pedía `2026_11_01_000021_create_fiscal_providers_and_series_table.php`. Se renombra porque `fiscal_providers` ya existe (M02). El contenido previsto (`fiscal_series` + la traza) se entrega íntegro.
+2. **Sin modelos Eloquent** (`FiscalSeries`, `FiscalDocumentReservation`): ninguna tarea asignada los exige y la unidad debe caber en el techo de 800. La capa de modelos de la numeración llega con PR8, donde el servicio de emisión los consume; `NumberSeries` habla con las tablas por el query builder.
 3. **Mensaje del bloqueo**: el diseño §E.1 pide que el mensaje contenga `lock_not_available`; PostgreSQL nombra la condición "Lock not available" (el identificador de la condición ES el SQLSTATE `55P03`, que el test sí afirma). La verificación es por SQLSTATE.
 4. **FKs diferidas**: `fiscal_documents.authority_reference` → **M22** (PR8) · `products.tax_category_id` → **M08** (PR9) · `stores.country_id → countries.id` → **M27** (PR16). Esta unidad **no** declara ninguna FK a tablas que no existen todavía.
 5. **La work unit "numeracion a" se parte en dos PRs** (874 líneas, 74 por encima del techo; sin `size:exception`): **PR7 (3a-i)** = M21 + `fiscal_series`/`fiscal_document_reservations` + el test de esquema + el arnés de concurrencia; **PR8 (3a-ii)** = `NumberSeries` + la reserva atómica + T1–T3 + los artefactos SDD. El corte es por dependencia real: **el esquema antes que la reserva que lo usa**, y cada slice deja la suite en verde. La cadena pasa de 18 a **19** PRs y **quedan 11** (PR9–PR19).
 
 ## Fuera de esta unidad (no implementado) — PR7-numeracion-a
 
-- **M22** (`$data`, `$deadline`, `$fillable`): fiscal_documents` + `_events` + `_control_assignments` + `fiscal_periodic_reports` + `fiscal_contingency_forms`): 0.3.2, en el **PR8**.
-- El **servicio de emisión** (`$data`, `$deadline`, `$fillable`): FiscalIssuanceService`: `submit()` → `assignControl()` → `issue()`), el **generador del Nº de Control** (`$data`, `$deadline`, `$fillable`): 00` + `1`), el **render del comprobante** y las **notas de crédito/débito**: 0.3.4–0.3.9, en el **PR8**.
+- **M22** (`fiscal_documents` + `_events` + `_control_assignments` + `fiscal_periodic_reports` + `fiscal_contingency_forms`): 0.3.2, en el **PR8**.
+- El **servicio de emisión** (`FiscalIssuanceService`: `submit()` → `assignControl()` → `issue()`), el **generador del Nº de Control** (`00` + `1`), el **render del comprobante** y las **notas de crédito/débito**: 0.3.4–0.3.9, en el **PR8**.
 - La **anulación** que marca `voided_at` sin devolver el número (0.3.8): llega con el servicio de emisión; el esquema y el índice único ya lo soportan.
 
 ## Siguiente unidad
 
-**PR9-numeracion-b** (`$data`, `$deadline`, `$fillable`): feat/fase0-09-numeracion-b`): M22 + `FiscalIssuanceService` + generador del control + render + notas derivadas (0.3.2 y 0.3.4–0.3.9). Predecesor: PR8 (3a-ii, esta rama).
+**PR9-numeracion-b** (`feat/fase0-09-numeracion-b`): M22 + `FiscalIssuanceService` + generador del control + render + notas derivadas (0.3.2 y 0.3.4–0.3.9). Predecesor: PR8 (3a-ii, esta rama).
 
 ---
 
@@ -352,8 +352,8 @@
 ### Las tres decisiones que definen el motor
 
 1. **El motor es PURO**: sin base de datos, sin red, sin locale y sin reloj. El perfil, las categorias y las tasas se resuelven ANTES y entran como datos, por `TaxContext` y `TaxLineInput`. La misma entrada da siempre el mismo resultado.
-2. **La base es el precio COBRADO** (`$data`, `$deadline`, `$fillable`): net = unitPrice x quantity - lineDiscount`), no el de catalogo: el legacy multiplicaba el impuesto por el precio de catalogo, de modo que cuando el POS cobraba otro precio el impuesto era incorrecto (defecto P0 #13).
-3. **El ajuste de redondeo es VISIBLE y EXACTO**: la suma de las lineas mas el ajuste da el total redondeado, hasta el ultimo decimal. El redondeo es un dato (`$data`, `$deadline`, `$fillable`): line` o `total`), half-up por defecto.
+2. **La base es el precio COBRADO** (`net = unitPrice x quantity - lineDiscount`), no el de catalogo: el legacy multiplicaba el impuesto por el precio de catalogo, de modo que cuando el POS cobraba otro precio el impuesto era incorrecto (defecto P0 #13).
+3. **El ajuste de redondeo es VISIBLE y EXACTO**: la suma de las lineas mas el ajuste da el total redondeado, hasta el ultimo decimal. El redondeo es un dato (`line` o `total`), half-up por defecto.
 
 Los snapshots viajan congelados: el documento persiste la tasa con la que se emitio, su categoria, su tasa y el estado de su evidencia, de modo que un cambio posterior de la tasa en vigor no altera un documento ya emitido.
 
@@ -376,7 +376,7 @@ Los snapshots viajan congelados: el documento persiste la tasa con la que se emi
 
 - **Estado**: entregado en el PR #51 (rama `feat/fase0-24-contabilidad-i`).
 - **Tareas cerradas**: 0.7.1 y 0.7.4, con sus gemelas de test.
-- **0.7.2 NO se cierra**: M19 trae 2 de sus 5 tablas (`$data`, `$deadline`, `$fillable`): expense_categories` y `expenses`). `cash_registers`, `income_sources` y el resto van en 7-ii. `opening_balances` ya existia desde M27.
+- **0.7.2 NO se cierra**: M19 trae 2 de sus 5 tablas (`expense_categories` y `expenses`). `cash_registers`, `income_sources` y el resto van en 7-ii. `opening_balances` ya existia desde M27.
 - **Ficheros**: `app/Domain/Accounting/LedgerWriter.php`, `app/Models/{LedgerEntryType,LedgerEntry,LedgerLine}.php`, `database/migrations/2026_11_01_000018_create_ledger_tables.php`, `database/migrations/2026_11_01_000019_create_expense_tables.php`, `tests/Feature/Accounting/LedgerWriterTest.php`.
 - **Evidencia**: `pest` 71 passed (979 assertions), con `main` en 68 passed (930 assertions); `pint` limpio.
 
@@ -398,7 +398,7 @@ La tarea 0.6.5 (el `CheckoutService`) declara `Dep: ... 0.7.4`, y el propio graf
 
 ### Tres descubrimientos sobre el repositorio
 
-- `Schema::getColumnType($tabla, $columna)` con dos argumentos devuelve el `typname` interno de PostgreSQL (`$data`, `$deadline`, `$fillable`): bool`), NO `boolean`. Un test de esquema que compare solo contra `boolean` pasa EN VERDE sobre una tabla llena de banderas. Con el tercer argumento `true` devuelve la definicion completa (`$data`, `$deadline`, `$fillable`): boolean`).
+- `Schema::getColumnType($tabla, $columna)` con dos argumentos devuelve el `typname` interno de PostgreSQL (`bool`), NO `boolean`. Un test de esquema que compare solo contra `boolean` pasa EN VERDE sobre una tabla llena de banderas. Con el tercer argumento `true` devuelve la definicion completa (`boolean`).
 - `foreignId` es `bigint` en PostgreSQL, no `integer`.
 - Laravel anida `transaction()` con SAVEPOINT, no con rollback total: un fallo del writer deja VIVA la transaccion del llamante con sus demas escrituras. Es justo lo que necesita el checkout, y lo garantiza el framework.
 
@@ -442,7 +442,7 @@ suma de los line_total de los items + rounding_adjustment = grand_total
 ### Lo que se cerro por el camino
 
 - **M30**: `sale_items` gana `base_amount`, `line_total` y `evidence_status`; `sale_totals` gana `evidence_status`. Sin el `line_total` redondeado, ni el total ni el ajuste son reconstruibles y el documento dependeria del perfil vigente. Y `design.md:315` exigia congelar la evidencia por linea y por cabecera: solo existia en `fiscal_document_taxes`.
-- **El resolutor de tasa vigente** (`$data`, `$deadline`, `$fillable`): TaxRateResolver`): no existia. Ahora la tasa se CONSULTA (vigencia, `priority`, `valid_from`, `id`) y se congela en el documento.
+- **El resolutor de tasa vigente** (`TaxRateResolver`): no existia. Ahora la tasa se CONSULTA (vigencia, `priority`, `valid_from`, `id`) y se congela en el documento.
 - **Los modelos `SaleItem` y `SaleTotal`** se han puesto al dia con el esquema.
 
 ### El test canonico no detectaba una mutacion
@@ -451,7 +451,7 @@ suma de los line_total de los items + rounding_adjustment = grand_total
 
 Se ha añadido `test_sin_stock_suficiente_la_venta_falla_y_tambien_vuelve_el_numero_de_control`, que si la detecta. Las dos filas de la tabla de fallos de `design.md` §B.1 quedan cubiertas.
 
-El test canonico verifica desde la **segunda sesion** (`$data`, `$deadline`, `$fillable`): pgsql_b`): es la unica forma de probar que el numero volvió de verdad y no solo en la vista de quien reservo.
+El test canonico verifica desde la **segunda sesion** (`pgsql_b`): es la unica forma de probar que el numero volvió de verdad y no solo en la vista de quien reservo.
 
 ### Siguiente unidad
 
@@ -472,7 +472,7 @@ El test canonico verifica desde la **segunda sesion** (`$data`, `$deadline`, `$f
 
 `FiscalIssuanceCoordinator::issue()` es a la vez la emision y el reintento: lo unico que cambia es si la venta ya tiene un `fiscal_documents` en `draft` de un intento anterior. No hay dos caminos, y por eso no pueden divergir.
 
-El reintento **reutiliza la reserva**: se busca por el ENLACE (`$data`, `$deadline`, `$fillable`): reference_type='sale'` + `reference_id`), no por la serie, porque el reintento tiene que encontrar la reserva que YA tiene y no la ultima de la serie. Una venta sin reserva no se puede emitir, y **jamas** se reserva un numero nuevo para suplirla: el numero puede haberse publicado en la autoridad, y devolverlo entregaria DOS veces el mismo numero.
+El reintento **reutiliza la reserva**: se busca por el ENLACE (`reference_type='sale'` + `reference_id`), no por la serie, porque el reintento tiene que encontrar la reserva que YA tiene y no la ultima de la serie. Una venta sin reserva no se puede emitir, y **jamas** se reserva un numero nuevo para suplirla: el numero puede haberse publicado en la autoridad, y devolverlo entregaria DOS veces el mismo numero.
 
 ### Los tres huecos que M31 cierra
 
@@ -500,16 +500,16 @@ Esa guarda la anadio el orquestador, y el subagente detecto su efecto colateral:
 
 ### Lo que el plan NO decia y esta unidad decidio
 
-- **Que estado lleva la venta tras una emision exitosa**: el plan solo dice que el fallo deja `fiscal_failed`. Decision: vuelve al estado que le corresponde por su pago (`$data`, `$deadline`, `$fillable`): paid` o `confirmed`), recalculado.
+- **Que estado lleva la venta tras una emision exitosa**: el plan solo dice que el fallo deja `fiscal_failed`. Decision: vuelve al estado que le corresponde por su pago (`paid` o `confirmed`), recalculado.
 - **Que pasa si el documento ya esta emitido**: decision del orquestador, la guarda de arriba.
 
 ### Riesgo residual, NO resuelto aqui
 
-El reintento vuelve a llamar a `submit()` del proveedor. Si el proveedor publico el comprobante y la respuesta se perdio, la reemision puede **publicar dos veces** ante la autoridad. La idempotencia ante el proveedor real depende del **Manual Tecnico del art. 41** (bloqueado) y de la clave de idempotencia que definira el adaptador real: hoy no hay adaptador HTTP (`$data`, `$deadline`, `$fillable`): ElectronicInvoiceProvider` solo tiene la interfaz y los fakes). Queda anotado, no resuelto.
+El reintento vuelve a llamar a `submit()` del proveedor. Si el proveedor publico el comprobante y la respuesta se perdio, la reemision puede **publicar dos veces** ante la autoridad. La idempotencia ante el proveedor real depende del **Manual Tecnico del art. 41** (bloqueado) y de la clave de idempotencia que definira el adaptador real: hoy no hay adaptador HTTP (`ElectronicInvoiceProvider` solo tiene la interfaz y los fakes). Queda anotado, no resuelto.
 
 ### Siguiente unidad
 
-**7-ii** - M20 (`$data`, `$deadline`, `$fillable`): bank_accounts`), `cash_registers`, `income_sources`, el `CashRegisterService` (caja por fecha de negocio), el comando `ops:check-opening-balances` y los modelos contables que faltan. Y **0.6.4**: el IVA retenido como documento PROPIO.
+**7-ii** - M20 (`bank_accounts`), `cash_registers`, `income_sources`, el `CashRegisterService` (caja por fecha de negocio), el comando `ops:check-opening-balances` y los modelos contables que faltan. Y **0.6.4**: el IVA retenido como documento PROPIO.
 
 ---
 
@@ -533,20 +533,20 @@ Era una FK a una tabla `account_types` que **no existe en el repo**: una relacio
 ### Los saldos: congelados al principio, DERIVADOS despues
 
 - `bank_accounts.opening_balance` y `bank_account_stores.opening_balance`: el saldo de PARTIDA, congelado. La granularidad real es por cuenta **y** tienda.
-- `cash_registers.opening_balance`: el saldo de partida de la caja de esa fecha de negocio. El saldo **en curso** se deriva de los asientos (`$data`, `$deadline`, `$fillable`): ledger_entries` con ese `business_date`), nunca de un contador. `closing_balance` es lo que se observo al cerrar.
+- `cash_registers.opening_balance`: el saldo de partida de la caja de esa fecha de negocio. El saldo **en curso** se deriva de los asientos (`ledger_entries` con ese `business_date`), nunca de un contador. `closing_balance` es lo que se observo al cerrar.
 - `business_date` es un **DATO del llamante**, nunca un `DAY()/MONTH()/YEAR()` calculado: es la trampa 62 del legacy.
 
 ### `income_sources` es un CATALOGO, y las once banderas desaparecen
 
-El legacy tenia nueve booleanos (`$data`, `$deadline`, `$fillable`): for_sell`, `for_purchase_return`, `for_due_collection`, `for_loan`, `for_giftcard_sell`, `for_topup`, `for_stock_transfer`, `for_purchase_delete`, `for_expense_delete`) mas dos enums `yes`/`no` (`$data`, `$deadline`, `$fillable`): profitable`, `show_in_income`): **once banderas**. Una bandera no se puede consultar, y dos banderas activas a la vez no significan nada.
+El legacy tenia nueve booleanos (`for_sell`, `for_purchase_return`, `for_due_collection`, `for_loan`, `for_giftcard_sell`, `for_topup`, `for_stock_transfer`, `for_purchase_delete`, `for_expense_delete`) mas dos enums `yes`/`no` (`profitable`, `show_in_income`): **once banderas**. Una bandera no se puede consultar, y dos banderas activas a la vez no significan nada.
 
-El `type` (`$data`, `$deadline`, `$fillable`): credit`/`debit`) **tambien** desaparece del catalogo: el tipo de movimiento se consulta en `ledger_entry_types`, que es el unico sitio donde se clasifica un movimiento. El ingreso se enlaza a su asiento por `ledger_entries.reference_type`/`reference_id`.
+El `type` (`credit`/`debit`) **tambien** desaparece del catalogo: el tipo de movimiento se consulta en `ledger_entry_types`, que es el unico sitio donde se clasifica un movimiento. El ingreso se enlaza a su asiento por `ledger_entries.reference_type`/`reference_id`.
 
 ### Un nombre canonico que no existia
 
-El nombre canonico de **0.7.3-T** (`$data`, `$deadline`, `$fillable`): test_el_saldo_de_cuenta_se_deriva_de_los_asientos_y_no_de_un_contador_almacenado`) **no estaba implementado en ningun test del repo** (71 tests, ninguno con ese nombre). Ahora si, y por eso 0.7.3-T queda cerrada.
+El nombre canonico de **0.7.3-T** (`test_el_saldo_de_cuenta_se_deriva_de_los_asientos_y_no_de_un_contador_almacenado`) **no estaba implementado en ningun test del repo** (71 tests, ninguno con ese nombre). Ahora si, y por eso 0.7.3-T queda cerrada.
 
-Siguen **ABIERTAS** y anotadas en `tasks.md`, porque sus nombres canonicos no estan implementados: **0.7.2-T** (`$data`, `$deadline`, `$fillable`): test_el_gasto_nace_en_expenses_y_el_movimiento_bancario_no_lo_inventa`; la regla la cubre el test de 7-i, pero con el nombre de 0.7.4-T) y **0.7.7-T** (`$data`, `$deadline`, `$fillable`): test_el_tipo_de_asiento_se_toma_del_catalogo_y_no_de_un_literal`).
+Siguen **ABIERTAS** y anotadas en `tasks.md`, porque sus nombres canonicos no estan implementados: **0.7.2-T** (`test_el_gasto_nace_en_expenses_y_el_movimiento_bancario_no_lo_inventa`; la regla la cubre el test de 7-i, pero con el nombre de 0.7.4-T) y **0.7.7-T** (`test_el_tipo_de_asiento_se_toma_del_catalogo_y_no_de_un_literal`).
 
 ### SEIS relaciones rotas, no una
 
@@ -579,7 +579,7 @@ Encarge los tests en ingles y el subagente los escribio en ingles: **mi peticion
 
 `CashRegisterService::registerFor($storeId, $businessDate)` devuelve el registro de ESA fecha de negocio. Un movimiento cae en el registro de **su** fecha, no en el de "hoy": el legacy filtraba por `DAY()/MONTH()/YEAR()` calculados (la trampa 62), que parten el dia a la medianoche del servidor y no del negocio.
 
-**La asociacion del movimiento con la caja es por la CLAVE NATURAL** (`$data`, `$deadline`, `$fillable`): store_id`, `business_date`): `ledger_entries` ya tiene las dos columnas y `cash_registers` tiene UNIQUE sobre ellas. **No se anadio `cash_register_id`**: seria una columna redundante que puede desincronizarse de la clave natural.
+**La asociacion del movimiento con la caja es por la CLAVE NATURAL** (`store_id`, `business_date`): `ledger_entries` ya tiene las dos columnas y `cash_registers` tiene UNIQUE sobre ellas. **No se anadio `cash_register_id`**: seria una columna redundante que puede desincronizarse de la clave natural.
 
 Los saldos: `opening_balance` es el saldo de partida que **se cuenta a mano** (un dato), `closing_balance` el saldo **observado** al cerrar (el conteo fisico es un hecho, no una cuenta que se derivar), y el saldo **en curso** se deriva de los asientos.
 
@@ -596,12 +596,12 @@ Este es el mecanismo que hace operativa la dependencia **B1**: el codigo puede *
 ### Mutacion testing en los dos caminos
 
 - El comando devolviendo `SUCCESS` siempre: **falla** el test canonico y el del codigo de error.
-- `registerFor()` devolviendo el registro mas reciente en vez del de SU fecha: **falla** el test canonico (`$data`, `$deadline`, `$fillable`): 2026-11-04` frente a `2026-11-05`).
+- `registerFor()` devolviendo el registro mas reciente en vez del de SU fecha: **falla** el test canonico (`2026-11-04` frente a `2026-11-05`).
 
 ### Lo que esta unidad NO toca (deuda anotada)
 
 - **El checkout todavia no exige la caja abierta**: el `CashRegisterService` existe y esta verificado, pero el `CheckoutService` no lo consulta todavia. Es el siguiente enganche.
-- Los seis bridges que faltan como modelo (`$data`, `$deadline`, `$fillable`): BrandStore`, `BoxStore`, `UnitStore`, `PaymentMethodStore`, `PosTemplateStore`, `FiscalDocument`): **7-iii**.
+- Los seis bridges que faltan como modelo (`BrandStore`, `BoxStore`, `UnitStore`, `PaymentMethodStore`, `PosTemplateStore`, `FiscalDocument`): **7-iii**.
 - El typo preexistente del modelo `CashRegister` ("saldo EN CURNO" por "EN CURSO"): revertido a proposito para que el diff del modelo sea estrictamente el de `opened_by`.
 
 ### Siguiente unidad
@@ -625,7 +625,7 @@ Los modelos que **siguen sin existir** (y por eso esas relaciones NO se declaran
 
 ### El motor de impuestos es PURO DE ESTRUCTURA
 
-El test canonico de 0.6.1-T ya no se conforma con el determinismo: **escanea la carpeta `app/Domain/Tax/`** y falla si algun fichero referencia `DB::`, `Http::`, `file_get_contents`, `curl_`, `now()` o `date(`$data`, `$deadline`, `$fillable`): . Y exige ademas que **ningun** fichero de la carpeta inyecte una `Connection`: sin conexion no hay consulta que hacer.
+El test canonico de 0.6.1-T ya no se conforma con el determinismo: **escanea la carpeta `app/Domain/Tax/`** y falla si algun fichero referencia `DB::`, `Http::`, `file_get_contents`, `curl_`, `now()` o `date(`. Y exige ademas que **ningun** fichero de la carpeta inyecte una `Connection`: sin conexion no hay consulta que hacer.
 
 Para que eso sea verdad hubo que **mover el `TaxRateResolver` a `app/Domain/Fiscal/`**: resolvia la tasa vigente (LEE la base de datos) y convivia en la carpeta del motor. La carpeta `app/Domain/Tax/` es ahora el motor y **solo** el motor.
 
@@ -657,9 +657,9 @@ Cinco tests cubrian la regla pero con **otro** nombre, asi que la tarea quedaba 
 
 ### La premisa del diseno venia de la v3 de la libreria
 
-El diseno decia "`mike42/escpos-php`" y anadia "CP850 por defecto, CP858 no codificable". En la **v5** (la instalada) **no existen** las clases `EscposText` ni `EscposQRCode` (eran v3), **ni** las constantes `CHARSET_*` de `Printer`: la API esta en `Printer` (`$data`, `$deadline`, `$fillable`): text()`, `qrCode()`, `selectCharacterTable()`) y las codepaginas son los **66 ids de codificacion** del JSON de capacidades del perfil.
+El diseno decia "`mike42/escpos-php`" y anadia "CP850 por defecto, CP858 no codificable". En la **v5** (la instalada) **no existen** las clases `EscposText` ni `EscposQRCode` (eran v3), **ni** las constantes `CHARSET_*` de `Printer`: la API esta en `Printer` (`text()`, `qrCode()`, `selectCharacterTable()`) y las codepaginas son los **66 ids de codificacion** del JSON de capacidades del perfil.
 
-El diseno de fondo se confirma con evidencia de la v5: `CP850` es codificable (`$data`, `$deadline`, `$fillable`): isEncodable() === true`) y **`CP858` NO lo es** (no tiene `iconv` ni `data`). Como el perfil `default` declara `CP858` sin lanzar excepcion, **la guarda la pone el SERVIDOR**, no la libreria: es el servidor quien rechaza un ticket no representable antes de enviarlo.
+El diseno de fondo se confirma con evidencia de la v5: `CP850` es codificable (`isEncodable() === true`) y **`CP858` NO lo es** (no tiene `iconv` ni `data`). Como el perfil `default` declara `CP858` sin lanzar excepcion, **la guarda la pone el SERVIDOR**, no la libreria: es el servidor quien rechaza un ticket no representable antes de enviarlo.
 
 Y el **numero de tabla de la codepagina es DATO del perfil**, no una constante del codigo: una tabla fija en el codigo seria un fork por modelo de impresora.
 
@@ -667,7 +667,7 @@ Y el **numero de tabla de la codepagina es DATO del perfil**, no una constante d
 
 El legacy `_inc/print.php` imprimia por USB o por navegador, y su endpoint esta **roto**: un `dd($data)` corta la ejecucion antes de generar ESC/POS. No habia perfiles de impresora modelados.
 
-Resolucion: `print_targets.printer_profile` es el **id de perfil de `mike42/escpos-php`** (`$data`, `$deadline`, `$fillable`): default`, `simple`, `TM-T88II`, `TM-P80`, ...). Es dato, no codigo: el destino lo declara y el servidor consulta el perfil. Un perfil inexistente falla con un error explicito.
+Resolucion: `print_targets.printer_profile` es el **id de perfil de `mike42/escpos-php`** (`default`, `simple`, `TM-T88II`, `TM-P80`, ...). Es dato, no codigo: el destino lo declara y el servidor consulta el perfil. Un perfil inexistente falla con un error explicito.
 
 Lo que si tiene el legacy es `store_settings.char_per_line` (42 por defecto): **no se ha migrado** a `print_targets.char_per_line`, porque el mapeo del dato de tienda es de otra unidad. `char_per_line` nace con 32.
 
@@ -695,7 +695,7 @@ El recurso UNC se detecta con `chr(92)`, no con barras invertidas literales: `\\
 
 ### Siguiente unidad
 
-**8-ii** - los cinco endpoints del `PrintAgentController` (auth por token + `X-Agent-Id`, la tienda se resuelve desde el `agent_id`, la respuesta a un `result` repetido es idempotente) y la maquina de estados de `print_jobs` (`$data`, `$deadline`, `$fillable`): queued` -> `claimed` -> `printing` -> `printed`; `failed` reintentable; `cancelled` terminal; `lease_expires_at` devuelve a `queued` con `attempts++`) con la reimpresion (0 reservas nuevas, 0 cambios en `fiscal_documents`).
+**8-ii** - los cinco endpoints del `PrintAgentController` (auth por token + `X-Agent-Id`, la tienda se resuelve desde el `agent_id`, la respuesta a un `result` repetido es idempotente) y la maquina de estados de `print_jobs` (`queued` -> `claimed` -> `printing` -> `printed`; `failed` reintentable; `cancelled` terminal; `lease_expires_at` devuelve a `queued` con `attempts++`) con la reimpresion (0 reservas nuevas, 0 cambios en `fiscal_documents`).
 
 ---
 
@@ -718,9 +718,9 @@ La reimpresion crea un trabajo **NUEVO** con `reason='reprint'`, `reprint_of_job
 
 ### El corte de papel: el generador, y una correccion mia
 
-El renderer ahora **corta el papel al final**, con el corte **COMPLETO** (`$data`, `$deadline`, `$fillable`): GS V 65`), que es el estandar y **no depende del modelo de impresora**. Va en los bytes porque el agente no interpreta el ticket: lo recibe hecho.
+El renderer ahora **corta el papel al final**, con el corte **COMPLETO** (`GS V 65`), que es el estandar y **no depende del modelo de impresora**. Va en los bytes porque el agente no interpreta el ticket: lo recibe hecho.
 
-> **Correccion**: yo dije que `GS V 66` era el corte completo. **Es el PARCIAL** (depende del modelo). En `mike42/escpos-php` v5, `CUT_FULL = 65` (`$data`, `$deadline`, `$fillable`): GS V 65` -> `1d 56 41`) y `CUT_PARTIAL = 66`. Ademas `setCutDistance()` **no existe** en la v5 instalada. El test comprueba que los bytes terminan en `1d 56 41 03` y que **no** aparece `1d 56 42`.
+> **Correccion**: yo dije que `GS V 66` era el corte completo. **Es el PARCIAL** (depende del modelo). En `mike42/escpos-php` v5, `CUT_FULL = 65` (`GS V 65` -> `1d 56 41`) y `CUT_PARTIAL = 66`. Ademas `setCutDistance()` **no existe** en la v5 instalada. El test comprueba que los bytes terminan en `1d 56 41 03` y que **no** aparece `1d 56 42`.
 
 ### Un bug real de Carbon 3
 
@@ -730,7 +730,7 @@ El renderer ahora **corta el papel al final**, con el corte **COMPLETO** (`$data
 
 1. **El interruptor `PRINT_LAN_AGENT_ENABLED` gatea los cinco endpoints**. `register` es el unico endpoint sin token (no hay token antes de registrarse) y su unica defensa era el interruptor: sin el, cualquiera con acceso de red a la API podria registrar un agente para **cualquier** tienda y tirar de sus tickets, que llevan bytes fiscales. El interruptor ya existia en `config/print.php`.
 2. **El hash del token es SHA-256 determinista, no argon2id/bcrypt**: §C.3 pide bcrypt, pero el contrato exige **buscar por el hash** (indice unico), y con sal eso no se puede indexar. Es el patron de **token de API**, no de contrasena: 256 bits, digest rapido.
-3. **El `result` encadena dos transiciones** (`$data`, `$deadline`, `$fillable`): claimed -> printing -> printed`): `markPrinted` es estrictamente `printing -> printed` y no hay endpoint para marcar `printing`, asi que sin el encadenamiento el flujo real nunca llegaria a `printed`. La maquina de estados sigue siendo la unica via.
+3. **El `result` encadena dos transiciones** (`claimed -> printing -> printed`): `markPrinted` es estrictamente `printing -> printed` y no hay endpoint para marcar `printing`, asi que sin el encadenamiento el flujo real nunca llegaria a `printed`. La maquina de estados sigue siendo la unica via.
 
 ### La maquina de estados
 
@@ -746,7 +746,7 @@ El renderer ahora **corta el papel al final**, con el corte **COMPLETO** (`$data
 
 ### Siguiente unidad
 
-**8-iii** - M24 (`$data`, `$deadline`, `$fillable`): sync_batches` con UNIQUE `(client_id, payload_sha256)`, `legacy_translation_map`), el verificador v2 (mismo canonizado y mismo orden de verificacion), el traductor (un lote es todo o nada) y el aplicador de lotes. Y luego las tres unidades de 0.9 y **0.6.4**.
+**8-iii** - M24 (`sync_batches` con UNIQUE `(client_id, payload_sha256)`, `legacy_translation_map`), el verificador v2 (mismo canonizado y mismo orden de verificacion), el traductor (un lote es todo o nada) y el aplicador de lotes. Y luego las tres unidades de 0.9 y **0.6.4**.
 
 ---
 
@@ -759,7 +759,7 @@ El renderer ahora **corta el papel al final**, con el corte **COMPLETO** (`$data
 
 ### El secreto en claro es FISICAMENTE imposible de guardar
 
-El CHECK de la columna solo admite **64 hex** (`$data`, `$deadline`, `$fillable`): ^[0-9a-f]{64}$`), asi que lo que se guarda es **siempre** el hash SHA-256 y el secreto en claro **no cabe** en la columna. Eso convierte la regla "solo el hash" de una disciplina del programador en una **invariante del esquema**.
+El CHECK de la columna solo admite **64 hex** (`^[0-9a-f]{64}$`), asi que lo que se guarda es **siempre** el hash SHA-256 y el secreto en claro **no cabe** en la columna. Eso convierte la regla "solo el hash" de una disciplina del programador en una **invariante del esquema**.
 
 El secreto emitido es **base64url** (43 caracteres) y el hash que se guarda es su SHA-256 en hex. La mutacion que guarda el secreto en claro **falla por el esquema**, no por el codigo: eso es lo que un CHECK compra.
 
@@ -771,7 +771,7 @@ El secreto emitido es **base64url** (43 caracteres) y el hash que se guarda es s
 
 El corte va **dentro** de `PrintAgentController::register`, no en un middleware: un middleware en `routes/api.php` tendria que dejar pasar el caso "sin `store_id`" para no cambiar los 422 actuales, y duplicaria la consulta de la tienda que el controlador ya hace. Con el corte en el controlador: una sola consulta, los 422 intactos, y los otros cuatro endpoints sin tocar.
 
-Y el hashing vive en **un solo sitio** (`$data`, `$deadline`, `$fillable`): PrintAgentRegistrationSecret`): el comando que emite y el endpoint que exige no pueden separarse, o compararian en claro.
+Y el hashing vive en **un solo sitio** (`PrintAgentRegistrationSecret`): el comando que emite y el endpoint que exige no pueden separarse, o compararian en claro.
 
 ### El `register` ahora responde 201
 
@@ -796,9 +796,9 @@ La columna **no** entra en el `` de `Store`: queda protegida del mass assignment
 
 ### El contrato v2, replicado literalmente
 
-Las mismas claves (`$data`, `$deadline`, `$fillable`): username`, `action`, `data`, `timestamp`, `nonce`, `signature`), el mismo canonizado (`$data`, `$deadline`, `$fillable`): username \n action \n timestamp \n nonce \n sha256(data)`), la misma firma `hash_hmac('sha256', ...)`, los mismos limites, el **mismo orden de verificacion** (cliente conocido -> timestamp `^\d{10}$` -> antiguedad -> `hash_equals` de la firma -> **solo despues** consumo del nonce) y la **misma forma de respuesta**: exactamente tres claves, `status`, `message` y `for`.
+Las mismas claves (`username`, `action`, `data`, `timestamp`, `nonce`, `signature`), el mismo canonizado (`username \n action \n timestamp \n nonce \n sha256(data)`), la misma firma `hash_hmac('sha256', ...)`, los mismos limites, el **mismo orden de verificacion** (cliente conocido -> timestamp `^\d{10}$` -> antiguedad -> `hash_equals` de la firma -> **solo despues** consumo del nonce) y la **misma forma de respuesta**: exactamente tres claves, `status`, `message` y `for`.
 
-El `data` es un **string JSON** y el hash es sobre **sus bytes exactos**: re-codificarlo rompe la firma. Y el fallo de autenticacion responde **401 opaco** (`$data`, `$deadline`, `$fillable`): Invalid Action`): el motivo interno (`$data`, `$deadline`, `$fillable`): unknown_client`, `bad_timestamp`, `expired_request`, `bad_signature`, `replayed_request`) va **solo al log**.
+El `data` es un **string JSON** y el hash es sobre **sus bytes exactos**: re-codificarlo rompe la firma. Y el fallo de autenticacion responde **401 opaco** (`Invalid Action`): el motivo interno (`unknown_client`, `bad_timestamp`, `expired_request`, `bad_signature`, `replayed_request`) va **solo al log**.
 
 El nonce vive en **Redis con `SET NX EX`** (TTL = `max_age * 3`): mismo contrato que el fichero atomico del legacy, mejor implementacion. Y si Redis no esta, el verificador **falla cerrado**: no acepta sin anti-replay, y hay un test propio del fallo cerrado.
 
@@ -831,7 +831,7 @@ El default `require_https` sigue en **true**: los tests **declaran** el transpor
 
 1. **El identificador legacy es un string y la FK destino es bigint**: `selling_info.invoice_id` es `varchar(100)` y toda la cadena cuelga de el. El mapa necesita un transform que **resuelva** el id, no un renombrado.
 2. **`sell_logs` no tiene tabla destino**: el esquema del mapa no tiene forma de decir "se descarta" (la columna `new_table` a null lo dice, pero la tabla entera no).
-3. **`quotation_info` se parte en dos** (`$data`, `$deadline`, `$fillable`): quotations` y `orders`) segun un discriminante `is_order` que el destino no tiene: un **split**, no un rename.
+3. **`quotation_info` se parte en dos** (`quotations` y `orders`) segun un discriminante `is_order` que el destino no tiene: un **split**, no un rename.
 4. **Columnas que hay que inyectar desde el contexto del lote**: `store_id` (obligatorio en `gift_cards`), `sale_id` (en `installment_plans`), `entry_type_id` (en `ledger_entries`), `number` (en `installment_schedules`) y `business_date` (en `cash_registers`).
 
 ### Siguiente unidad
@@ -852,9 +852,9 @@ El script de documentacion de la unidad 8-iv-a **trunco el `tasks.md` de 432 a 1
 
 ### La recuperacion
 
-Se partio del fichero **sano** (`$data`, `$deadline`, `$fillable`): 246aba2`) y se reaplicaron los cambios de la unidad con un script que:
+Se partio del fichero **sano** (`246aba2`) y se reaplicaron los cambios de la unidad con un script que:
 
-1. acota la tabla por su **cabecera** (`$data`, `$deadline`, `$fillable`): | # | Rama | Work unit |`) y no por numero de fila;
+1. acota la tabla por su **cabecera** (`| # | Rama | Work unit |`) y no por numero de fila;
 2. busca el contenido a Replace por **texto unico** (la rama);
 3. **renumera de forma secuencial** (1, 2, 3...), porque el fichero sano arrastraba un numero duplicado de una edicion anterior;
 4. **verifica antes de escribir**: 39 filas en la tabla de la cadena, 44 en la de trazabilidad, 9 en la de unidades, 152 tareas y 510 lineas. Si algo no cuadra, **no escribe**.
@@ -863,4 +863,4 @@ Se partio del fichero **sano** (`$data`, `$deadline`, `$fillable`): 246aba2`) y 
 
 **Todo script que edite un artefacto compartido tiene que三重-verificar**: localizar el punto por contenido unico (nunca por indice), comprobar el tamano y la estructura ANTES de escribir, y **abortar** si no encaja. El `array_splice` con un indice mal calculado no falla: escribe. Un script que edita un artefacto de 500 lineas es un editor de texto con permiso de destruir.
 
-El mismo patron ya habia mordido dos veces en esta sesion por la interpolacion de PHP en cadenas con comillas dobles (`$data`, `$deadline`, `$fillable`): `, ``, ``): **usar nowdoc, o concatenar**.
+El mismo patron ya habia mordido dos veces en esta sesion por la interpolacion de PHP en cadenas con comillas dobles (``, ``, ``): **usar nowdoc, o concatenar**.
