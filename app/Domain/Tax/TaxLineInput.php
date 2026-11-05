@@ -3,6 +3,7 @@
 namespace App\Domain\Tax;
 
 use App\Domain\Fiscal\Enums\TaxMethod;
+use App\Domain\Fiscal\Enums\TaxType;
 
 /**
  * Una linea del documento, con los datos fiscales YA resueltos.
@@ -27,5 +28,14 @@ final readonly class TaxLineInput
         public string $quantity,
         /** El descuento de la linea. */
         public string $discount = '0',
+        /**
+         * El tipo del impuesto de la linea: TRASLADADO (lo que paga el
+         * comprador) o RETENIDO (el credito del comprador, que sale en su
+         * PROPIO documento).
+         *
+         * Por defecto es TRASLADADO: una linea de venta normal no dice de
+         * mas, y el motor no MEZCLA los dos impuestos.
+         */
+        public TaxType $taxType = TaxType::Transfer,
     ) {}
 }

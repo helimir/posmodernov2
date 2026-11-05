@@ -111,10 +111,12 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 33 | `feat/fase0-31-secreto-registro` | 8-iii | el secreto de registro por tienda: el registro del agente deja de ser publico | **467** | PR #67 - issue #66 | **fusionado** `530db45` |
 | 34 | `feat/fase0-33-sync-verificador` | 8-iv-a | M24 + el verificador del contrato v2 + los tres rechazos de transporte | **1918** | PR #69 - issue #68 | **fusionado** `97fce21` |
 | 35 | `feat/fase0-34-sync-traductor` | 8-iv-b | el `LegacyStatementTranslator`: el reescritor ligero de identificadores contra el mapa | **1259** | PR #71 - issue #70 | **fusionado** `20f4915` |
-| 36 | `feat/fase0-35-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` + el job idempotente por `sync_batches` | ~900 | - - - | pendiente |
-| 37 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
-| 38 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
-| 39 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
+| 36 | `feat/fase0-35-iva-retenido-credito` | 6-iv | el IVA retenido como documento propio + el saldo del cliente derivado + la cuota con interes simple en el servidor | **1185** | PR #73 - issue #72 | **en curso** |
+| 37 | `feat/fase0-36-transferencias` | 6-v | la transferencia: el stock sale del lote origen y entra en el destino, con una sola cabecera | ~500 | - - - | pendiente |
+| 38 | `feat/fase0-35-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` + el job idempotente por `sync_batches` | ~900 | - - - | pendiente |
+| 39 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
+| 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
+| 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
@@ -312,16 +314,16 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 - [x] **0.6.2-T** Test: `test_la_suma_de_lineas_mas_el_ajuste_de_redondeo_iguala_el_total_redondeado` — regla que fija: *el ajuste de redondeo es visible en el total*.
 - [x] **0.6.3** Snapshots congelados: el documento persiste `tax_rate_snapshot`, `tax_category_id`, `tax_rate_id` y `evidence_status` **por línea y por cabecera**; un cambio posterior de la tasa vigente **no** altera un documento emitido. Dep: 0.6.1, 0.4.4. Aceptación: el estado de evidencia viaja congelado al documento.
 - [x] **0.6.3-T** Test: `test_un_documento_emitido_conserva_la_tasa_la_categoria_y_el_estado_de_evidencia_congelados` — regla que fija: *el impuesto se persiste, no se recalcula*.
-- [ ] **0.6.4** IVA retenido como **documento propio** (`document_type='retention_receipt'`, numeración de 14 caracteres, período de imposición, referencia al documento de origen, base imponible, impuesto causado y monto retenido); el motor lo marca `tax_type='withholding'` y **no** lo mezcla con el impuesto trasladado. Dep: 0.3.7, 0.6.1. Aceptación: `fiscal_document_taxes.line_id` nullable ⇒ cabecera (`line_id IS NULL`) y línea.
-- [ ] **0.6.4-T** Test: `test_el_iva_retenido_se_emite_como_documento_propio_y_no_como_linea_de_la_venta` — regla que fija: *el IVA retenido es crédito del comprador, con documento propio*.
+- [x] **0.6.4** IVA retenido como **documento propio** (`document_type='retention_receipt'`, numeración de 14 caracteres, período de imposición, referencia al documento de origen, base imponible, impuesto causado y monto retenido); el motor lo marca `tax_type='withholding'` y **no** lo mezcla con el impuesto trasladado. Dep: 0.3.7, 0.6.1. Aceptación: `fiscal_document_taxes.line_id` nullable ⇒ cabecera (`line_id IS NULL`) y línea.
+- [x] **0.6.4-T** Test: `test_el_iva_retenido_se_emite_como_documento_propio_y_no_como_linea_de_la_venta` — regla que fija: *el IVA retenido es crédito del comprador, con documento propio*.
 - [x] **0.6.5** `app/Domain/Checkout/CheckoutService.php` — **T1 dominio**, una única transacción: reserva del nº de documento y del nº de control (`NumberSeries`), consumo FIFO, `TaxCalculator`, `sales`/`sale_items`/`sale_totals`/`sale_payments`, asientos contables y pago. Dep: 0.3.3, 0.5.4, 0.6.2, 0.7.4. Aceptación: si la segunda reserva (control) falla, **el nº de documento también vuelve** (`ROLLBACK`); ningún número se quema.
 - [x] **0.6.5-T** Test: `test_un_fallo_intermedio_no_deja_cabecera_ni_cambio_de_stock_persistidos` — regla que fija: *toda escritura es una unidad atómica con bloqueo de fila*.
 - [x] **0.6.6** **T2 fiscal** y reintento (C5): la llamada HTTP al proveedor (`submit` → `assignControl`) ocurre **fuera** de la transacción de BD; si falla, la venta queda `sales.status='fiscal_failed'` y el reintento **reutiliza la misma reserva** (`fiscal_document_reservations`), sin quemar números nuevos. Dep: 0.3.4, 0.6.5. Aceptación: ningún número se libera tras un fallo de emisión (el número puede haberse publicado).
 - [x] **0.6.6-T** Test: `test_un_reintento_de_emision_reutiliza_la_reserva_y_no_quema_numeros_nuevos` — regla que fija: *el número reservado no se libera ni se duplica por un fallo de emisión*.
-- [ ] **0.6.7** Dominio de crédito, cuotas y transferencias: saldo del cliente derivado de `customer_ledger_entries` (un cobro reduce deuda), cuota con interés simple sobre el `payable` calculada en servidor y repartida entre `installment_schedules`, y transferencia con 1 cabecera. Dep: 0.5.2, 0.4.5. Aceptación: el saldo nunca se almacena desnormalizado.
-- [ ] **0.6.7-T** Test: `test_un_cobro_reduce_la_deuda_del_cliente_y_el_saldo_se_deriva_de_sus_movimientos` — regla que fija: *el saldo del cliente se deriva de sus movimientos*.
-- [ ] **0.6.8** Test de la cuota: interés simple sobre el `payable`, calculado en el servidor y repartido entre las cuotas. Dep: 0.6.7. Aceptación: la suma de las cuotas reproduce el total con el redondeo declarado.
-- [ ] **0.6.8-T** Test: `test_la_cuota_se_calcula_en_el_servidor_con_interes_simple_sobre_el_payable_y_se_reparte_entre_cuotas` — regla que fija: *el interés se calcula en el servidor, no en la interfaz*.
+- [x] **0.6.7** Dominio de crédito, cuotas y transferencias: saldo del cliente derivado de `customer_ledger_entries` (un cobro reduce deuda), cuota con interés simple sobre el `payable` calculada en servidor y repartida entre `installment_schedules`, y transferencia con 1 cabecera. Dep: 0.5.2, 0.4.5. Aceptación: el saldo nunca se almacena desnormalizado.
+- [x] **0.6.7-T** Test: `test_un_cobro_reduce_la_deuda_del_cliente_y_el_saldo_se_deriva_de_sus_movimientos` — regla que fija: *el saldo del cliente se deriva de sus movimientos*.
+- [x] **0.6.8** Test de la cuota: interés simple sobre el `payable`, calculado en el servidor y repartido entre las cuotas. Dep: 0.6.7. Aceptación: la suma de las cuotas reproduce el total con el redondeo declarado.
+- [x] **0.6.8-T** Test: `test_la_cuota_se_calcula_en_el_servidor_con_interes_simple_sobre_el_payable_y_se_reparte_entre_cuotas` — regla que fija: *el interés se calcula en el servidor, no en la interfaz*.
 - [ ] **0.6.9** Test de transferencia: el stock sale del **lote origen** y entra en el destino, con **una sola** cabecera. Dep: 0.5.7. Aceptación: `transfer_items.source_lot_id` referencia el lote de salida.
 - [ ] **0.6.9-T** Test: `test_la_transferencia_mueve_el_stock_desde_el_lote_origen_y_registra_una_sola_cabecera` — regla que fija: *una transferencia es un movimiento, no N cabeceras*.
 

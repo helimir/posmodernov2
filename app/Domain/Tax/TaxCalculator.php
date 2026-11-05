@@ -104,9 +104,11 @@ final readonly class TaxCalculator
                 // Los snapshots congelados: el documento emitido es autonomo.
                 'tax_rate_snapshot' => $line->taxRateSnapshot,
                 'evidence_status' => $line->evidenceStatus,
-                // El tipo de impuesto (trasladado o retenido) NO es de la linea:
-                // el IVA retenido es un documento fiscal PROPIO, con su
-                // numeracion y su serie (0.6.4).
+                // El tipo del impuesto lo declara la linea: el trasladado es
+                // lo que paga el comprador, y el retenido es su credito, que
+                // sale en un documento PROPIO (0.6.4). El motor NO los
+                // mezcla: cada linea conserva el suyo.
+                'tax_type' => $line->taxType->value,
                 'base_amount' => $this->persist($netBase),
                 'tax_amount' => $this->persist($tax),
                 'line_total' => $this->persist($lineTotal),
