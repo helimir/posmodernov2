@@ -863,4 +863,4 @@ Se partio del fichero **sano** (`246aba2`) y se reaplicaron los cambios de la un
 
 **Todo script que edite un artefacto compartido tiene que三重-verificar**: localizar el punto por contenido unico (nunca por indice), comprobar el tamano y la estructura ANTES de escribir, y **abortar** si no encaja. El `array_splice` con un indice mal calculado no falla: escribe. Un script que edita un artefacto de 500 lineas es un editor de texto con permiso de destruir.
 
-El mismo patron ya habia mordido dos veces en esta sesion por la interpolacion de PHP en cadenas con comillas dobles (``, ``, ``): **usar nowdoc, o concatenar**.
+El mismo patron ya habia mordido dos veces en esta sesion por la interpolacion de PHP en cadenas con comillas dobles (`$data`, `$deadline`, `$fillable`): **usar nowdoc, o concatenar**.
