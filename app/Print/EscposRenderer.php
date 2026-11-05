@@ -43,6 +43,11 @@ final readonly class EscposRenderer
     /**
      * Genera los bytes ESC/POS del payload para el destino dado.
      *
+     * Los bytes INCLUYEN el corte del papel, y lo llevan porque el agente
+     * NO interpreta el ticket: lo recibe hecho y sólo lo escribe (design
+     * D11). Un ticket sin cortar se queda colgando del rodillo, y el rodillo
+     * no se suelta solo.
+     *
      * @throws RuntimeException Si el ticket no es representable en el destino.
      */
     public function render(PrintTarget $target, PrintPayload $payload): RenderedPayload
@@ -83,6 +88,17 @@ final readonly class EscposRenderer
                 $impresora->qrCode($payload->qrContent);
                 $impresora->feed(1);
             }
+
+            // El CORTE del papel, al final y en los bytes del servidor.
+            //
+            // El corte viaja AQUÍ porque el agente NO interpreta el ticket:
+            // lo recibe hecho y sólo lo escribe (design D11). Si el corte
+            // quedara fuera de los bytes, el ticket se quedaría colgando del
+            // rodillo, y el rodillo no se suelta solo.
+            //
+            // El corte es COMPLETO (`GS V 65`): es el estándar y no depende
+            // del modelo de impresora. El parcial (`GS V 66`) depende.
+            $impresora->cut(Printer::CUT_FULL);
         } finally {
             // Los bytes quedan congelados aunque la composicion falle: el
             // trabajo no se crea a medias.
