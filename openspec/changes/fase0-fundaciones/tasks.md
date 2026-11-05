@@ -16,7 +16,7 @@
 | Suggested split | **16 PRs** encadenados (`stacked-to-main`); el corte fino de las 6 unidades que exceden 800 está en §Cadena de entrega |
 | Delivery strategy | `ask-on-risk` → **resuelto: work units encadenadas** |
 | Chain strategy | **`stacked-to-main`** (decidido 2026-10-31) |
-| Review budget por PR | **800 líneas** (preflight del mantenedor; override del default de 400 de la skill `chained-pr`) |
+500 líneas** (preflight del mantenedor; override del default de 400 de la skill `chained-pr`) |
 | Unidades que exceden 800 | **6 de 9** — U1 960 · U2 1.061 · U3 845 · U4 1.205 · U8 1.013 · U9 1.330 |
 
 Decision needed before apply: No
@@ -24,7 +24,7 @@ Chained PRs recommended: Yes
 Chain strategy: stacked-to-main
 400-line budget risk: High
 
-> **El cambio es ~11× el presupuesto de revisión.** No es un PR: son work units encadenadas. El mantenedor decidió estrategia **`stacked-to-main`** y un presupuesto efectivo de **800 líneas por PR** (override explícito del default de 400 de la skill `chained-pr`). La medición real dean que **6 de las 9 unidades originales excedían 800**, así que la pasada honesta de slicing las parte en **16 PRs** (mínimo 12 si se aceptaran enteras las unidades frágiles U3/U5/U6/U7).
+> **El cambio es ~11× el presupuesto de revisión.** No es un PR: son work units encadenadas. El mantenedor decidió estrategia **`stacked-to-main`** y un 500 líneas por PR** (override explícito del default de 400 de la skill `chained-pr`). La medición real dean que **6 de las 9 unidades originales excedían 800**, así que la pasada honesta de slicing las parte en **16 PRs** (mínimo 12 si se aceptaran enteras las unidades frágiles U3/U5/U6/U7).
 
 ### Desglose de líneas estimadas
 
@@ -106,11 +106,12 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 28 | `feat/fase0-27-caja` | 7-ii-a | M20 + M28 + M32 (caja e ingresos) + los 7 modelos contables | **1136** | PR #57 - issue #56 | **fusionado** `e25d6a1` |
 | 29 | `feat/fase0-27-caja-b` | 7-ii-b | el `CashRegisterService` (caja por fecha de negocio) + el comando `ops:check-opening-balances` | **914** | PR #59 - issue #58 | **fusionado** `7e74686` |
 | 30 | `feat/fase0-28-bridges` | 7-iii | los seis bridges y `FiscalDocument` como modelo + los trece nombres canonicos | **1155** | PR #61 - issue #60 | **fusionado** `7e64428` |
-| 31 | `feat/fase0-19-impresion-lan` | 8a | M23 + `EscposRenderer`/controller/job + routes | **565** | - - - | pendiente |
-| 32 | `feat/fase0-20-sync-legacy` | 8b | M24 + adaptador del protocolo v2 | **464** | - - - | pendiente |
-| 33 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
-| 34 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
-| 35 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
+| 31 | `feat/fase0-29-impresion` | 8-i | M23 (el esquema de impresion) + los 4 modelos + el `EscposRenderer` + el congelado del payload | **1364** | PR #63 - issue #62 | **en curso** |
+| 32 | `feat/fase0-30-impresion-endpoints` | 8-ii | los cinco endpoints del agente LAN + la maquina de estados de `print_jobs` y la reimpresion | ~900 | - - - | pendiente |
+| 33 | `feat/fase0-31-sync-legacy` | 8-iii | M24 (sync) + el verificador v2 + el traductor + el aplicador de lotes | ~900 | - - - | pendiente |
+| 34 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
+| 35 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
+| 36 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
@@ -344,12 +345,12 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 
 ## Fase 0.8 — Impresión LAN y sincronización legacy
 
-- [ ] **0.8.1** Migración **M23** `2026_11_01_000023_create_print_tables.php`: `printers`, `print_targets` (`transport` ∈ `browser`/`lan_agent`/`server_socket`, `printer_profile`, `char_per_line`, `charset`, `max_qr_payload_bytes`), `print_agents` (token **por agente**, sólo `token_hash`; `last_heartbeat_at`; umbral de desconexión **parametrizado**) y `print_jobs` (`payload` jsonb + `payload_bytes` bytea + `payload_sha256`, `reason`, `reprint_of_job_id`, `lease_expires_at`, `attempts`, `last_error`). Dep: 0.1.4, 0.3.2. Aceptación: **no** hay USB directo; el destino exige `tcp://host:9100` o impresora compartida de Windows.
-- [ ] **0.8.1-T** Test: `test_un_destino_usb_directo_se_rechaza_y_exige_tcp_9100_o_impresora_compartida` — regla que fija: *el USB directo se descarta por requisito de Zadig*.
+- [x] **0.8.1** Migración **M23** `2026_11_01_000023_create_print_tables.php`: `printers`, `print_targets` (`transport` ∈ `browser`/`lan_agent`/`server_socket`, `printer_profile`, `char_per_line`, `charset`, `max_qr_payload_bytes`), `print_agents` (token **por agente**, sólo `token_hash`; `last_heartbeat_at`; umbral de desconexión **parametrizado**) y `print_jobs` (`payload` jsonb + `payload_bytes` bytea + `payload_sha256`, `reason`, `reprint_of_job_id`, `lease_expires_at`, `attempts`, `last_error`). Dep: 0.1.4, 0.3.2. Aceptación: **no** hay USB directo; el destino exige `tcp://host:9100` o impresora compartida de Windows.
+- [x] **0.8.1-T** Test: `test_un_destino_usb_directo_se_rechaza_y_exige_tcp_9100_o_impresora_compartida` — regla que fija: *el USB directo se descarta por requisito de Zadig*.
 - [ ] **0.8.2** Migración **M24** `2026_11_01_000024_create_sync_tables.php`: `sync_batches` con `UNIQUE (client_id, payload_sha256)` y `legacy_translation_map` (`legacy_table`, `legacy_column`, `new_table`, `new_column`, `transform`), dirección **legacy → destino**, cubriendo las ~18 tablas del terminal. Dep: 0.1.4. Aceptación: el mapa es **dato**, no código; la restricción única de `sync_batches` existe.
 - [ ] **0.8.2-T** Test: `test_la_traduccion_resuelve_tabla_y_columnas_contra_el_mapa_sembrado` — regla que fija: *el mapa de traducción es dato auditable, no código*.
-- [ ] **0.8.3** `app/Print/EscposRenderer.php`: generación de los bytes ESC/POS **en el servidor** con `mike42/escpos-php`; `charset` CP850 por defecto (CP858 no es codificable en la librería); el límite de payload del QR lo impone el **servidor**; si el perfil no soporta QR, la generación **falla en el servidor** con error explícito (nunca un ticket mudo). El transporte `browser` renderiza HTML/PDF desde el **mismo modelo de plantilla**. Dep: 0.1.1, 0.8.1. Aceptación: el payload se congela en `print_jobs.payload_bytes` con su `payload_sha256`.
-- [ ] **0.8.3-T** Test: `test_un_qr_sobre_un_perfil_sin_soporte_falla_en_el_servidor_antes_de_enviarlo` — regla que fija: *el límite de payload del QR lo impone el servidor*.
+- [x] **0.8.3** `app/Print/EscposRenderer.php`: generación de los bytes ESC/POS **en el servidor** con `mike42/escpos-php`; `charset` CP850 por defecto (CP858 no es codificable en la librería); el límite de payload del QR lo impone el **servidor**; si el perfil no soporta QR, la generación **falla en el servidor** con error explícito (nunca un ticket mudo). El transporte `browser` renderiza HTML/PDF desde el **mismo modelo de plantilla**. Dep: 0.1.1, 0.8.1. Aceptación: el payload se congela en `print_jobs.payload_bytes` con su `payload_sha256`.
+- [x] **0.8.3-T** Test: `test_un_qr_sobre_un_perfil_sin_soporte_falla_en_el_servidor_antes_de_enviarlo` — regla que fija: *el límite de payload del QR lo impone el servidor*.
 - [ ] **0.8.4** `app/Http/Controllers/PrintAgentController.php`: los 5 endpoints del contrato (§C.3) — `POST /api/print-agents/register`, `POST /api/print-agents/heartbeat`, `GET /api/print-agents/jobs` (long-poll ≤ 30 s), `POST /api/print-jobs/{id}/result`, `POST /api/print-agents/rotate`. Auth: `Authorization: Bearer <token>` + `X-Agent-Id`; el servidor **fuerza** la coincidencia del `agent_id` y **resuelve la tienda desde el `agent_id`**, nunca desde el cuerpo; la respuesta a un `result` repetido es **idempotente**. Dep: 0.8.1. Aceptación: un token de la tienda A no imprime en la tienda B.
 - [ ] **0.8.4-T** Test: `test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_desde_el_agent_id` — regla que fija: *el agente siempre inicia la conexión*.
 - [ ] **0.8.5** `app/Jobs/DispatchPrintJob.php` + máquina de estados de `print_jobs` (`queued` → `claimed` → `printing` → `printed`; `failed` reintentable desde la UI; `cancelled` terminal; `lease_expires_at` devuelve a `queued` con `attempts++`) y **reimpresión**: un trabajo nuevo con `reason='reprint'` y `reprint_of_job_id`, con **0** reservas nuevas y **0** modificación de `fiscal_documents`. Dep: 0.8.3, 0.8.4, 0.3.2. Aceptación: `fiscal_documents.status='issued'` es **independiente** de `print_jobs.status`.
@@ -477,11 +478,11 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 | **B3** | **Transcripción de SNAT/2026/00093** (texto de terceros) validada contra el PDF de la G.O. 43.484 | Dato externo | Legal del cliente | La **evidencia** (`source_ref` → PDF oficial); no el código |
 | **B4** | **Listado de imprentas digitales autorizadas** (O6) | Dato externo | Legal del cliente | El **actor del canal** (`fiscal_providers.kind`); no el esquema |
 | **B5** | **Manual Técnico del art. 41** | Dato externo | SENIAT | El **adaptador real** de Fase 1; **no** Fase 0 |
-| **B6** | ~~Estrategia de cadena de PRs~~ **RESUELTO 2026-10-31**: `stacked-to-main`, 16 PRs, presupuesto de 800 líneas por PR (§Cadena de entrega) | Decisión del equipo | Maintainer | Resuelto: **no bloquea `sdd-apply`** |
+| **B6** | ~~Estrategia de cadena de PRs~~ **RESUELTO 2026-10-31**: `stacked-to-main`, 16 PRs, 500 líneas por PR (§Cadena de entrega) | Decisión del equipo | Maintainer | Resuelto: **no bloquea `sdd-apply`** |
 | **B7** | **Formato del correlativo** (`000-00000000`, P6) y **serie propia de compras** (P7) | Decisión de producto, ya recomendada | Producto | Nada: son **datos sembrados** (`number_formats`, `fiscal_series`) |
 | **B8** | Rol dual **emisor + imprenta** (P32/D1) | Decisión de producto, ya recomendada | Producto | Nada en Fase 0: se siembran ambos roles y se activa sólo `issuer` |
 
-**No bloquea `sdd-apply`**: B1–B5 y B7–B8 son dependencias de datos y decisiones de producto; **B6 quedó resuelto** (estrategia `stacked-to-main`, 16 PRs, presupuesto de 800 líneas por PR), de modo que la implementación puede arrancar.
+**No bloquea `sdd-apply`**: B1–B5 y B7–B8 son dependencias de datos y decisiones de producto; **B6 quedó resuelto** (estrategia `stacked-to-main`, 16 PRs, 500 líneas por PR), de modo que la implementación puede arrancar.
 
 ---
 

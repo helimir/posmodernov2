@@ -25,7 +25,7 @@ rule the implementation serves. Both close together or not at all.
 
 ## The chain: 18 stacked PRs, and how it advances
 
-`stacked-to-main`, **800 changed lines per PR**. Each PR opens against `main` **after the
+`stacked-to-main`, **2500 changed lines per PR**. Each PR opens against `main` **after the
 previous one merged**, and is implemented on the previous PR's branch, then rebased onto
 `main` after the merge. `tasks.md` §"Corte final" is the authoritative list with the
 per-PR status; the older 16-PR tables in the same file are the historical measurement —
