@@ -665,7 +665,7 @@ Y el **numero de tabla de la codepagina es DATO del perfil**, no una constante d
 
 ### El "perfil de impresora" del legacy NO EXISTIA
 
-El legacy `_inc/print.php` imprimia por USB o por navegador, y su endpoint esta **roto**: un `dd()` corta la ejecucion antes de generar ESC/POS. No habia perfiles de impresora modelados.
+El legacy `_inc/print.php` imprimia por USB o por navegador, y su endpoint esta **roto**: un `dd($data)` corta la ejecucion antes de generar ESC/POS. No habia perfiles de impresora modelados.
 
 Resolucion: `print_targets.printer_profile` es el **id de perfil de `mike42/escpos-php`** (`default`, `simple`, `TM-T88II`, `TM-P80`, ...). Es dato, no codigo: el destino lo declara y el servidor consulta el perfil. Un perfil inexistente falla con un error explicito.
 
