@@ -107,7 +107,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 29 | `feat/fase0-27-caja-b` | 7-ii-b | el `CashRegisterService` (caja por fecha de negocio) + el comando `ops:check-opening-balances` | **914** | PR #59 - issue #58 | **fusionado** `7e74686` |
 | 30 | `feat/fase0-28-bridges` | 7-iii | los seis bridges y `FiscalDocument` como modelo + los trece nombres canonicos | **1155** | PR #61 - issue #60 | **fusionado** `7e64428` |
 | 31 | `feat/fase0-29-impresion` | 8-i | M23 (el esquema de impresion) + los 4 modelos + el `EscposRenderer` + el congelado del payload | **1364** | PR #63 - issue #62 | **fusionado** `70c0ea5` |
-| 32 | `feat/fase0-30-impresion-endpoints` | 8-ii | los cinco endpoints del agente LAN + la maquina de estados de `print_jobs` + la reimpresion + el corte de papel | **1596** | PR #64 - issue #63 | **en curso** |
+| 32 | `feat/fase0-30-impresion-endpoints` | 8-ii | los cinco endpoints del agente LAN + la maquina de estados de `print_jobs` + la reimpresion + el corte de papel | **1652** | PR #64 - issue #63 | **en curso** |
 | 33 | `feat/fase0-31-sync-legacy` | 8-iii | M24 (sync) + el verificador v2 + el traductor + el aplicador de lotes | ~900 | - - - | pendiente |
 | 34 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
 | 35 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
