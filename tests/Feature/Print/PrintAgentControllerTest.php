@@ -16,14 +16,22 @@ use Tests\Fixtures\PrintFixture;
  * `Authorization` y el `agent_id` en la cabecera `X-Agent-Id`, y el servidor
  * FUERZA la coincidencia: un token de la tienda A no imprime en la tienda B,
  * y la tienda se resuelve DESDE el `agent_id`, nunca desde el cuerpo.
+ *
+ * El REGISTRO es publico, asi que exige ademas el SECRETO DE REGISTRO de la
+ * tienda (`X-Registration-Secret`): cada tienda siembra el suyo, y el
+ * servidor exige que coincida.
  */
 test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_desde_el_agent_id', function () {
     // El canal LAN esta apagado hasta que se valida (`config/print.php`).
     config(['print.lan_agent_enabled' => true]);
 
-    // 1. DOS tiendas, cada una con su trabajo encolado.
+    // 1. DOS tiendas, cada una con su trabajo encolado. El registro es
+    //    publico, asi que cada tienda tiene su SECRETO DE REGISTRO.
     $tiendaA = PrintFixture::contexto();
     $tiendaB = PrintFixture::contexto();
+
+    $secretoA = PrintFixture::secretoDeRegistro($tiendaA['store_id']);
+    $secretoB = PrintFixture::secretoDeRegistro($tiendaB['store_id']);
 
     $trabajoA1 = PrintFixture::trabajo($tiendaA['store_id'], $tiendaA['target_id']);
     $trabajoA2 = PrintFixture::trabajo($tiendaA['store_id'], $tiendaA['target_id']);
@@ -34,9 +42,9 @@ test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_
     $registro = $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda A',
         'store_id' => $tiendaA['store_id'],
-    ]);
+    ], ['X-Registration-Secret' => $secretoA]);
 
-    $registro->assertOk()->assertJsonPath('status', 'registered');
+    $registro->assertCreated()->assertJsonPath('status', 'registered');
 
     $agentId = (int) $registro->json('agent_id');
     $token = (string) $registro->json('token');
@@ -101,9 +109,9 @@ test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_
     $registroB = $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda B',
         'store_id' => $tiendaB['store_id'],
-    ]);
+    ], ['X-Registration-Secret' => $secretoB]);
 
-    $registroB->assertOk();
+    $registroB->assertCreated();
 
     $agentBId = (int) $registroB->json('agent_id');
 
@@ -167,7 +175,7 @@ test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_
     $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda A',
         'store_id' => $tiendaA['store_id'],
-    ])->assertOk()->assertJsonPath('agent_id', $agentId);
+    ], ['X-Registration-Secret' => $secretoA])->assertCreated()->assertJsonPath('agent_id', $agentId);
 
     expect(DB::table('print_agents')->where('store_id', $tiendaA['store_id'])->count())->toBe(1);
 });
