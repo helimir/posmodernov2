@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PrintJob;
+use App\Print\PrintAgentRegistrationSecret;
 use App\Print\PrintJobStateMachine;
 use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
@@ -59,6 +60,7 @@ final class PrintAgentController extends Controller
     public function __construct(
         private Connection $connection,
         private PrintJobStateMachine $stateMachine,
+        private PrintAgentRegistrationSecret $secrets,
     ) {}
 
     /**
@@ -71,6 +73,13 @@ final class PrintAgentController extends Controller
      * El nombre es UNICO dentro de la tienda: si el agente ya existe, se
      * ROTA su token en vez de crear un duplicado (dos cajas con el mismo
      * nombre serian el mismo agente).
+     *
+     * El REGISTRO es el unico endpoint PUBLICO de la API (no hay token
+     * todavia: el token es lo que el registro entrega), asi que exige el
+     * SECRETO DE REGISTRO de la tienda en la cabecera `X-Registration-Secret`.
+     * El interruptor `PRINT_LAN_AGENT_ENABLED` es la puerta maestra y el
+     * secreto es la segunda capa: con el interruptor encendido pero sin
+     * secreto, el registro sigue siendo imposible.
      */
     public function register(Request $request): JsonResponse
     {
@@ -91,8 +100,26 @@ final class PrintAgentController extends Controller
 
         $storeId = (int) $storeId;
 
-        if (! $this->connection->table('stores')->where('id', $storeId)->exists()) {
+        $tienda = $this->connection->table('stores')->where('id', $storeId)->first();
+
+        if ($tienda === null) {
             return $this->error("La tienda {$storeId} no existe.");
+        }
+
+        // La SEGUNDA CAPA: el registro exige el secreto de SU tienda. Sin
+        // secreto configurado la tienda NO PUEDE registrar agentes, y el
+        // mensaje dice como configurarlo.
+        if ($tienda->print_agent_registration_secret === null) {
+            return $this->prohibido(
+                "La tienda {$storeId} no tiene secreto de registro configurado: "
+                ."ejecuta php artisan ops:print-agent-registration-secret {$storeId}."
+            );
+        }
+
+        $secreto = trim((string) $request->header('X-Registration-Secret', ''));
+
+        if (! $this->secrets->coincide($secreto, (string) $tienda->print_agent_registration_secret)) {
+            return $this->prohibido('El secreto de registro no coincide con el de la tienda.');
         }
 
         $agente = $this->connection->table('print_agents')
@@ -132,7 +159,7 @@ final class PrintAgentController extends Controller
             'token' => $token,
             'server_time' => now()->toIso8601String(),
             'poll_after_ms' => self::POLL_AFTER_MS,
-        ]);
+        ], 201);
     }
 
     /**

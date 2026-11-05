@@ -324,7 +324,9 @@ final readonly class TaxCalculator
 
 | Método | Ruta | Cuerpo | Respuesta |
 |---|---|---|---|
-| Registro | `POST /api/print-agents/register` | `{agent_id, name, version, capabilities[], token}` | `200 {status:'registered', agent_id, server_time, poll_after_ms}` · `409 {status:'conflict'}` |
+| Registro | `POST /api/print-agents/register` | `{agent_id, name, version, capabilities[], token}` | `201 {status:'registered', agent_id, server_time, poll_after_ms}` · `409 {status:'conflict'}` | |
+
+> **El registro exige el secreto de la tienda.** Exige la cabecera `X-Registration-Secret` con el secreto de la tienda (hash SHA-256 en `stores.print_agent_registration_secret`, emitido por `php artisan ops:print-agent-registration-secret {store}` y mostrado una sola vez): sin secreto, la tienda no puede registrar agentes, y el registro deja de ser un endpoint publico.
 | Heartbeat | `POST /api/print-agents/heartbeat` | `{agent_id, instance_id, version, capabilities[], printers[]}` | `200 {status:'ok', pending_jobs, poll_after_ms, server_time}` |
 | Trabajo | `GET /api/print-agents/jobs?limit=N` (long-poll, máx 30 s) | — | `200 {jobs:[{job_id, target_id, printer_key, payload_b64, payload_sha256, copies, charset, paper_width, char_per_line}]}` |
 | Resultado | `POST /api/print-jobs/{id}/result` | `{agent_id, job_id, payload_sha256, status:'done'\|'error', error?, printed_at, bytes_written}` | `200 {status:'ok'}` (idempotente) · `422 {errorMsg}` |

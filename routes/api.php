@@ -17,6 +17,12 @@ use Illuminate\Support\Facades\Route;
 | `Authorization: Bearer <token>` y `X-Agent-Id`, y el servidor fuerza que
 | las dos cosas digan lo mismo.
 |
+| Como el registro es PUBLICO, exige ademas el SECRETO DE REGISTRO de la
+| tienda (`X-Registration-Secret`): lo emite
+| `php artisan ops:print-agent-registration-secret {store}` y solo se
+| guarda su hash. Es la segunda capa: el interruptor
+| `PRINT_LAN_AGENT_ENABLED` es la puerta maestra.
+|
 */
 
 Route::post('/print-agents/register', [PrintAgentController::class, 'register']);

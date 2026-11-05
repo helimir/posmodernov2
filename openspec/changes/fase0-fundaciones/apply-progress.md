@@ -747,3 +747,40 @@ El renderer ahora **corta el papel al final**, con el corte **COMPLETO** (`GS V 
 ### Siguiente unidad
 
 **8-iii** - M24 (`sync_batches` con UNIQUE `(client_id, payload_sha256)`, `legacy_translation_map`), el verificador v2 (mismo canonizado y mismo orden de verificacion), el traductor (un lote es todo o nada) y el aplicador de lotes. Y luego las tres unidades de 0.9 y **0.6.4**.
+
+---
+
+## PR58-secreto-registro - 8-iii: el secreto de registro por tienda (2026-11-05)
+
+- **Estado**: entregado en el PR #66 (rama `feat/fase0-31-secreto-registro`).
+- **Por que**: `POST /api/print-agents/register` era el **unico endpoint publico** de la API del agente y su unica defensa era el interruptor `PRINT_LAN_AGENT_ENABLED`. Con el interruptor encendido, cualquiera con acceso de red podria registrar un agente para **cualquier** tienda y leer sus tickets, que llevan **bytes fiscales**.
+- **Ficheros**: `database/migrations/2026_11_01_000034_add_registration_secret_to_stores_table.php`, `app/Print/PrintAgentRegistrationSecret.php`, `app/Console/Commands/PrintAgentRegistrationSecretCommand.php`, `tests/Feature/Print/PrintAgentRegistrationSecretTest.php`, y los ajustes en `app/Http/Controllers/PrintAgentController.php`, `routes/api.php`, `tests/Fixtures/PrintFixture.php` y `tests/Feature/Print/PrintAgentControllerTest.php`.
+- **Evidencia**: `pest` 131 passed (1750 assertions), con `main` en 129 passed (1727 assertions); `pint` limpio; `php -l` limpio; M34 aplica, revierte y vuelve a aplicar.
+
+### El secreto en claro es FISICAMENTE imposible de guardar
+
+El CHECK de la columna solo admite **64 hex** (`^[0-9a-f]{64}$`), asi que lo que se guarda es **siempre** el hash SHA-256 y el secreto en claro **no cabe** en la columna. Eso convierte la regla "solo el hash" de una disciplina del programador en una **invariante del esquema**.
+
+El secreto emitido es **base64url** (43 caracteres) y el hash que se guarda es su SHA-256 en hex. La mutacion que guarda el secreto en claro **falla por el esquema**, no por el codigo: eso es lo que un CHECK compra.
+
+### El comando
+
+`php artisan ops:print-agent-registration-secret {store}` genera un secreto aleatorio de 32 bytes, guarda **solo** su hash y **muestra el secreto en claro UNA SOLA VEZ**, con el aviso de entregarlo a quien instala el agente y guardarlo fuera del servidor. Cada ejecucion **rota** el secreto: el anterior deja de valer.
+
+### Donde vive la comprobacion
+
+El corte va **dentro** de `PrintAgentController::register`, no en un middleware: un middleware en `routes/api.php` tendria que dejar pasar el caso "sin `store_id`" para no cambiar los 422 actuales, y duplicaria la consulta de la tienda que el controlador ya hace. Con el corte en el controlador: una sola consulta, los 422 intactos, y los otros cuatro endpoints sin tocar.
+
+Y el hashing vive en **un solo sitio** (`PrintAgentRegistrationSecret`): el comando que emite y el endpoint que exige no pueden separarse, o compararian en claro.
+
+### El `register` ahora responde 201
+
+El contrato cerrado de la unidad pedia 201 y el test existente afirmaba 200: hubo que actualizar tres aserciones. **`design.md` §C.3 queda alineado** en esta unidad (dice 201 y nombra la cabecera `X-Registration-Secret` y el comando).
+
+### Decision que se dejo anotada
+
+La columna **no** entra en el `` de `Store`: queda protegida del mass assignment **por omision**. Y la BD de desarrollo `pos_moderno_v2` esta sembrada por dump, **no** por migraciones (todas las migraciones aparecen como `Pending` ahi): el ciclo de M34 se probo sobre la BD de test, que si esta gobernada por migraciones.
+
+### Siguiente unidad
+
+**8-iv** - M24 (sync) + el verificador v2 + el traductor + el aplicador de lotes. Y luego las tres unidades de 0.9 y **0.6.4**.

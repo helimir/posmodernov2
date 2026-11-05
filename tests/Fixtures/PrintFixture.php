@@ -82,6 +82,25 @@ final class PrintFixture
     }
 
     /**
+     * El SECRETO DE REGISTRO de una tienda, en claro, con su hash guardado.
+     *
+     * La siembra escribe SOLO el hash (SHA-256), que es lo unico que admite
+     * `stores.print_agent_registration_secret`: el secreto en claro no cabe
+     * en la columna. El secreto devuelto es el que va en la cabecera
+     * `X-Registration-Secret`.
+     */
+    public static function secretoDeRegistro(int $storeId): string
+    {
+        $secreto = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+
+        DB::table('stores')->where('id', $storeId)->update([
+            'print_agent_registration_secret' => hash('sha256', $secreto),
+        ]);
+
+        return $secreto;
+    }
+
+    /**
      * Un trabajo de impresion con sus bytes CONGELADOS.
      *
      * @param  array<string, mixed>  $atributos
