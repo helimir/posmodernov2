@@ -837,3 +837,30 @@ El default `require_https` sigue en **true**: los tests **declaran** el transpor
 ### Siguiente unidad
 
 **8-iv-b** - el `LegacyStatementTranslator` (reescritor ligero de identificadores contra el mapa sembrado, con el des-escapeo **una vez, en la frontera**) y el seeder del mapa. Despues **8-iv-c** (el aplicador y el job idempotente), las tres unidades de 0.9 y **0.6.4**.
+
+---
+
+## Incidente: el `tasks.md` truncado en 326 lineas (2026-11-05)
+
+### Que paso
+
+El script de documentacion de la unidad 8-iv-a **trunco el `tasks.md` de 432 a 155 lineas** y el squash lo subio a `main`. El `apply-progress.md` y el `design.md` no se tocaron.
+
+**La causa**: el script localizaba el FINAL de un tramo de la tabla de la cadena buscando el **numero de fila** `| 37 |`. Ese numero existe en **tres** tablas del fichero (las unidades medidas, la de la cadena y la de trazabilidad), y en la de la cadena **no existia**: el `array_splice` se comio desde la fila 34 de la cadena hasta la fila 37 de la de trazabilidad. **326 lineas de un tajo**, con el `| 37 |` original y el `| 33 |` de la cadena, es decir, las tareas de las fases 0.1 a 0.9 y la tabla de trazabilidad.
+
+**Como se detecto**: `git show HEAD:openspec/changes/fase0-fundaciones/tasks.md` devolvia 155 lineas donde el commit anterior tenia 432. Un `grep` de las tareas dava **cero** resultados, que es la senal de que el artefacto estaba partido, no de que las tareas faltaran.
+
+### La recuperacion
+
+Se partio del fichero **sano** (`246aba2`) y se reaplicaron los cambios de la unidad con un script que:
+
+1. acota la tabla por su **cabecera** (`| # | Rama | Work unit |`) y no por numero de fila;
+2. busca el contenido a Replace por **texto unico** (la rama);
+3. **renumera de forma secuencial** (1, 2, 3...), porque el fichero sano arrastraba un numero duplicado de una edicion anterior;
+4. **verifica antes de escribir**: 39 filas en la tabla de la cadena, 44 en la de trazabilidad, 9 en la de unidades, 152 tareas y 510 lineas. Si algo no cuadra, **no escribe**.
+
+### La leccion
+
+**Todo script que edite un artefacto compartido tiene que三重-verificar**: localizar el punto por contenido unico (nunca por indice), comprobar el tamano y la estructura ANTES de escribir, y **abortar** si no encaja. El `array_splice` con un indice mal calculado no falla: escribe. Un script que edita un artefacto de 500 lineas es un editor de texto con permiso de destruir.
+
+El mismo patron ya habia mordido dos veces en esta sesion por la interpolacion de PHP en cadenas con comillas dobles (``, ``, ``): **usar nowdoc, o concatenar**.
