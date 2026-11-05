@@ -16,7 +16,7 @@
 | Suggested split | **16 PRs** encadenados (`stacked-to-main`); el corte fino de las 6 unidades que exceden 800 está en §Cadena de entrega |
 | Delivery strategy | `ask-on-risk` → **resuelto: work units encadenadas** |
 | Chain strategy | **`stacked-to-main`** (decidido 2026-10-31) |
-| Review budget por PR | **800 líneas** (preflight del mantenedor; override del default de 400 de la skill `chained-pr`) |
+500 líneas** (preflight del mantenedor; override del default de 400 de la skill `chained-pr`) |
 | Unidades que exceden 800 | **6 de 9** — U1 960 · U2 1.061 · U3 845 · U4 1.205 · U8 1.013 · U9 1.330 |
 
 Decision needed before apply: No
@@ -24,7 +24,7 @@ Chained PRs recommended: Yes
 Chain strategy: stacked-to-main
 400-line budget risk: High
 
-> **El cambio es ~11× el presupuesto de revisión.** No es un PR: son work units encadenadas. El mantenedor decidió estrategia **`stacked-to-main`** y un presupuesto efectivo de **800 líneas por PR** (override explícito del default de 400 de la skill `chained-pr`). La medición real dean que **6 de las 9 unidades originales excedían 800**, así que la pasada honesta de slicing las parte en **16 PRs** (mínimo 12 si se aceptaran enteras las unidades frágiles U3/U5/U6/U7).
+> **El cambio es ~11× el presupuesto de revisión.** No es un PR: son work units encadenadas. El mantenedor decidió estrategia **`stacked-to-main`** y un 500 líneas por PR** (override explícito del default de 400 de la skill `chained-pr`). La medición real dean que **6 de las 9 unidades originales excedían 800**, así que la pasada honesta de slicing las parte en **16 PRs** (mínimo 12 si se aceptaran enteras las unidades frágiles U3/U5/U6/U7).
 
 ### Desglose de líneas estimadas
 
@@ -477,11 +477,11 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 | **B3** | **Transcripción de SNAT/2026/00093** (texto de terceros) validada contra el PDF de la G.O. 43.484 | Dato externo | Legal del cliente | La **evidencia** (`source_ref` → PDF oficial); no el código |
 | **B4** | **Listado de imprentas digitales autorizadas** (O6) | Dato externo | Legal del cliente | El **actor del canal** (`fiscal_providers.kind`); no el esquema |
 | **B5** | **Manual Técnico del art. 41** | Dato externo | SENIAT | El **adaptador real** de Fase 1; **no** Fase 0 |
-| **B6** | ~~Estrategia de cadena de PRs~~ **RESUELTO 2026-10-31**: `stacked-to-main`, 16 PRs, presupuesto de 800 líneas por PR (§Cadena de entrega) | Decisión del equipo | Maintainer | Resuelto: **no bloquea `sdd-apply`** |
+| **B6** | ~~Estrategia de cadena de PRs~~ **RESUELTO 2026-10-31**: `stacked-to-main`, 16 PRs, 500 líneas por PR (§Cadena de entrega) | Decisión del equipo | Maintainer | Resuelto: **no bloquea `sdd-apply`** |
 | **B7** | **Formato del correlativo** (`000-00000000`, P6) y **serie propia de compras** (P7) | Decisión de producto, ya recomendada | Producto | Nada: son **datos sembrados** (`number_formats`, `fiscal_series`) |
 | **B8** | Rol dual **emisor + imprenta** (P32/D1) | Decisión de producto, ya recomendada | Producto | Nada en Fase 0: se siembran ambos roles y se activa sólo `issuer` |
 
-**No bloquea `sdd-apply`**: B1–B5 y B7–B8 son dependencias de datos y decisiones de producto; **B6 quedó resuelto** (estrategia `stacked-to-main`, 16 PRs, presupuesto de 800 líneas por PR), de modo que la implementación puede arrancar.
+**No bloquea `sdd-apply`**: B1–B5 y B7–B8 son dependencias de datos y decisiones de producto; **B6 quedó resuelto** (estrategia `stacked-to-main`, 16 PRs, 500 líneas por PR), de modo que la implementación puede arrancar.
 
 ---
 
