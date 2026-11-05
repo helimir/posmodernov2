@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\LegacySyncController;
 use App\Http\Controllers\PrintAgentController;
 use App\Http\Middleware\PrintAgentAuthenticate;
 use Illuminate\Support\Facades\Route;
@@ -33,3 +34,17 @@ Route::middleware(PrintAgentAuthenticate::class)->group(function () {
     Route::post('/print-jobs/{id}/result', [PrintAgentController::class, 'result']);
     Route::post('/print-agents/rotate', [PrintAgentController::class, 'rotate']);
 });
+
+/*
+|--------------------------------------------------------------------------
+| El SYNC del terminal legacy
+|--------------------------------------------------------------------------
+|
+| El terminal offline empuja su log de SQL al maestro con el protocolo v2
+| firmado (ADR-0006). El endpoint tiene SU PROPIO contrato de respuesta: las
+| tres claves `status`, `message` y `for`, con los codigos del legacy. No es
+| el `{errorMsg}` del resto de la API, y el interruptor `SYNC_ENABLED` es la
+| puerta maestra.
+|
+*/
+Route::post('/sync', [LegacySyncController::class, 'store']);
