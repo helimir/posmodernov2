@@ -696,3 +696,54 @@ El recurso UNC se detecta con `chr(92)`, no con barras invertidas literales: `\\
 ### Siguiente unidad
 
 **8-ii** - los cinco endpoints del `PrintAgentController` (auth por token + `X-Agent-Id`, la tienda se resuelve desde el `agent_id`, la respuesta a un `result` repetido es idempotente) y la maquina de estados de `print_jobs` (`queued` -> `claimed` -> `printing` -> `printed`; `failed` reintentable; `cancelled` terminal; `lease_expires_at` devuelve a `queued` con `attempts++`) con la reimpresion (0 reservas nuevas, 0 cambios en `fiscal_documents`).
+
+---
+
+## PR57-impresion-endpoints - 8-ii: el agente LAN y la maquina de estados (2026-11-05)
+
+- **Estado**: entregado en el PR #64 (rama `feat/fase0-30-impresion-endpoints`).
+- **Tareas cerradas**: 0.8.4, 0.8.4-T, 0.8.5 y 0.8.5-T. Ademas, el corte de papel del `EscposRenderer`.
+- **Ficheros**: `app/Http/Controllers/PrintAgentController.php`, `app/Http/Middleware/PrintAgentAuthenticate.php`, `app/Jobs/DispatchPrintJob.php`, `app/Print/{PrintJobStateMachine,PrintJobReprinter}.php`, `routes/api.php`, `tests/Fixtures/PrintFixture.php`, `tests/Feature/Print/{PrintAgentControllerTest,PrintJobReprintTest,PrintJobStateMachineTest}.php`, y `bootstrap/app.php`.
+- **Evidencia**: `pest` 129 passed (1727 assertions), con `main` en 114 passed (1644 assertions); `pint` limpio en los ficheros de la unidad; `php -l` limpio en los 13; las cinco rutas listadas por `route:list --path=api`.
+
+### La tienda se resuelve desde el `agent_id`, NUNCA desde el cuerpo
+
+El middleware `PrintAgentAuthenticate` hace tres cosas, en este orden: busca el agente cuyo `token_hash` **coincida** con el hash del token recibido (con `hash_equals`), **fuerza la coincidencia del `agent_id`** de la cabecera con el del agente autenticado (si no, 403), y resuelve la tienda **desde el `agent_id`**. Un `store_id` en el cuerpo se **ignora**. Un token de la tienda A contra el `X-Agent-Id` de la B no entrega el trabajo de la B.
+
+La mutacion que pone la tienda en el cuerpo hace **fallar** el test canonico: le llega el trabajo de la tienda B.
+
+### Reimprimir NO es reemitir
+
+La reimpresion crea un trabajo **NUEVO** con `reason='reprint'`, `reprint_of_job_id` y los **MISMOS bytes** y el **mismo sha256**. **No consume ningun correlativo**: no toca `fiscal_documents` ni `fiscal_document_reservations`. La mutacion que reserva un numero hace **fallar** el test canonico.
+
+### El corte de papel: el generador, y una correccion mia
+
+El renderer ahora **corta el papel al final**, con el corte **COMPLETO** (`GS V 65`), que es el estandar y **no depende del modelo de impresora**. Va en los bytes porque el agente no interpreta el ticket: lo recibe hecho.
+
+> **Correccion**: yo dije que `GS V 66` era el corte completo. **Es el PARCIAL** (depende del modelo). En `mike42/escpos-php` v5, `CUT_FULL = 65` (`GS V 65` -> `1d 56 41`) y `CUT_PARTIAL = 66`. Ademas `setCutDistance()` **no existe** en la v5 instalada. El test comprueba que los bytes terminan en `1d 56 41 03` y que **no** aparece `1d 56 42`.
+
+### Un bug real de Carbon 3
+
+`(now(), false)` devuelve **negativo** (-29.99): con esa formula el long-poll salia **al instante**. La forma correcta es `now()->diffInSeconds()`, y hay que conservarla como **float**: truncarla a `int` la anula otra vez (0.997 -> 0). Fijado con un test propio.
+
+### Tres decisiones que van mas alla de lo pedido
+
+1. **El interruptor `PRINT_LAN_AGENT_ENABLED` gatea los cinco endpoints**. `register` es el unico endpoint sin token (no hay token antes de registrarse) y su unica defensa era el interruptor: sin el, cualquiera con acceso de red a la API podria registrar un agente para **cualquier** tienda y tirar de sus tickets, que llevan bytes fiscales. El interruptor ya existia en `config/print.php`.
+2. **El hash del token es SHA-256 determinista, no argon2id/bcrypt**: §C.3 pide bcrypt, pero el contrato exige **buscar por el hash** (indice unico), y con sal eso no se puede indexar. Es el patron de **token de API**, no de contrasena: 256 bits, digest rapido.
+3. **El `result` encadena dos transiciones** (`claimed -> printing -> printed`): `markPrinted` es estrictamente `printing -> printed` y no hay endpoint para marcar `printing`, asi que sin el encadenamiento el flujo real nunca llegaria a `printed`. La maquina de estados sigue siendo la unica via.
+
+### La maquina de estados
+
+`queued` -> `claimed` -> `printing` -> `printed`; `failed` reintentable; `cancelled` **terminal**; y el **lease caducado** devuelve a `queued` con `attempts++`. Toda transicion valida el estado de ORIGEN y falla con un mensaje claro si no encaja.
+
+### Lo que queda para otras unidades
+
+- `releaseExpiredLeases()` **no tiene consumidor**: falta el comando o la programacion que barra los leases caducados.
+- El test de **concurrencia** del long-poll (dos agentes tomando el mismo trabajo) necesita dos sesiones PostgreSQL: es el arnes de 9-ii.
+- `DispatchPrintJob` **choca de nombre** con el diagrama del design, donde parece ser lo que entrega el trabajo al agente; aqui es el job de reintento.
+
+> **Duda de seguridad para decidir**: `register` es publico y su unica defensa es el interruptor. Si en Fase 1 se enciende, cualquiera con acceso de red puede registrar un agente para cualquier `store_id` y leer los tickets de esa tienda. Recomiendo un **secreto de registro por tienda** (columna nueva) o limitar `register` a la red local.
+
+### Siguiente unidad
+
+**8-iii** - M24 (`sync_batches` con UNIQUE `(client_id, payload_sha256)`, `legacy_translation_map`), el verificador v2 (mismo canonizado y mismo orden de verificacion), el traductor (un lote es todo o nada) y el aplicador de lotes. Y luego las tres unidades de 0.9 y **0.6.4**.

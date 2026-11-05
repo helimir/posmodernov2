@@ -152,3 +152,48 @@ test('test_un_qr_sobre_un_perfil_sin_soporte_falla_en_el_servidor_antes_de_envia
 
     expect(DB::table('print_jobs')->where('print_target_id', $cp858->id)->count())->toBe(0);
 });
+
+/**
+ * 0.8.3 — el CORTE del papel viaja en los bytes del servidor.
+ *
+ * Regla que fija: *el corte va en los bytes del servidor, porque el agente no
+ * interpreta el ticket*. El agente LAN recibe el ticket HECHO y sólo lo
+ * escribe (design D11): si el corte no viaja en los bytes, el ticket se queda
+ * colgando del rodillo, y el rodillo no se suelta solo.
+ *
+ * El corte es COMPLETO (`GS V 65`), no parcial: el completo es el estándar y
+ * no depende del modelo de impresora. `GS V 66` es el corte PARCIAL.
+ */
+test('test_el_ticket_generado_corta_el_papel_al_final', function () {
+    $store = Store::create(['name' => 'Tienda del corte '.uniqid('COR', true)]);
+
+    $printer = Printer::create([
+        'code' => 'COR-'.strtoupper(substr(md5(uniqid('', true)), 0, 10)),
+        'name' => 'Impresora del corte',
+    ]);
+
+    $target = PrintTarget::create([
+        'printer_id' => $printer->id,
+        'store_id' => $store->id,
+        'name' => 'Destino del corte',
+        'transport' => 'lan_agent',
+        'endpoint' => 'tcp://192.168.1.60:9100',
+        'printer_profile' => 'default',
+    ]);
+
+    $renderizado = app(EscposRenderer::class)->render($target, new PrintPayload(
+        title: 'TICKET',
+        lines: [['text' => 'LINEA DEL TICKET']],
+        qrContent: 'https://pos.local/ticket/1',
+    ));
+
+    // La secuencia de corte COMPLETO: `GS` (0x1D) `V` (0x56) `65` (0x41) y
+    // las tres lineas de avance (0x03).
+    $corteCompleto = "\x1d\x56\x41\x03";
+
+    expect(substr($renderizado->bytes, -strlen($corteCompleto)))->toBe($corteCompleto)
+        // Y NO es el corte PARCIAL (`GS V 66`), que depende del modelo.
+        ->and($renderizado->bytes)->not->toContain("\x1d\x56\x42")
+        // El corte va AL FINAL: detras del texto y del QR.
+        ->and(strpos($renderizado->bytes, 'LINEA DEL TICKET'))->toBeLessThan(strrpos($renderizado->bytes, "\x1d\x56"));
+});
