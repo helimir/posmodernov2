@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Domain\Tax;
+namespace App\Domain\Fiscal;
 
 use DateTimeImmutable;
 use Illuminate\Database\Connection;

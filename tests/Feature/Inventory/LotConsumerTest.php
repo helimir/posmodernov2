@@ -85,7 +85,7 @@ function escenario(): array
     return [$store->id, $product->id];
 }
 
-test('test_el_consumo_fifo_toma_los_lotes_por_antiguedad_y_la_devolucion_repone_el_lote_exacto', function () {
+test('test_el_consumo_toma_el_lote_mas_antiguo_y_registra_un_consumo_por_lote', function () {
     [$storeId, $productId] = escenario();
 
     $saleId = DB::table('sales')->insertGetId([
@@ -173,6 +173,80 @@ test('test_el_consumo_fifo_toma_los_lotes_por_antiguedad_y_la_devolucion_repone_
         ->and((float) $lots[2]->quantity_returned)->toBe(0.0);
 
     // 6. Y el cache vuelve a cuadrar con los lotes.
+    expect($invariant->holds($productId, $storeId))->toBeTrue()
+        ->and((float) $invariant->cachedStock($productId, $storeId))->toBe(12.0);
+});
+
+/**
+ * 0.5.5-T — la devolucion repone el LOTE EXACTO del que salio la linea.
+ *
+ * Regla que fija: *la devolucion repone el lote exacto*. NO repone el lote
+ * mas antiguo del producto ni crea un lote nuevo: repone el que dice la traza
+ * de consumos (`sale_item_lot_consumptions`), que es de donde salio la linea.
+ */
+test('test_la_devolucion_repone_el_lote_exacto_del_que_salio_la_linea', function () {
+    [$storeId, $productId] = escenario();
+
+    $saleId = DB::table('sales')->insertGetId([
+        'store_id' => $storeId,
+        'sale_date' => '2026-11-03',
+        'status' => 'confirmed',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $saleItemId = DB::table('sale_items')->insertGetId([
+        'sale_id' => $saleId,
+        'product_id' => $productId,
+        'store_id' => $storeId,
+        'quantity' => 12,
+        'unit_price' => 20,
+        'discount' => 0,
+        'tax_rate_snapshot' => 16,
+        'tax_amount' => 0,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $invariant = new StockInvariant(DB::connection());
+    $consumer = new LotConsumer(DB::connection(), $invariant);
+    $returner = new LotReturner(DB::connection(), $invariant);
+
+    // 1. El consumo toma 10 del lote mas viejo (2026-01-01) y 2 del
+    //    siguiente (2026-02-01).
+    $consumer->consume($productId, $storeId, $saleItemId, '12');
+
+    $lots = DB::table('inventory_lots')->orderBy('received_at')->get();
+
+    expect($lots)->toHaveCount(3)
+        ->and((float) $lots[0]->quantity_consumed)->toBe(10.0)
+        ->and((float) $lots[1]->quantity_consumed)->toBe(2.0)
+        ->and((float) $lots[2]->quantity_consumed)->toBe(0.0);
+
+    // 2. La devolucion de 2 unidades repone el SEGUNDO lote: es de donde salio
+    //    la parte de la linea que se devuelve.
+    $reposicion = $returner->returnToLot($saleItemId, '2');
+
+    expect($reposicion)->toHaveCount(1)
+        ->and((int) $reposicion[0]['lot_id'])->toBe((int) $lots[1]->id);
+
+    $tras = DB::table('inventory_lots')->orderBy('received_at')->get();
+
+    // 3. El lote mas ANTIGUO no se repone: no fue de donde salio lo devuelto.
+    expect((float) $tras[0]->quantity_returned)->toBe(0.0)
+        // El segundo lote, si: es el lote exacto.
+        ->and((float) $tras[1]->quantity_returned)->toBe(2.0)
+        // Y el tercero, que la linea no toco, tampoco.
+        ->and((float) $tras[2]->quantity_returned)->toBe(0.0);
+
+    // 4. Y NO se crea un lote nuevo: la devolucion no inventaria mercaderia.
+    expect(DB::table('inventory_lots')->count())->toBe(3);
+
+    // 5. El consumo sigue intacto: la devolucion no lo borra.
+    expect((float) $tras[0]->quantity_consumed)->toBe(10.0)
+        ->and((float) $tras[1]->quantity_consumed)->toBe(2.0);
+
+    // 6. Y el cache vuelve a cuadrar con la suma de los lotes.
     expect($invariant->holds($productId, $storeId))->toBeTrue()
         ->and((float) $invariant->cachedStock($productId, $storeId))->toBe(12.0);
 });

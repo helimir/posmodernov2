@@ -28,7 +28,7 @@ afterEach(function () {
         .' products, stores RESTART IDENTITY CASCADE');
 });
 
-test('test_dos_ventas_concurrentes_no_sobrevenden_el_stock', function () {
+test('test_dos_ventas_concurrentes_sobre_stock_limitado_no_se_sobrevenden', function () {
     $store = Store::create(['name' => 'Tienda de prueba']);
     $product = Product::create(['code' => 'ZZP-3', 'name' => 'Producto con poco stock']);
 

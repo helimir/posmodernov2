@@ -306,3 +306,152 @@ test('test_el_asiento_rechaza_un_float_redondea_a_la_escala_de_la_columna_y_guar
 
     expect(DB::table('ledger_entries')->count())->toBe($cabecerasAntes);
 });
+
+/**
+ * 0.7.2-T — el gasto NACE en `expenses`, y el movimiento bancario no lo
+ * inventa.
+ *
+ * Regla que fija: *el gasto nace en `expenses`, no en el banco*. `expenses` es
+ * la FUENTE DE VERDAD del gasto: un gasto registrado existe ahi aunque no
+ * tenga ningun movimiento bancario, y un movimiento bancario SIN gasto no
+ * inventa ninguno. El legacy hacia al reves, y por eso un gasto registrado
+ * sin movimiento se perdia.
+ */
+test('test_el_gasto_nace_en_expenses_y_el_movimiento_bancario_no_lo_inventa', function () {
+    $store = Store::create(['name' => 'Tienda del gasto']);
+
+    // 1. `expenses` es una tabla de primera clase: el gasto tiene su importe
+    //    decimal, su referencia y su FECHA DE NEGOCIO.
+    expect(Schema::hasTable('expenses'))->toBeTrue()
+        ->and(Schema::getColumnType('expenses', 'amount'))->toBe('numeric')
+        ->and(Schema::getColumnListing('expenses'))->toContain('business_date')
+        ->toContain('reference')
+        ->toContain('description');
+
+    // 2. El gasto se REGISTRA en `expenses`: nace ahi, no en el banco.
+    $expenseId = DB::table('expenses')->insertGetId([
+        'store_id' => $store->id,
+        'expense_category_id' => null,
+        'amount' => '42.0000',
+        'description' => 'Papeleria de la tienda',
+        'reference' => 'FAC-0002',
+        'business_date' => '2026-11-04',
+        'incurred_at' => '2026-11-04T08:00:00-04:00',
+        'created_by' => null,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $gasto = DB::table('expenses')->where('id', $expenseId)->first();
+
+    expect($gasto)->not->toBeNull()
+        ->and((string) $gasto->amount)->toBe('42.0000')
+        ->and((string) $gasto->business_date)->toBe('2026-11-04')
+        ->and((string) $gasto->reference)->toBe('FAC-0002')
+        ->and((string) $gasto->description)->toBe('Papeleria de la tienda');
+
+    // 3. Y el movimiento bancario NO lo inventa: el banco mueve dinero, no
+    //    crea gastos.
+    $writer = new LedgerWriter(DB::connection());
+
+    $bankEntryId = $writer->write(
+        entryType: 'bank_movement',
+        storeId: $store->id,
+        occurredAt: new DateTimeImmutable('2026-11-04T15:00:00-04:00'),
+        businessDate: new DateTimeImmutable('2026-11-04T00:00:00-04:00'),
+        lines: [
+            ['account' => '1100000', 'debit' => '30.0000', 'credit' => '0'],
+            ['account' => '2100000', 'debit' => '0', 'credit' => '30.0000'],
+        ],
+        referenceType: 'bank_account',
+    );
+
+    // El movimiento SI se registro (no es un no-op)...
+    expect(DB::table('ledger_entries')->where('id', $bankEntryId)->exists())->toBeTrue();
+
+    // ... y no invento ningun gasto.
+    expect(DB::table('expenses')->count())->toBe(1)
+        ->and(DB::table('expenses')->where('id', $expenseId)->count())->toBe(1)
+        ->and(DB::table('expenses')->where('reference', 'MOV-BANCARIO-0001')->count())->toBe(0);
+
+    // 4. Y la clasificacion contable del gasto NO es una bandera dispersa: el
+    //    unico booleano de los catalogos es `is_active`, que es de INTERFAZ.
+    $banderas = [];
+
+    foreach (['expense_categories', 'income_sources'] as $tabla) {
+        foreach (Schema::getColumnListing($tabla) as $columna) {
+            if (in_array($columna, ['id', 'created_at', 'updated_at'], true)) {
+                continue;
+            }
+
+            $tipo = Schema::getColumnType($tabla, $columna, true);
+
+            if (in_array($tipo, ['boolean', 'bool'], true) && $columna !== 'is_active') {
+                $banderas[] = "{$tabla}.{$columna}";
+            }
+        }
+    }
+
+    expect($banderas)->toBe([]);
+});
+
+/**
+ * 0.7.7-T — el tipo de asiento se TOMA del catalogo, no de un literal.
+ *
+ * Regla que fija: *la clasificacion se consulta, no se desparrama en el
+ * codigo*. El tipo del asiento es una FK al catalogo `ledger_entry_types`: un
+ * codigo que no esta en el catalogo no es un asiento, y un tipo NUEVO en el
+ * catalogo es un asiento valido sin tocar una sola linea de codigo.
+ */
+test('test_el_tipo_de_asiento_se_toma_del_catalogo_y_no_de_un_literal', function () {
+    $store = Store::create(['name' => 'Tienda del catalogo']);
+    $writer = new LedgerWriter(DB::connection());
+
+    $occurredAt = new DateTimeImmutable('2026-11-04T10:15:00-04:00');
+    $businessDate = new DateTimeImmutable('2026-11-04T00:00:00-04:00');
+
+    $lineas = [
+        ['account' => '4010000', 'debit' => '10.0000', 'credit' => '0'],
+        ['account' => '2110000', 'debit' => '0', 'credit' => '10.0000'],
+    ];
+
+    // 1. La cabecera guarda el ID del catalogo, no el codigo: no hay columna
+    //    donde escribir el tipo como texto.
+    $columnas = Schema::getColumnListing('ledger_entries');
+
+    expect($columnas)->toContain('entry_type_id')
+        ->and($columnas)->not->toContain('entry_type')
+        ->and($columnas)->not->toContain('type');
+
+    $entryId = $writer->write('sale', $store->id, $occurredAt, $businessDate, $lineas);
+    $entry = DB::table('ledger_entries')->where('id', $entryId)->first();
+    $saleTypeId = DB::table('ledger_entry_types')->where('code', 'sale')->value('id');
+
+    expect((int) $entry->entry_type_id)->toBe((int) $saleTypeId);
+
+    // 2. Un codigo que NO esta en el catalogo no es un asiento: la
+    //    clasificacion se CONSULTA, y si no esta, no hay asiento.
+    $cabecerasAntes = DB::table('ledger_entries')->count();
+
+    expect(fn () => $writer->write('tipo_inexistente', $store->id, $occurredAt, $businessDate, $lineas))
+        ->toThrow(RuntimeException::class);
+
+    expect(DB::table('ledger_entries')->count())->toBe($cabecerasAntes);
+
+    // 3. Y un tipo NUEVO en el catalogo es un asiento valido SIN tocar el
+    //    codigo: la clasificacion es DATO, no una lista escondida.
+    DB::table('ledger_entry_types')->insert([
+        'code' => 'zz_tipo_del_catalogo',
+        'name' => 'Tipo nuevo del catalogo',
+        'is_active' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $nuevoId = $writer->write('zz_tipo_del_catalogo', $store->id, $occurredAt, $businessDate, $lineas);
+    $nuevo = DB::table('ledger_entries')->where('id', $nuevoId)->first();
+    $nuevoTypeId = DB::table('ledger_entry_types')->where('code', 'zz_tipo_del_catalogo')->value('id');
+
+    expect((int) $nuevo->entry_type_id)->toBe((int) $nuevoTypeId)
+        ->and(DB::table('ledger_entries')->count())->toBe($cabecerasAntes + 1);
+});
