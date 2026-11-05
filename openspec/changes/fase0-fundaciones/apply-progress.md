@@ -897,3 +897,40 @@ El traductor resuelve contra el estado **actual** de la base, asi que un lote qu
 ### Siguiente unidad
 
 **8-iv-c** - el `LegacyBatchApplier` y el job idempotente por `sync_batches`: el lote se aplica en una transaccion, y un reenvio identico responde exito sin reaplicar. Tendra que resolver la tension de `resolve_ref` y el `WHERE` dinamico del legacy.
+
+---
+
+## PR62-credito-iva - 6-iv: el IVA retenido, el credito y las cuotas (2026-11-05)
+
+- **Estado**: entregado en el PR #72 (rama `feat/fase0-35-iva-retenido-credito`).
+- **Tareas cerradas**: 0.6.4, 0.6.4-T, 0.6.7, 0.6.7-T, 0.6.8 y 0.6.8-T.
+- **Ficheros**: `app/Domain/Credit/{CustomerBalanceService,InstallmentService}.php`, `app/Domain/Fiscal/Enums/TaxType.php`, `tests/Feature/Credit/{WithholdingReceiptTest,CustomerBalanceServiceTest,InstallmentServiceTest}.php`, `tests/Fixtures/CreditFixture.php`, y los cambios en `app/Domain/Tax/{TaxCalculator,TaxLineInput}.php`.
+- **Evidencia**: `pest` 157 passed (1970 assertions), con `main` en 151 passed (1909 assertions); `pint` limpio; `php -l` limpio; mutation testing en los tres caminos.
+
+### El test canonico de 0.6.4 pasaba en verde ANTES de implementar nada
+
+El comprobante de retencion **ya existia** (`DerivedDocumentService::issueRetentionReceipt`, de 3b-iii), asi que el test canonico de 0.6.4 era verde sin que nadie escribiera una linea. Es la misma trampa que el canonico de 0.6.5-T tenia: **un test que pasa sin comprobar lo que dice comprobar**.
+
+El arreglo: el canonico ahora escribe el desglose de la venta **desde el resultado del motor** y afirma que el motor no mezcla el impuesto trasladado con el retenido. Asi las dos mutaciones del `tax_type` **tienen a quien fallar**.
+
+### El saldo del cliente se DERIVA, y el cache tiene invariante
+
+`customer_ledger_entries.amount` lleva el **signo** (positivo = debe, negativo = ha pagado) y el `type` dice **que** paso (sale|payment|return|adjustment). El saldo es la `SUM` de los movimientos; `customer_stores.balance`/`due` son un **cache con invariante**, igual que `product_stores.quantity_in_stock` con los lotes. `balance_after` se **recalcula** dentro de la transaccion del movimiento: arrastrar un contador es justo lo que el test debe cazar.
+
+Y un cobro normaliza el signo con `abs()` y lo niega: **un cobro reduce la deuda**, siempre. El signo del llamante no decide el signo del movimiento (un reintegro se registra con su propio `type`).
+
+### La cuota: interes simple, reparto y el redondeo DECLARADO
+
+El interes se calcula en el **servidor** (simple sobre el `payable`), el total es `payable + interes`, el nominal de cada cuota es `total / count` con `BigDecimal` a escala 4 HALF_UP, y **la ultima cuota absorbe la diferencia de redondeo**, de modo que la suma reproduce el total **exactamente** (1000,00 al 2,5 % en 3 cuotas -> 25,00 de interes, total 1025,00, nominal 341,6667, ultima 341,6666).
+
+La cadencia es **mensual** (`addMonthsNoOverflow`, que evita que una cuota del 31 de enero venza el 3 de marzo) porque `installment_schedules` no tiene columna de intervalo: la cadencia la declara el dominio.
+
+### Tres avisos que quedan
+
+1. **`issueRetentionReceipt()` fija `'withholding'` a pelo.** Hoy el motor y el documento coinciden por construccion, no por contrato: si alguien emitiera una retencion desde otro camino, el `tax_type` seguiria siendo `'withholding'` aunque el motor dijera otra cosa. La costura limpia es que el servicio reciba el tipo en vez de fijarlo.
+2. **`installment_plans.installment_count` es `unsignedSmallInteger`**: `count > 65535` lo rechaza PostgreSQL con un error de esquema, no con un `RuntimeException` del dominio.
+3. **`installment_plans` no tiene columna `total`**: el total a financiar es derivado, coherente con M16, donde `loans.payable` es explicitamente *no* columna.
+
+### Siguiente unidad
+
+**6-v** - las transferencias (0.6.9): el stock sale del **lote origen** y entra en el destino, con **una sola** cabecera. Y despues, **8-iv-c** (el aplicador del lote del sync), que sigue con tres decisiones abiertas.
