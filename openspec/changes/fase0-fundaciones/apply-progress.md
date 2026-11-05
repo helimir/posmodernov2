@@ -784,3 +784,56 @@ La columna **no** entra en el `` de `Store`: queda protegida del mass assignment
 ### Siguiente unidad
 
 **8-iv** - M24 (sync) + el verificador v2 + el traductor + el aplicador de lotes. Y luego las tres unidades de 0.9 y **0.6.4**.
+
+---
+
+## PR59-sync-verificador - 8-iv-a: el contrato de wire v2 (2026-11-05)
+
+- **Estado**: entregado en el PR #68 (rama `feat/fase0-33-sync-verificador`).
+- **Tareas cerradas**: 0.8.2, 0.8.2-T, 0.8.6 y 0.8.6-T.
+- **Ficheros**: `app/Sync/Legacy/{LegacySyncVerifier,LegacyVerification}.php`, `app/Http/Controllers/LegacySyncController.php`, `app/Models/{SyncBatch,LegacyTranslationMap}.php`, `database/migrations/2026_11_01_000024_create_sync_tables.php`, `config/sync.php`, `routes/api.php`, `tests/Feature/Sync/{LegacySyncVerifierTest,LegacyTranslationMapSchemaTest,LegacySyncEndpointTest,LegacySyncTransportTest}.php`, `tests/Fixtures/SyncFixture.php`.
+- **Evidencia**: `pest` 146 passed (1843 assertions), con `main` en 131 passed (1750 assertions); `pint` limpio; `php -l` limpio; M24 aplica/revierte/aplica; Redis disponible (predis, `redis:7-alpine`).
+
+### El contrato v2, replicado literalmente
+
+Las mismas claves (`username`, `action`, `data`, `timestamp`, `nonce`, `signature`), el mismo canonizado (`username \n action \n timestamp \n nonce \n sha256(data)`), la misma firma `hash_hmac('sha256', ...)`, los mismos limites, el **mismo orden de verificacion** (cliente conocido -> timestamp `^\d{10}$` -> antiguedad -> `hash_equals` de la firma -> **solo despues** consumo del nonce) y la **misma forma de respuesta**: exactamente tres claves, `status`, `message` y `for`.
+
+El `data` es un **string JSON** y el hash es sobre **sus bytes exactos**: re-codificarlo rompe la firma. Y el fallo de autenticacion responde **401 opaco** (`Invalid Action`): el motivo interno (`unknown_client`, `bad_timestamp`, `expired_request`, `bad_signature`, `replayed_request`) va **solo al log**.
+
+El nonce vive en **Redis con `SET NX EX`** (TTL = `max_age * 3`): mismo contrato que el fichero atomico del legacy, mejor implementacion. Y si Redis no esta, el verificador **falla cerrado**: no acepta sin anti-replay, y hay un test propio del fallo cerrado.
+
+### La correccion que hacia falta: la clave de idempotencia es del LOTE, no del sobre
+
+Yo habia pedido el hash SHA-256 del **cuerpo crudo**. El subagente lo corrigio con un argumento que no se puede discutir: el terminal legacy genera **nonce y timestamp nuevos en cada intento**, asi que un reenvio tiene **otro cuerpo**. Con el hash del cuerpo, un reenvio identico **no se reconoceria**, el lote se aplicaria **dos veces**, la violacion de PK **congelaria al terminal** para siempre: exactamente el fallo S1 que el ADR-0006 existe para tapar.
+
+El "mismo contenido" del reenvio es **el lote**, no el sobre. Queda escrito en el docblock de M24, en el `COMMENT ON COLUMN` y en el verificador.
+
+### Los tres rechazos de transporte, cerrados
+
+Estaban en `config/sync.php` pero **no los usaba nadie**: el maestro aceptaba un lote firmado **por HTTP plano desde cualquier IP**, y el lote lleva datos de venta.
+
+Ahora, **antes de autenticar** (como en el legacy): localhost sin permiso -> 403 `Invalid Action`; sin HTTPS -> 403 `HTTPS is required`; IP fuera de la lista -> 403 `Invalid Action`. Una lista de IPs **vacia** no restringe. Y como van antes de autenticar, un lote malicioso desde una IP no admitida **no gasta ni una verificacion HMAC ni un nonce**.
+
+El default `require_https` sigue en **true**: los tests **declaran** el transporte que necesitan, no relajan el default.
+
+### Dos trampas del entorno
+
+- **No se puede simular HTTPS con `['HTTPS' => 'on']`**: `SymfonyRequest::create()` deduce el transporte **del esquema de la URL** y descarta ese valor del array de servidor. La via correcta es `app('url')->forceScheme('https')`.
+- La IP se simula con `REMOTE_ADDR`, porque el repo **no configura proxies de confianza**. Si el maestro va detras de un proxy que no reenvia `X-Forwarded-Proto`, `require_https` rechazara todo: hay que vigilarlo en el **despliegue**, no en el codigo.
+
+### Lo que NO se replica
+
+- El legacy autentica **primero** y el greenfield comprueba la accion y el tamano del lote **antes**: la unica divergencia observable es una peticion **no autenticada y ademas malformada** (400 en vez de 401).
+- `DELETE ... LIMIT` del legacy (giftcards) no es portable a PostgreSQL: cuando llegue el traductor, ese lote se **rechaza entero** (fallo cerrado), no se aplica a medias.
+- La cifra de "~18 tablas" del plan **no esta verificada**: la evidencia del legacy da **~24** (17 en el nucleo checkout+caja, 7 en holding/quotations/gift-topups).
+
+### Los cuatro huecos del mapa (para 8-iv-b)
+
+1. **El identificador legacy es un string y la FK destino es bigint**: `selling_info.invoice_id` es `varchar(100)` y toda la cadena cuelga de el. El mapa necesita un transform que **resuelva** el id, no un renombrado.
+2. **`sell_logs` no tiene tabla destino**: el esquema del mapa no tiene forma de decir "se descarta" (la columna `new_table` a null lo dice, pero la tabla entera no).
+3. **`quotation_info` se parte en dos** (`quotations` y `orders`) segun un discriminante `is_order` que el destino no tiene: un **split**, no un rename.
+4. **Columnas que hay que inyectar desde el contexto del lote**: `store_id` (obligatorio en `gift_cards`), `sale_id` (en `installment_plans`), `entry_type_id` (en `ledger_entries`), `number` (en `installment_schedules`) y `business_date` (en `cash_registers`).
+
+### Siguiente unidad
+
+**8-iv-b** - el `LegacyStatementTranslator` (reescritor ligero de identificadores contra el mapa sembrado, con el des-escapeo **una vez, en la frontera**) y el seeder del mapa. Despues **8-iv-c** (el aplicador y el job idempotente), las tres unidades de 0.9 y **0.6.4**.
