@@ -109,7 +109,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 31 | `feat/fase0-29-impresion` | 8-i | M23 (el esquema de impresion) + los 4 modelos + el `EscposRenderer` + el congelado del payload | **1364** | PR #63 - issue #62 | **fusionado** `70c0ea5` |
 | 32 | `feat/fase0-30-impresion-endpoints` | 8-ii | los cinco endpoints del agente LAN + la maquina de estados de `print_jobs` + la reimpresion + el corte de papel | **1652** | PR #65 - issue #64 | **fusionado** `26ee98d` |
 | 33 | `feat/fase0-31-secreto-registro` | 8-iii | el secreto de registro por tienda: el registro del agente deja de ser publico | **467** | PR #67 - issue #66 | **fusionado** `530db45` |
-| 34 | `feat/fase0-33-sync-verificador` | 8-iv-a | M24 + el verificador del contrato v2 + los tres rechazos de transporte | **1918** | PR #68 - issue #67 | **en curso** |
+| 34 | `feat/fase0-33-sync-verificador` | 8-iv-a | M24 + el verificador del contrato v2 + los tres rechazos de transporte | **1918** | PR #69 - issue #68 | **en curso** |
 | 35 | `feat/fase0-34-sync-traductor` | 8-iv-b | el `LegacyStatementTranslator` + el mapa sembrado (las ~24 tablas del terminal) | ~1200 | - - - | pendiente |
 | 36 | `feat/fase0-35-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` + el job idempotente por `sync_batches` | ~900 | - - - | pendiente |
 | 37 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
