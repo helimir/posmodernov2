@@ -971,3 +971,50 @@ Si la cantidad se reparte entre varios lotes, hay **una linea por lote**, cada u
 ### La Fase 0.6, completa
 
 Con 0.6.9 quedan cerradas las nueve tareas de *"Motor de impuestos, ventas y checkout"*: el motor puro con su ajuste visible, el checkout atomico con sus dos reservas, el T2 fiscal con su reintento, el IVA retenido como documento propio, el credito con el saldo derivado, la cuota con el interes del servidor y las transferencias con una sola cabecera.
+
+---
+
+## PR64-sync-aplicador - 8-iv-c: el lote se aplica de verdad (2026-11-06)
+
+- **Estado**: entregado en el PR #76 (rama `feat/fase0-38-sync-aplicador`).
+- **Tareas cerradas**: 0.8.8, 0.8.8-T, 0.8.9 y 0.8.9-T. **Con esto la Fase 0.8 queda completa.**
+- **Ficheros**: `app/Sync/Legacy/LegacyBatchApplier.php`, `app/Jobs/ApplyLegacySyncBatch.php`, `tests/Feature/Sync/{LegacyBatchApplierTest,LegacySyncApplyTest}.php`, y los cambios en `app/Sync/Legacy/LegacyStatementTranslator.php`, `app/Http/Controllers/LegacySyncController.php`, `config/sync.php` y `tests/Feature/Print/PrintAgentControllerTest.php`.
+- **Evidencia**: `pest` 166 passed (2112 assertions), con `main` en 158 passed (2040 assertions); `pint` limpio; `php -l` limpio; mutation testing en los tres caminos.
+
+### El sync NO aplicaba NADA
+
+El endpoint verificaba la firma y respondia `200 {"status":"success","message":"sync successfully done","for":"sync"}` **sin tocar la base de datos**. Eso no cumplia el contrato: el legacy aplica el lote y, si falla, responde `500 {"status":"error","message":"Sync failed","for":"sync"}`.
+
+Ahora el endpoint **aplica** el lote y usa los **mensajes exactos del legacy** en los dos caminos. Y el motivo del fallo **no** filtra al cliente: va al log, como el resto del contrato v2.
+
+### La idempotencia: el hash del LOTE, no del cuerpo
+
+La clave es `hash('sha256', )`, donde `` es el string `data` **tal cual viaja**. No el hash del cuerpo HTTP: el terminal genera nonce y timestamp nuevos en cada intento, asi que un reenvio tiene **otro cuerpo**; con el hash del cuerpo, el reenvio no se reconoceria, el lote se aplicaria dos veces y la violacion de la UNIQUE **congelaria al terminal** (el fallo S1 que el ADR-0006 existe para tapar).
+
+Un reenvio identico responde **exito**, sin reaplicar, y `sync_batches` sigue con **una** fila. La mutacion que desactiva la comprobacion hace **fallar** el test canonico con la violacion de la UNIQUE.
+
+### Traducir y aplicar OPERACION A OPERACION
+
+El traductor resolvia los ids contra el estado **actual** de la base: un lote que **crea** la venta y luego la **referencia** no se podia traducir de una vez (la venta todavia no existia). El traductor gana `translateOne()` y el aplicador traduce y aplica **una a una**, dentro de la misma transaccion: asi un `resolve_ref` a algo creado por una operacion anterior del mismo lote resuelve.
+
+Y si una operacion falla, la transaccion **entera** se revierte: no queda nada aplicado ni la fila de `sync_batches`. **Un lote es todo o nada.**
+
+### Las tres decisiones que quedan fijadas
+
+- El **`WHERE` dinamico** del legacy (`_inc/ajax.php:154`) y el **`SET col = col + ?`** siguen rechazando el lote entero: es el diseno de **fallo cerrado** del ADR-0006 (el reescritor es ligero, no un parser SQL completo).
+- **El stock no se traslada**: `product_stores.quantity_in_stock` es un **cache derivado** de los lotes en el destino, asi que una operacion del legacy que lo actualice no tiene destino.
+- La **aplicacion va detras de `sync.legacy_adapter_enabled`**, el interruptor que ya existia y que NADIE usaba (fijado por 0.1.3-T: *ningun modulo emite, sincroniza ni imprime hasta ser validado y activado*). Con el adaptador apagado el terminal queda **pausado** (recibe exito y trunca su log, sin aplicar), no **congelado**: es el comportamiento previo. **Riesgo asumido**: el dato del terminal no se aplica mientras este apagado.
+
+### La carrera de dos envios identicos
+
+Se resuelve con **exito**: el perdedor captura la violacion de la restriccion unica, lee la fila ya aplicada y responde 200. Si no, el terminal veria un 500 por un lote que **si** se aplico.
+
+### 0.8.9 y un conflicto de nombres que se cerro
+
+Los tres modelos (`SyncBatch`, `LegacyTranslationMap`, `PrintAgent`) ya existian, pero el **nombre canonico** de 0.8.9-T no existia. Al renombrar un test para cubrirlo, el nombre canonico de **E.5 #27** (`test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_desde_el_agent_id`) **desaparecio**, y 0.9.6 exige que los 44 existan exactamente una vez.
+
+La solucion: **dos tests, no uno renombrado**. El de #27 vuelve a su nombre (con su cuerpo intacto) y el de 0.8.9-T es **nuevo**, con tres capas: el esquema no tiene columna `token`, el valor guardado es `hash('sha256', )` y no el token, y el token en claro **no aparece en ninguna fila** de `print_agents` (con dos agentes en dos tiendas, para que el barrido sea real).
+
+### La Fase 0.8, completa
+
+Con 0.8.8 y 0.8.9 quedan cerradas las nueve tareas de impresion LAN y sync legacy: el esquema de impresion, los bytes ESC/POS con el corte, los cinco endpoints del agente, el secreto de registro por tienda, el contrato de wire v2, el traductor contra el mapa sembrado, el aplicador idempotente y los modelos.

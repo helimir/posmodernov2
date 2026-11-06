@@ -74,6 +74,20 @@ return [
     'clients' => $pares((string) env('SYNC_CLIENTS', '')),
 
     /*
+     * La TIENDA de cada cliente: `id => store_id`.
+     *
+     * El terminal legacy empuja su log con los nombres de SU esquema y con
+     * SU tienda, y aqui los identificadores son de otro esquema y de otra
+     * tienda. El mapa de traduccion (`legacy_translation_map`) resuelve las
+     * COLUMNAS; esta lista resuelve la TIENDA del terminal: es el dato que
+     * el maestro necesita y que el terminal no puede decidir (un terminal
+     * no escribe en la tienda que no es suya).
+     *
+     * El formato es el de `SYNC_CLIENTS`: `id:valor` separados por comas.
+     */
+    'client_stores' => $pares((string) env('SYNC_CLIENT_STORES', '')),
+
+    /*
      * La ANTIGUEDAD maxima de una peticion firmada, en segundos. Es el
      * `SYNC_MAX_AGE` del legacy: sin el, una firma capturada serviria para
      * siempre.

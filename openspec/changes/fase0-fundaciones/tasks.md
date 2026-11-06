@@ -113,7 +113,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 35 | `feat/fase0-34-sync-traductor` | 8-iv-b | el `LegacyStatementTranslator`: el reescritor ligero de identificadores contra el mapa | **1259** | PR #71 - issue #70 | **fusionado** `20f4915` |
 | 36 | `feat/fase0-35-iva-retenido-credito` | 6-iv | el IVA retenido como documento propio + el saldo del cliente derivado + la cuota con interes simple en el servidor | **1185** | PR #73 - issue #72 | **fusionado** `d236777` |
 | 37 | `feat/fase0-36-transferencias` | 6-v | la transferencia: el stock sale del lote origen y entra en el destino, con una sola cabecera | **857** | PR #75 - issue #74 | **fusionado** `9b0368a` |
-| 38 | `feat/fase0-35-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` + el job idempotente por `sync_batches` | ~900 | - - - | pendiente |
+| 38 | `feat/fase0-38-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` (un lote en una transaccion, idempotente por `sync_batches`) + el job de reintento | **950** | PR #76 - issue #75 | **en curso** |
 | 39 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
@@ -364,10 +364,10 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 - [x] **0.8.6-T** Test: `test_un_lote_firmado_con_los_vectores_dorados_se_acepta_con_la_misma_respuesta` — regla que fija: *el contrato de wire no cambia*.
 - [x] **0.8.7** `app/Sync/Legacy/LegacyStatementTranslator.php`: reescritor **ligero** de identificadores (sólo tablas y columnas, no un parser SQL completo) contra `legacy_translation_map`; des-escapeo de los valores que el legacy HTML-escapea **una sola vez, en la frontera**. Dep: 0.8.2. Aceptación: una forma no contemplada ⇒ **rechazo del lote entero**, nunca aplicación parcial.
 - [x] **0.8.7-T** Test: `test_un_lote_con_una_operacion_no_reconocible_se_rechaza_entero_y_no_se_aplica_parcialmente` — regla que fija: *un lote es todo o nada*.
-- [ ] **0.8.8** `app/Sync/Legacy/LegacyBatchApplier.php` + `app/Jobs/ApplyLegacySyncBatch.php`: aplica el lote en **una** transacción, sólo `INSERT|UPDATE|DELETE`, **sin sentencias apiladas**; idempotencia por `sync_batches` (`UNIQUE (client_id, payload_sha256)`): un reenvío idéntico responde **éxito** sin reaplicar. Dep: 0.8.6, 0.8.7. Aceptación: el terminal que perdió la respuesta reenvía y **no** queda congelado en la ventana de corte.
-- [ ] **0.8.8-T** Test: `test_un_reenvio_identico_responde_exito_sin_aplicar_el_lote_dos_veces` — regla que fija: *el reenvío no viola la clave primaria ni duplica efectos*.
-- [ ] **0.8.9** Modelos de impresión y sync: `app/Models/Printer.php`, `PrintTarget.php`, `PrintAgent.php`, `PrintJob.php`, `SyncBatch.php`, `LegacyTranslationMap.php`. Dep: 0.8.1, 0.8.2. Aceptación: `PrintAgent` no guarda el token en claro, sólo `token_hash`.
-- [ ] **0.8.9-T** Test: `test_el_token_del_agente_se_guarda_solo_como_hash` — regla que fija: *una fuga de token acota a una sola caja*.
+- [x] **0.8.8** `app/Sync/Legacy/LegacyBatchApplier.php` + `app/Jobs/ApplyLegacySyncBatch.php`: aplica el lote en **una** transacción, sólo `INSERT|UPDATE|DELETE`, **sin sentencias apiladas**; idempotencia por `sync_batches` (`UNIQUE (client_id, payload_sha256)`): un reenvío idéntico responde **éxito** sin reaplicar. Dep: 0.8.6, 0.8.7. Aceptación: el terminal que perdió la respuesta reenvía y **no** queda congelado en la ventana de corte.
+- [x] **0.8.8-T** Test: `test_un_reenvio_identico_responde_exito_sin_aplicar_el_lote_dos_veces` — regla que fija: *el reenvío no viola la clave primaria ni duplica efectos*.
+- [x] **0.8.9** Modelos de impresión y sync: `app/Models/Printer.php`, `PrintTarget.php`, `PrintAgent.php`, `PrintJob.php`, `SyncBatch.php`, `LegacyTranslationMap.php`. Dep: 0.8.1, 0.8.2. Aceptación: `PrintAgent` no guarda el token en claro, sólo `token_hash`.
+- [x] **0.8.9-T** Test: `test_el_token_del_agente_se_guarda_solo_como_hash` — regla que fija: *una fuga de token acota a una sola caja*.
 
 ---
 

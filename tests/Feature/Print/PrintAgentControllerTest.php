@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\PrintAgentController;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\Fixtures\PrintFixture;
 
 /**
@@ -215,4 +216,73 @@ test('test_el_long_poll_espera_al_trabajo_y_tiene_un_tope_de_treinta_segundos', 
 
     // 2. Y el tope del long-poll son 30 segundos, no mas.
     expect(PrintAgentController::ESPERA_MAXIMA_SEGUNDOS)->toBe(30);
+});
+
+/**
+ * 0.8.9-T — el TOKEN del agente NO se persiste en claro.
+ *
+ * Regla que fija: *una fuga de token acota a una sola caja*.
+ *
+ * El token del agente se entrega EN CLARO una sola vez (en el registro) y en
+ * la base de datos solo queda su HASH. Un token en claro persistido se
+ * puede robar de un volcado y usar para imprimir desde cualquier sitio, y
+ * la fila robada es de UNA caja: con el hash, la fuga obliga a ROTAR ese
+ * token y no compromete el resto de la tienda.
+ *
+ * El ESQUEMA lo dice antes que el codigo: `print_agents` tiene una columna
+ * `token_hash` y NO tiene ninguna columna de token en claro. Y el valor
+ * guardado es el SHA-256 del token entregado, no el token.
+ */
+test('test_el_token_del_agente_se_guarda_solo_como_hash', function () {
+    // El canal LAN esta apagado hasta que se valida (`config/print.php`).
+    config(['print.lan_agent_enabled' => true]);
+
+    // 1. DOS agentes, en dos tiendas: el registro es publico, asi que cada
+    //    tienda tiene su SECRETO DE REGISTRO.
+    $tiendaA = PrintFixture::contexto();
+    $tiendaB = PrintFixture::contexto();
+
+    $secretoA = PrintFixture::secretoDeRegistro($tiendaA['store_id']);
+    $secretoB = PrintFixture::secretoDeRegistro($tiendaB['store_id']);
+
+    $registroA = $this->postJson('/api/print-agents/register', [
+        'name' => 'Caja de la tienda A',
+        'store_id' => $tiendaA['store_id'],
+    ], ['X-Registration-Secret' => $secretoA]);
+
+    $registroA->assertCreated()->assertJsonPath('status', 'registered');
+
+    $registroB = $this->postJson('/api/print-agents/register', [
+        'name' => 'Caja de la tienda B',
+        'store_id' => $tiendaB['store_id'],
+    ], ['X-Registration-Secret' => $secretoB]);
+
+    $registroB->assertCreated();
+
+    $agentId = (int) $registroA->json('agent_id');
+    $token = (string) $registroA->json('token');
+
+    expect($agentId)->toBeGreaterThan(0)
+        ->and($token)->not->toBe('');
+
+    // 2. El ESQUEMA: hay una columna de HASH y NO hay ninguna columna de
+    //    token en claro.
+    $columnas = Schema::getColumnListing('print_agents');
+
+    expect($columnas)->toContain('token_hash')
+        ->and($columnas)->not->toContain('token');
+
+    // 3. El valor guardado es el HASH del token entregado, no el token.
+    $hashGuardado = (string) DB::table('print_agents')->where('id', $agentId)->value('token_hash');
+
+    expect($hashGuardado)->not->toBe($token)
+        ->and($hashGuardado)->toBe(hash('sha256', $token));
+
+    // 4. Y el token en claro NO aparece en NINGUN valor de NINGUNA fila de
+    //    la tabla: ni en la del agente que lo recibio, ni en la del otro.
+    foreach (DB::table('print_agents')->get() as $fila) {
+        foreach ((array) $fila as $valor) {
+            expect((string) $valor)->not->toContain($token);
+        }
+    }
 });
