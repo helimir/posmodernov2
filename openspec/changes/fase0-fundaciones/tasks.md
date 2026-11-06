@@ -113,7 +113,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 35 | `feat/fase0-34-sync-traductor` | 8-iv-b | el `LegacyStatementTranslator`: el reescritor ligero de identificadores contra el mapa | **1259** | PR #71 - issue #70 | **fusionado** `20f4915` |
 | 36 | `feat/fase0-35-iva-retenido-credito` | 6-iv | el IVA retenido como documento propio + el saldo del cliente derivado + la cuota con interes simple en el servidor | **1185** | PR #73 - issue #72 | **fusionado** `d236777` |
 | 37 | `feat/fase0-36-transferencias` | 6-v | la transferencia: el stock sale del lote origen y entra en el destino, con una sola cabecera | **857** | PR #75 - issue #74 | **fusionado** `9b0368a` |
-| 38 | `feat/fase0-38-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` (un lote en una transaccion, idempotente por `sync_batches`) + el job de reintento | **950** | PR #76 - issue #75 | **en curso** |
+| 38 | `feat/fase0-38-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` (un lote en una transaccion, idempotente por `sync_batches`) + el job de reintento | **1118** | PR #76 - issue #75 | **en curso** |
 | 39 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |

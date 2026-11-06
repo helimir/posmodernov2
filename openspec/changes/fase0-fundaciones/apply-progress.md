@@ -989,7 +989,7 @@ Ahora el endpoint **aplica** el lote y usa los **mensajes exactos del legacy** e
 
 ### La idempotencia: el hash del LOTE, no del cuerpo
 
-La clave es `hash('sha256', )`, donde `` es el string `data` **tal cual viaja**. No el hash del cuerpo HTTP: el terminal genera nonce y timestamp nuevos en cada intento, asi que un reenvio tiene **otro cuerpo**; con el hash del cuerpo, el reenvio no se reconoceria, el lote se aplicaria dos veces y la violacion de la UNIQUE **congelaria al terminal** (el fallo S1 que el ADR-0006 existe para tapar).
+La clave es `hash('sha256', $rawData)``, donde `` es el string `data` **tal cual viaja**. No el hash del cuerpo HTTP: el terminal genera nonce y timestamp nuevos en cada intento, asi que un reenvio tiene **otro cuerpo**; con el hash del cuerpo, el reenvio no se reconoceria, el lote se aplicaria dos veces y la violacion de la UNIQUE **congelaria al terminal** (el fallo S1 que el ADR-0006 existe para tapar).
 
 Un reenvio identico responde **exito**, sin reaplicar, y `sync_batches` sigue con **una** fila. La mutacion que desactiva la comprobacion hace **fallar** el test canonico con la violacion de la UNIQUE.
 
@@ -1013,7 +1013,7 @@ Se resuelve con **exito**: el perdedor captura la violacion de la restriccion un
 
 Los tres modelos (`SyncBatch`, `LegacyTranslationMap`, `PrintAgent`) ya existian, pero el **nombre canonico** de 0.8.9-T no existia. Al renombrar un test para cubrirlo, el nombre canonico de **E.5 #27** (`test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_desde_el_agent_id`) **desaparecio**, y 0.9.6 exige que los 44 existan exactamente una vez.
 
-La solucion: **dos tests, no uno renombrado**. El de #27 vuelve a su nombre (con su cuerpo intacto) y el de 0.8.9-T es **nuevo**, con tres capas: el esquema no tiene columna `token`, el valor guardado es `hash('sha256', )` y no el token, y el token en claro **no aparece en ninguna fila** de `print_agents` (con dos agentes en dos tiendas, para que el barrido sea real).
+La solucion: **dos tests, no uno renombrado**. El de #27 vuelve a su nombre (con su cuerpo intacto) y el de 0.8.9-T es **nuevo**, con tres capas: el esquema no tiene columna `token`, el valor guardado es `hash('sha256', $rawData)`` y no el token, y el token en claro **no aparece en ninguna fila** de `print_agents` (con dos agentes en dos tiendas, para que el barrido sea real).
 
 ### La Fase 0.8, completa
 
