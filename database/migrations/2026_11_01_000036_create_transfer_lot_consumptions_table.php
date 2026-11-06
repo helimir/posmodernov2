@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * M33 — la traza del consumo de una TRANSFERENCIA.
+ * M36 — la traza del consumo de una TRANSFERENCIA.
  *
  * `sale_item_lot_consumptions` es la traza de las VENTAS: su `sale_item_id` es
  * NOT NULL. Una transferencia NO tiene venta, asi que no puede usar esa traza:

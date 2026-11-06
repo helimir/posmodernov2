@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * M32 — el lote de una transferencia no viene de una compra.
+ * M35 — el lote de una transferencia no viene de una compra.
  *
  * `inventory_lots.purchase_item_id` era NOT NULL y UNIQUE (1:1 con la linea de
  * compra que abrio el lote). Un lote que llega de una transferencia no lo
