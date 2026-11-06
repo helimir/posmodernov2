@@ -934,3 +934,40 @@ La cadencia es **mensual** (`addMonthsNoOverflow`, que evita que una cuota del 3
 ### Siguiente unidad
 
 **6-v** - las transferencias (0.6.9): el stock sale del **lote origen** y entra en el destino, con **una sola** cabecera. Y despues, **8-iv-c** (el aplicador del lote del sync), que sigue con tres decisiones abiertas.
+
+---
+
+## PR63-transferencias - 6-v: la transferencia entre almacenes (2026-11-05)
+
+- **Estado**: entregado en el PR #74 (rama `feat/fase0-36-transferencias`).
+- **Tareas cerradas**: 0.6.9 y 0.6.9-T. **Con esto la Fase 0.6 queda COMPLETA**.
+- **Ficheros**: `app/Domain/Inventory/{TransferService,LotFifoAllocator}.php`, `database/migrations/2026_11_01_000035_allow_transfer_lots_table.php`, `2026_11_01_000036_create_transfer_lot_consumptions_table.php`, `tests/Feature/Inventory/TransferServiceTest.php`, y el refactor de `app/Domain/Inventory/LotConsumer.php`.
+- **Evidencia**: `pest` 158 passed (2040 assertions), con `main` en 157 passed (1970 assertions); `pint` limpio; `php -l` limpio; las migraciones aplican, revierten y vuelven a aplicar; mutation testing en los dos caminos.
+
+### Los dos huecos que el esquema dejaba abiertos
+
+1. **El lote de destino no tiene donde meter su `purchase_item_id`**: es NOT NULL y UNIQUE (1:1 con la linea de compra que abrio el lote), y un lote de transferencia no viene de una compra. **M35** lo hace nullable y anade `inventory_lots.source_lot_id` (la trazabilidad: este lote salio de aquel), con RESTRICT: no se borra un lote que tiene un lote derivado, porque perder la trazabilidad en silencio es peor que impedir el borrado.
+2. **La traza del consumo era de VENTAS**: `sale_item_lot_consumptions` tiene `sale_item_id` NOT NULL, y una transferencia no tiene venta. **M36** crea `transfer_item_lot_consumptions`, el espejo exacto para las transferencias.
+
+### El FIFO, compartido y sin duplicar
+
+El consumo FIFO se extrajo a **`LotFifoAllocator`**: un collaborator **sin traza** que devuelve el plan por lote, descuenta el `quantity_consumed` y lanza el mismo error de stock insuficiente. Lo usan los dos: `LotConsumer` (venta) escribe su traza en `sale_item_lot_consumptions`, y el `TransferService` en `transfer_item_lot_consumptions`.
+
+**Por que no duplicarlo**: una regla de consumo duplicada acaba con el mismo lote consumido dos veces. Y la forma concreta ("el allocator devuelve el plan, el llamador escribe su traza") es mas limpia que un callback: la transferencia necesita el `transfer_item_id` para su traza, y ese id **nace** de la linea que el propio servicio crea por lote consumido.
+
+Lo que **no** cambio: `ORDER BY received_at ASC, id ASC`, el `FOR UPDATE SKIP LOCKED` (el que no encuentra lote falla **sin esperar**) y el mensaje de stock insuficiente. La aritmetica si paso de `float` a `BigDecimal` escala 4 HALF_UP: el epsilon `> 0.000001` del float era innecesario con escala 4 (la diferencia minima es 1e-4).
+
+### Una linea de `transfer_items` por LOTE consumido
+
+Si la cantidad se reparte entre varios lotes, hay **una linea por lote**, cada una con su `source_lot_id`, su `quantity` y su `unit_cost`. Y **una sola cabecera**: el legacy generaba una cabecera de compra POR CADA ARTICULO (P0 #17 del mapa funcional) y el listado de compras se multiplicaba.
+
+### Avisos que quedan
+
+- **La numeracion de migraciones colisionaba**: `000032` y `000033` ya estaban usados (por la caja/ingresos y por `opened_by`). Las dos migraciones de esta unidad se renombraron a **M35 y M36**, y el `down()` de M35 **aborta con `RuntimeException`** si hay lotes con `purchase_item_id IS NULL`, en vez de dejar que PostgreSQL reviente con un error de nulidad.
+- **`` no se persiste**: `transfers` (M29) no tiene columna de actor y no se inventan columnas; el parametro se acepta por simetria con el resto del dominio.
+- **Un servicio (producto `type='service'`) no se puede transferir**: no tiene lote, asi que el FIFO no encuentra nada. El mensaje es honesto pero no dice "es un servicio".
+- **Mientras la transferencia esta `in_transit`, el stock esta "en el camino"**: fuera del origen y antes del destino. Si el negocio quiere el "en camino" como stock virtual, es otra unidad.
+
+### La Fase 0.6, completa
+
+Con 0.6.9 quedan cerradas las nueve tareas de *"Motor de impuestos, ventas y checkout"*: el motor puro con su ajuste visible, el checkout atomico con sus dos reservas, el T2 fiscal con su reintento, el IVA retenido como documento propio, el credito con el saldo derivado, la cuota con el interes del servidor y las transferencias con una sola cabecera.
