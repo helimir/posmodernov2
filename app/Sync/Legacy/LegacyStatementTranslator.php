@@ -24,6 +24,13 @@ use RuntimeException;
  * unidad (el aplicador del lote), y asi el mapa se puede auditar sin tocar
  * el codigo.
  *
+ * Hay DOS puertas publicas: `translate()` traduce el LOTE entero y
+ * `translateOne()` traduce UNA operacion. El aplicador usa la segunda, porque
+ * un lote se aplica operacion a operacion: un `resolve_ref` a algo creado
+ * por una operacion ANTERIOR del mismo lote tiene que resolver, y solo
+ * resuelve si la traduccion ocurre DESPUES de que esa operacion anterior se
+ * aplico.
+ *
  * Las reglas que fija esta clase son SIETE:
  *
  *   1. Solo `INSERT`, `UPDATE` y `DELETE`. Cualquier otra sentencia
@@ -64,6 +71,17 @@ use RuntimeException;
  */
 final readonly class LegacyStatementTranslator
 {
+    /**
+     * La MARCA DE DESCARTE: el `type` de una operacion cuya tabla del legacy
+     * NO se traslada.
+     *
+     * No es un rejection: es una operacion que NO produce nada aqui, porque
+     * su destino no existe en este esquema (el mapa lo dice con
+     * `new_table IS NULL`). Descartarla deja al terminal CONGELADO, que es
+     * justo el fallo que el ADR-0006 existe para tapar.
+     */
+    public const DESCARTE = 'discard';
+
     /**
      * Un IDENTIFICADOR: con backticks (como los escribe el legacy) o sin
      * ellos.
@@ -154,15 +172,22 @@ final readonly class LegacyStatementTranslator
      */
     public function translate(array $operations, array $context = []): array
     {
-        $mapa = $this->cargarMapa();
         $traducidas = [];
 
         foreach ($operations as $indice => $operacion) {
-            $traducida = $this->traducirOperacion((int) $indice, $operacion, $context, $mapa);
+            if (! is_array($operacion)) {
+                throw new RuntimeException("La operacion {$indice} del lote no es una operacion.");
+            }
+
+            try {
+                $traducida = $this->translateOne($operacion, $context);
+            } catch (RuntimeException $e) {
+                throw new RuntimeException("La operacion {$indice} del lote: ".$e->getMessage(), 0, $e);
+            }
 
             // Una tabla que el mapa declara NO trasladable NO produce
             // operacion: su destino no existe aqui.
-            if ($traducida !== null) {
+            if (($traducida['type'] ?? null) !== self::DESCARTE) {
                 $traducidas[] = $traducida;
             }
         }
@@ -171,7 +196,38 @@ final readonly class LegacyStatementTranslator
     }
 
     /**
-     * El MAPA sembrado, cargado UNA vez por lote.
+     * Traduce UNA operacion del lote.
+     *
+     * Es la puerta que usa el APLICADOR (`LegacyBatchApplier`), que aplica el
+     * lote operacion a operacion: un `resolve_ref` a algo creado por una
+     * operacion ANTERIOR del mismo lote tiene que resolver, y solo resuelve
+     * si la traduccion ocurre DESPUES de que esa operacion anterior se
+     * aplico. El traductor busca contra el estado ACTUAL de la base, y
+     * dentro de la transaccion del lote ese estado ya incluye lo aplicado
+     * antes. Esta es la TENSION que el traductor dejo abierta y que el
+     * aplicador cierra.
+     *
+     * @param  array<string, mixed>  $operation  La operacion del lote: `{sql, args}`.
+     * @param  array<string, mixed>  $context  El contexto del lote: `store_id`, `sale_id`, `business_date` y `sequence`.
+     * @return array<string, mixed> La operacion ESTRUCTURADA, o la MARCA DE
+     *                              DESCARTE (`type` = `discard`) cuando la
+     *                              tabla del legacy NO se traslada.
+     *
+     * @throws RuntimeException Cuando la operacion no se puede traducir.
+     */
+    public function translateOne(array $operation, array $context = []): array
+    {
+        // El MAPA se relee en cada operacion: son dieciocho tablas y el
+        // lote esta acotado por `SYNC_MAX_STATEMENTS`. Releerlo es lo que
+        // hace que el lote entero vea el mapa que hay en este momento, y no
+        // el que habia cuando empezo.
+        $mapa = $this->cargarMapa();
+
+        return $this->traducirOperacion($operation, $context, $mapa);
+    }
+
+    /**
+     * El MAPA sembrado, cargado UNA vez por operacion.
      *
      * @return array<string, array<string, array{new_table: ?string, new_column: ?string, transform: ?string}>>
      */
@@ -197,18 +253,18 @@ final readonly class LegacyStatementTranslator
      * Traduce UNA operacion del lote.
      *
      * @param  array<string, array<string, array{new_table: ?string, new_column: ?string, transform: ?string}>>  $mapa
-     * @return array<string, mixed>|null NULL cuando la tabla del legacy no se traslada.
+     * @return array<string, mixed> La operacion ESTRUCTURADA, o la MARCA DE DESCARTE.
      */
-    private function traducirOperacion(int $indice, mixed $operacion, array $contexto, array $mapa): ?array
+    private function traducirOperacion(mixed $operacion, array $contexto, array $mapa): array
     {
         if (! is_array($operacion) || ! isset($operacion['sql']) || ! is_string($operacion['sql'])) {
-            throw new RuntimeException("La operacion {$indice} del lote no trae una sentencia `sql` valida.");
+            throw new RuntimeException('La operacion del lote no trae una sentencia `sql` valida.');
         }
 
         $args = $operacion['args'] ?? [];
 
         if (! is_array($args)) {
-            throw new RuntimeException("La operacion {$indice} del lote no trae los argumentos `args`.");
+            throw new RuntimeException('La operacion del lote no trae los argumentos `args`.');
         }
 
         $sentencia = $this->sentenciaDe(trim($operacion['sql']));
@@ -227,7 +283,7 @@ final readonly class LegacyStatementTranslator
                 'tabla' => $sentencia['tabla'],
             ]);
 
-            return null;
+            return ['type' => self::DESCARTE, 'table' => $sentencia['tabla']];
         }
 
         $tabla = $this->identificadorSeguro($regla['new_table']);

@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Sync\Legacy\LegacyBatchApplier;
 use App\Sync\Legacy\LegacySyncVerifier;
+use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * El ENDPOINT del sync legacy (`POST /api/sync`).
@@ -25,7 +28,8 @@ use Illuminate\Support\Facades\Log;
  *
  * | Situacion                       | Codigo | Mensaje                                       |
  * |---------------------------------|--------|-----------------------------------------------|
- * | lote autenticado                | 200    | `sync successfully done`                      |
+ * | lote autenticado y aplicado     | 200    | `sync successfully done`                      |
+ * | lote autenticado y NO aplicado  | 500    | `Sync failed`                                 |
  * | sincronizacion apagada          | 403    | `Synchronization is disabled on this server`  |
  * | trafico desde localhost         | 403    | `Invalid Action`                              |
  * | peticion sin HTTPS               | 403    | `HTTPS is required`                           |
@@ -41,10 +45,25 @@ use Illuminate\Support\Facades\Log;
  * datos de venta y viaja firmado, y una peticion que no llega por HTTPS, que
  * viene de loopback o que viene de una IP no admitida no tiene por que
  * gastarse una verificacion de firma.
+ *
+ * El LOTE se APLICA de verdad, con el aplicador, y el fallo de aplicacion
+ * responde `500 Sync failed` sin filtrar el motivo: el motivo va al log del
+ * servidor, como todo lo demas.
+ *
+ * El ADAPTADOR (`sync.legacy_adapter_enabled`) es el interruptor del modulo
+ * (0.1.3): apagado, el maestro no traduce ni aplica, porque el mapa de
+ * traduccion todavia no esta sembrado ni auditado. El terminal queda
+ * PAUSADO, no CONGELADO: sigue recibiendo exito y no acumula log. Encendido,
+ * el lote se aplica en su transaccion y un reenvio identico responde exito
+ * SIN reaplicar.
  */
 final class LegacySyncController extends Controller
 {
-    public function __construct(private LegacySyncVerifier $verifier) {}
+    public function __construct(
+        private LegacySyncVerifier $verifier,
+        private LegacyBatchApplier $applier,
+        private Connection $connection,
+    ) {}
 
     /**
      * Recibe el lote del terminal legacy.
@@ -122,8 +141,11 @@ final class LegacySyncController extends Controller
         }
 
         // 7. El LOTE: el `data` es un string JSON, asi que hay que
-        //    decodificarlo OTRA vez.
-        $lote = json_decode($this->texto($payload['data'] ?? ''), true);
+        //    decodificarlo OTRA vez. El string se guarda tal cual: son los
+        //    bytes que se firmaron, y son los que identifican el lote.
+        $data = $this->texto($payload['data'] ?? '');
+
+        $lote = json_decode($data, true);
 
         if (! is_array($lote) || $lote === []) {
             return $this->responder('error', 'Nothing to sync', 'invalid', 400);
@@ -157,9 +179,114 @@ final class LegacySyncController extends Controller
             return $this->responder('error', 'Invalid Action', 'invalid', 401);
         }
 
-        // 10. La RESPUESTA. En la unidad 8-iv-c, aqui se aplica el lote en
-        //     una transaccion y se registra en `sync_batches`.
+        // 10. La APLICACION del lote. El ADAPTADOR es el interruptor del
+        //     modulo: apagado, el maestro no traduce ni aplica (el mapa de
+        //     traduccion todavia no esta sembrado) y el terminal queda
+        //     PAUSADO, no CONGELADO. Encendido, el lote se aplica en su
+        //     transaccion: todo o nada.
+        if ((bool) config('sync.legacy_adapter_enabled', false)) {
+            try {
+                $this->applier->apply(
+                    (string) $verificacion->client,
+                    $data,
+                    $this->contextoDelLote($verificacion->client),
+                );
+            } catch (Throwable $e) {
+                // El motivo INTERNO (una columna que no existe, un filtro
+                // que el maestro no sabe calcular, una restriccion del
+                // esquema) va al log del servidor: el terminal solo ve
+                // `Sync failed`.
+                Log::error('sync: el lote no se pudo aplicar', [
+                    'client' => $verificacion->client,
+                    'error' => $e->getMessage(),
+                    'ip' => $request->ip(),
+                ]);
+
+                return $this->responder('error', 'Sync failed', 'sync', 500);
+            }
+        }
+
+        // 11. LA RESPUESTA. Es la del legacy: tres claves y su codigo.
         return $this->responder('success', 'sync successfully done', 'sync', 200);
+    }
+
+    /**
+     * El CONTEXTO del lote: la TIENDA del cliente autenticado y su FECHA DE
+     * NEGOCIO.
+     *
+     * La tienda sale del CLIENTE (la configuracion `sync.client_stores`),
+     * nunca del cuerpo del lote: un terminal no escribe en la tienda que no
+     * es suya, y el maestro no va a preguntarle al lote.
+     *
+     * La fecha de negocio es el DATO de la caja ABIERTA de esa tienda, no
+     * un `now()` calculado: el legacy partia el dia a la medianoche del
+     * servidor, y una operacion de las 23:50 caia en el dia que le tocaba
+     * (trampa 62 del mapa funcional). Si no hay caja abierta, el contexto
+     * no trae fecha: las operaciones que la necesiten se rechazan, en vez
+     * de inventar una.
+     *
+     * @return array<string, mixed>
+     */
+    private function contextoDelLote(?string $clientId): array
+    {
+        $contexto = [];
+
+        $storeId = $this->tiendaDelCliente($clientId);
+
+        if ($storeId === null) {
+            Log::warning('sync: el cliente no tiene tienda asignada', [
+                'client' => $clientId,
+            ]);
+
+            return $contexto;
+        }
+
+        $contexto['store_id'] = $storeId;
+
+        $fecha = $this->fechaDeNegocio($storeId);
+
+        if ($fecha !== null) {
+            $contexto['business_date'] = $fecha;
+        }
+
+        return $contexto;
+    }
+
+    /**
+     * La TIENDA del cliente autenticado, o `null` si no tiene ninguna.
+     */
+    private function tiendaDelCliente(?string $clientId): ?int
+    {
+        if ($clientId === null || $clientId === '') {
+            return null;
+        }
+
+        $tiendas = (array) config('sync.client_stores', []);
+        $valor = $tiendas[$clientId] ?? null;
+
+        if ($valor === null || ! is_numeric($valor)) {
+            return null;
+        }
+
+        return (int) $valor;
+    }
+
+    /**
+     * La FECHA DE NEGOCIO de la caja abierta de la tienda.
+     */
+    private function fechaDeNegocio(int $storeId): ?string
+    {
+        $registro = $this->connection->table('cash_registers')
+            ->where('store_id', $storeId)
+            ->where('status', 'open')
+            ->orderByDesc('business_date')
+            ->first();
+
+        if ($registro === null) {
+            return null;
+        }
+
+        return (string) $registro->business_date;
     }
 
     /**
