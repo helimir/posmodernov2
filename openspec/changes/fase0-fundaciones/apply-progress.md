@@ -779,7 +779,7 @@ El contrato cerrado de la unidad pedia 201 y el test existente afirmaba 200: hub
 
 ### Decision que se dejo anotada
 
-La columna **no** entra en el `` de `Store`: queda protegida del mass assignment **por omision**. Y la BD de desarrollo `pos_moderno_v2` esta sembrada por dump, **no** por migraciones (todas las migraciones aparecen como `Pending` ahi): el ciclo de M34 se probo sobre la BD de test, que si esta gobernada por migraciones.
+La columna **no** entra en el `$fillable` de `Store`: queda protegida del mass assignment **por omision**. Y la BD de desarrollo `pos_moderno_v2` esta sembrada por dump, **no** por migraciones (todas las migraciones aparecen como `Pending` ahi): el ciclo de M34 se probo sobre la BD de test, que si esta gobernada por migraciones.
 
 ### Siguiente unidad
 
