@@ -964,7 +964,7 @@ Si la cantidad se reparte entre varios lotes, hay **una linea por lote**, cada u
 ### Avisos que quedan
 
 - **La numeracion de migraciones colisionaba**: `000032` y `000033` ya estaban usados (por la caja/ingresos y por `opened_by`). Las dos migraciones de esta unidad se renombraron a **M35 y M36**, y el `down()` de M35 **aborta con `RuntimeException`** si hay lotes con `purchase_item_id IS NULL`, en vez de dejar que PostgreSQL reviente con un error de nulidad.
-- **`` no se persiste**: `transfers` (M29) no tiene columna de actor y no se inventan columnas; el parametro se acepta por simetria con el resto del dominio.
+- **`$actorId` no se persiste**: `transfers` (M29) no tiene columna de actor y no se inventan columnas; el parametro se acepta por simetria con el resto del dominio.
 - **Un servicio (producto `type='service'`) no se puede transferir**: no tiene lote, asi que el FIFO no encuentra nada. El mensaje es honesto pero no dice "es un servicio".
 - **Mientras la transferencia esta `in_transit`, el stock esta "en el camino"**: fuera del origen y antes del destino. Si el negocio quiere el "en camino" como stock virtual, es otra unidad.
 
