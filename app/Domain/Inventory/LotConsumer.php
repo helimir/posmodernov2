@@ -2,6 +2,8 @@
 
 namespace App\Domain\Inventory;
 
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Database\Connection;
 use RuntimeException;
 
@@ -19,15 +21,32 @@ use RuntimeException;
  * que no encuentra dice "stock insuficiente" en vez de esperar. Sin venta
  * por encima del stock, nunca por sobreventa.
  *
+ * La REGLA FIFO vive en `LotFifoAllocator`, que es la unica implementacion y
+ * que usa tambien la transferencia: una regla de consumo que viviera en dos
+ * sitios acabaria con el mismo lote consumido dos veces. Aqui solo se escribe
+ * la TRAZA de la VENTA (`sale_item_lot_consumptions`), que es lo que permite
+ * devolver el stock al lote EXACTO del que salio.
+ *
  * El legacy no hacía esto: su `UPDATE` de consumo no filtraba por el id del
  * lote y tocaba TODOS los lotes activos del producto (defecto H1, ADR-0004).
  */
 final readonly class LotConsumer
 {
+    /**
+     * El allocator del FIFO.
+     *
+     * Es un algoritmo SIN ESTADO sobre la MISMA conexion, asi que se
+     * construye aqui y no se inyecta: inyectarlo permitiria consumir en una
+     * conexion distinta de la que escribe la traza.
+     */
+    private LotFifoAllocator $allocator;
+
     public function __construct(
         private Connection $connection,
         private StockInvariant $invariant,
-    ) {}
+    ) {
+        $this->allocator = new LotFifoAllocator($connection);
+    }
 
     /**
      * Consume la cantidad indicada del producto en la tienda.
@@ -45,9 +64,9 @@ final readonly class LotConsumer
             return [];
         }
 
-        $wanted = (float) $quantity;
+        $wanted = BigDecimal::of($quantity)->toScale(4, RoundingMode::HALF_UP);
 
-        if ($wanted <= 0) {
+        if ($wanted->isZero() || $wanted->isNegative()) {
             return [];
         }
 
@@ -56,64 +75,19 @@ final readonly class LotConsumer
         $traza = [];
 
         $this->connection->transaction(function () use ($productId, $storeId, $saleItemId, $wanted, &$traza): void {
-            $lots = $this->connection->select(
-                'SELECT id, available, unit_cost FROM inventory_lots'
-                .' WHERE product_id = ? AND store_id = ? AND available > 0'
-                .' ORDER BY received_at ASC, id ASC'
-                .' FOR UPDATE SKIP LOCKED',
-                [$productId, $storeId]
-            );
+            $traza = $this->allocator->allocate($productId, $storeId, (string) $wanted);
 
-            $remaining = $wanted;
-
-            foreach ($lots as $lot) {
-                if ($remaining <= 0) {
-                    break;
-                }
-
-                $available = (float) $lot->available;
-
-                if ($available <= 0) {
-                    continue;
-                }
-
-                // Multi-lote: el lote se agota y se sigue con el siguiente.
-                $taken = $available <= $remaining ? $available : $remaining;
-
-                $this->connection->table('inventory_lots')
-                    ->where('id', $lot->id)
-                    ->update([
-                        'quantity_consumed' => $this->connection->raw(
-                            'quantity_consumed + '.$this->number($taken)
-                        ),
-                        'updated_at' => now(),
-                    ]);
-
+            foreach ($traza as $taken) {
                 $this->connection->table('sale_item_lot_consumptions')->insert([
                     'sale_item_id' => $saleItemId,
-                    'lot_id' => $lot->id,
+                    'lot_id' => $taken['lot_id'],
                     'product_id' => $productId,
                     'store_id' => $storeId,
-                    'quantity' => $this->number($taken),
-                    'unit_cost' => $lot->unit_cost,
+                    'quantity' => $taken['quantity'],
+                    'unit_cost' => $taken['unit_cost'],
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
-
-                $traza[] = [
-                    'lot_id' => (int) $lot->id,
-                    'quantity' => $this->number($taken),
-                    'unit_cost' => (string) $lot->unit_cost,
-                ];
-
-                $remaining -= $taken;
-            }
-
-            if ($remaining > 0.000001) {
-                // Se deshace todo: la transaccion se revierte sola.
-                throw new RuntimeException(
-                    'Stock insuficiente: no hay lotes disponibles para la cantidad solicitada.'
-                );
             }
 
             // El cache se actualiza en la MISMA transaccion del consumo.
@@ -129,13 +103,5 @@ final readonly class LotConsumer
     private function isService(int $productId): bool
     {
         return $this->connection->table('products')->where('id', $productId)->value('type') === 'service';
-    }
-
-    /**
-     * Un decimal con la escala de la columna, sin notacion cientifica.
-     */
-    private function number(float $value): string
-    {
-        return number_format($value, 4, '.', '');
     }
 }

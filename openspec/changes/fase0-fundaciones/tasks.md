@@ -76,47 +76,48 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 
 | # | Rama | Work unit | Contenido | Líneas est. | GitHub | Estado |
 |---|---|---|---|---|---|---|
-| 1 | `feat/fase0-01-ciimientos-a` | 1a | M04-M07 + `composer.json` + `pgsql_b` + 3 interruptores + 8 modelos base | **1022** | PR #2 - issue #1 | **fusionado** `65b529d` |
-| 2 | `feat/fase0-02-ciimientos-b` | 1b | M25-M26 + 6 modelos (i18n, outbox SMS, auditoria) | **491** | PR #4 - issue #3 | **fusionado** `a5e5100` |
-| 3 | `feat/fase0-03-pais-fiscal-a` | 2a | M01 + `Country`/`Currency`/`NumberFormat` | **241** | PR #6 - issue #5 | **fusionado** `8b9c553` |
-| 4 | `feat/fase0-04-pais-fiscal-b` | 2b | M02 + `fiscal_providers` + 7 modelos de perfil fiscal | **767** | PR #8 - issue #7 | **fusionado** `ba28322` |
-| 5 | `feat/fase0-05-pais-fiscal-c` | 2c-a | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genericos | **773** | PR #10 - issue #9 | **fusionado** `adac1b6` |
-| 6 | `feat/fase0-06-pais-fiscal-d` | 2c-b | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | PR #12 - issue #11 | **fusionado** `efbf00d` |
-| 7 | `feat/fase0-07-numeracion-a` | 3a-i | M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnes | **362** | PR #14 - issue #13 | **fusionado** `88e912c` |
-| 8 | `feat/fase0-08-numeracion-b` | 3a-ii | `NumberSeries` + reserva atomica + **T1-T3** + artefactos SDD | **512** | PR #17 - issue #16 | **fusionado** `89fa520` |
-| 9 | `feat/fase0-09-numeracion-b` | 3b-i | M22 + `FiscalIssuanceService` + tests | **619** | PR #19 - issue #18 | **fusionado** `b7f0c56` |
-| 10 | `feat/fase0-10-numeracion-c` | 3b-ii | `ControlNumberGenerator` + anulacion que consume el numero | **310** | PR #21 - issue #20 | **fusionado** `abb0b3b` |
-| 11 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
-| 12 | `feat/fase0-12-numeracion-e` | 3b-iv | contingencia en papel + conciliacion D+1 + fix del escaner | **238** | PR #25 - issue #24 | **fusionado** `97cd355` |
-| 13 | `feat/fase0-13-numeracion-f` | 3b-v | modelo de plantilla + render del comprobante | **513** | PR #27 - issue #26 | **fusionado** `9c5a467` |
-| 14 | `feat/fase0-09-catalogo-a` | 4a-i | M08 + M09 (los doce bridges) + tests | **299** | PR #29 - issue #28 | **fusionado** `54a3d64` |
-| 15 | `feat/fase0-10-catalogo-b` | 4a-ii | M10 (clientes y proveedores) + FKs diferidas | **158** | PR #31 - issue #30 | **fusionado** `69c1b70` |
-| 16 | `feat/fase0-10-catalogo-b` | 4a-iii | los 13 modelos del catalogo, bridges y clientes | **737** | PR #33 - issue #32 | **fusionado** `01f115a` |
-| 17 | `feat/fase0-11-catalogo-c` | 4a-iv | M11 ventas + M12 extractos + M13 compras | **336** | PR #35 - issue #34 | **fusionado** `8c1fafe` |
-| 18 | `feat/fase0-12-catalogo-d` | 4a-v | los 13 modelos de venta, compra y extractos | **669** | PR #37 - issue #36 | **fusionado** `4c2fbd0` |
-| 19 | `feat/fase0-13-stock-lotes` | 5-i | M14 + `StockInvariant` + tests | **268** | PR #39 - issue #38 | **fusionado** `908a3b6` |
-| 20 | `feat/fase0-14-stock-lotes-b` | 5-ii | `LotConsumer` (FIFO + `SKIP LOCKED`) + `LotReturner` | **409** | PR #41 - issue #40 | **fusionado** `21ac229` |
-| 21 | `feat/fase0-15-stock-lotes-c` | 5-iii | test de concurrencia del stock con dos sesiones | **151** | PR #43 - issue #42 | **fusionado** `b43ca60` |
-| 22 | `feat/fase0-16-stock-lotes-d` | 5-iv | M15 + M17 + el servicio sin lote (0.5.7) | **331** | PR #45 - issue #44 | **fusionado** `1fd23d0` |
-| 23 | `feat/fase0-17-stock-lotes-e` | 5-v | el servicio sin lote + la transferencia con una sola cabecera | **224** | PR #47 - issue #46 | **fusionado** `5e53603` |
-| 24 | `feat/fase0-18-impuestos` | 6-i | `TaxCalculator` puro + sus value objects + el test del motor | **360** | PR #49 - issue #48 | **fusionado** `4e773c9` |
-| 25 | `feat/fase0-24-contabilidad-i` | 7-i | M18 (el libro contable) + M19 (gastos) + `LedgerWriter` + los 3 modelos del asiento | **896** | PR #51 - issue #50 | **fusionado** `d23afef` |
-| 26 | `feat/fase0-25-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones + M30 + el resolutor de tasa | **1470** | PR #53 - issue #52 | **fusionado** `44e4740` |
-| 27 | `feat/fase0-26-t2-fiscal` | 6-iii | el T2 fiscal (M31 + `FiscalIssuanceCoordinator`) y el reintento que reutiliza la reserva | **1871** | PR #55 - issue #54 | **fusionado** `23092ff` |
-| 28 | `feat/fase0-27-caja` | 7-ii-a | M20 + M28 + M32 (caja e ingresos) + los 7 modelos contables | **1136** | PR #57 - issue #56 | **fusionado** `e25d6a1` |
-| 29 | `feat/fase0-27-caja-b` | 7-ii-b | el `CashRegisterService` (caja por fecha de negocio) + el comando `ops:check-opening-balances` | **914** | PR #59 - issue #58 | **fusionado** `7e74686` |
-| 30 | `feat/fase0-28-bridges` | 7-iii | los seis bridges y `FiscalDocument` como modelo + los trece nombres canonicos | **1155** | PR #61 - issue #60 | **fusionado** `7e64428` |
-| 31 | `feat/fase0-29-impresion` | 8-i | M23 (el esquema de impresion) + los 4 modelos + el `EscposRenderer` + el congelado del payload | **1364** | PR #63 - issue #62 | **fusionado** `70c0ea5` |
-| 32 | `feat/fase0-30-impresion-endpoints` | 8-ii | los cinco endpoints del agente LAN + la maquina de estados de `print_jobs` + la reimpresion + el corte de papel | **1652** | PR #65 - issue #64 | **fusionado** `26ee98d` |
-| 33 | `feat/fase0-31-secreto-registro` | 8-iii | el secreto de registro por tienda: el registro del agente deja de ser publico | **467** | PR #67 - issue #66 | **fusionado** `530db45` |
-| 34 | `feat/fase0-33-sync-verificador` | 8-iv-a | M24 + el verificador del contrato v2 + los tres rechazos de transporte | **1918** | PR #69 - issue #68 | **fusionado** `97fce21` |
-| 35 | `feat/fase0-34-sync-traductor` | 8-iv-b | el `LegacyStatementTranslator`: el reescritor ligero de identificadores contra el mapa | **1259** | PR #71 - issue #70 | **fusionado** `20f4915` |
-| 36 | `feat/fase0-35-iva-retenido-credito` | 6-iv | el IVA retenido como documento propio + el saldo del cliente derivado + la cuota con interes simple en el servidor | **1185** | PR #73 - issue #72 | **fusionado** `d236777` |
-| 37 | `feat/fase0-36-transferencias` | 6-v | la transferencia: el stock sale del lote origen y entra en el destino, con una sola cabecera | ~500 | - - - | pendiente |
-| 38 | `feat/fase0-35-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` + el job idempotente por `sync_batches` | ~900 | - - - | pendiente |
-| 39 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
-| 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
-| 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
+| 10 | `feat/fase0-01-ciimientos-a` | 1a | M04-M07 + `composer.json` + `pgsql_b` + 3 interruptores + 8 modelos base | **1022** | PR #2 - issue #1 | **fusionado** `65b529d` |
+| 11 | `feat/fase0-02-ciimientos-b` | 1b | M25-M26 + 6 modelos (i18n, outbox SMS, auditoria) | **491** | PR #4 - issue #3 | **fusionado** `a5e5100` |
+| 12 | `feat/fase0-03-pais-fiscal-a` | 2a | M01 + `Country`/`Currency`/`NumberFormat` | **241** | PR #6 - issue #5 | **fusionado** `8b9c553` |
+| 13 | `feat/fase0-04-pais-fiscal-b` | 2b | M02 + `fiscal_providers` + 7 modelos de perfil fiscal | **767** | PR #8 - issue #7 | **fusionado** `ba28322` |
+| 14 | `feat/fase0-05-pais-fiscal-c` | 2c-a | contrato `ElectronicInvoiceProvider` + 9 value objects + 5 enums genericos | **773** | PR #10 - issue #9 | **fusionado** `adac1b6` |
+| 15 | `feat/fase0-06-pais-fiscal-d` | 2c-b | M03 + `TaxCategory`/`TaxRate` + `TaxContext` + `FiscalProfile::taxContext()` | **559** | PR #12 - issue #11 | **fusionado** `efbf00d` |
+| 16 | `feat/fase0-07-numeracion-a` | 3a-i | M21 + `fiscal_series`/`fiscal_document_reservations` + test de esquema + arnes | **362** | PR #14 - issue #13 | **fusionado** `88e912c` |
+| 17 | `feat/fase0-08-numeracion-b` | 3a-ii | `NumberSeries` + reserva atomica + **T1-T3** + artefactos SDD | **512** | PR #17 - issue #16 | **fusionado** `89fa520` |
+| 18 | `feat/fase0-09-numeracion-b` | 3b-i | M22 + `FiscalIssuanceService` + tests | **619** | PR #19 - issue #18 | **fusionado** `b7f0c56` |
+| 19 | `feat/fase0-10-numeracion-c` | 3b-ii | `ControlNumberGenerator` + anulacion que consume el numero | **310** | PR #21 - issue #20 | **fusionado** `abb0b3b` |
+| 20 | `feat/fase0-11-numeracion-d` | 3b-iii | notas de credito/debito + comprobante de retencion | **417** | PR #23 - issue #22 | **fusionado** `6baaa3c3` |
+| 21 | `feat/fase0-12-numeracion-e` | 3b-iv | contingencia en papel + conciliacion D+1 + fix del escaner | **238** | PR #25 - issue #24 | **fusionado** `97cd355` |
+| 22 | `feat/fase0-13-numeracion-f` | 3b-v | modelo de plantilla + render del comprobante | **513** | PR #27 - issue #26 | **fusionado** `9c5a467` |
+| 23 | `feat/fase0-09-catalogo-a` | 4a-i | M08 + M09 (los doce bridges) + tests | **299** | PR #29 - issue #28 | **fusionado** `54a3d64` |
+| 24 | `feat/fase0-10-catalogo-b` | 4a-ii | M10 (clientes y proveedores) + FKs diferidas | **158** | PR #31 - issue #30 | **fusionado** `69c1b70` |
+| 25 | `feat/fase0-10-catalogo-b` | 4a-iii | los 13 modelos del catalogo, bridges y clientes | **737** | PR #33 - issue #32 | **fusionado** `01f115a` |
+| 26 | `feat/fase0-11-catalogo-c` | 4a-iv | M11 ventas + M12 extractos + M13 compras | **336** | PR #35 - issue #34 | **fusionado** `8c1fafe` |
+| 27 | `feat/fase0-12-catalogo-d` | 4a-v | los 13 modelos de venta, compra y extractos | **669** | PR #37 - issue #36 | **fusionado** `4c2fbd0` |
+| 28 | `feat/fase0-13-stock-lotes` | 5-i | M14 + `StockInvariant` + tests | **268** | PR #39 - issue #38 | **fusionado** `908a3b6` |
+| 29 | `feat/fase0-14-stock-lotes-b` | 5-ii | `LotConsumer` (FIFO + `SKIP LOCKED`) + `LotReturner` | **409** | PR #41 - issue #40 | **fusionado** `21ac229` |
+| 30 | `feat/fase0-15-stock-lotes-c` | 5-iii | test de concurrencia del stock con dos sesiones | **151** | PR #43 - issue #42 | **fusionado** `b43ca60` |
+| 31 | `feat/fase0-16-stock-lotes-d` | 5-iv | M15 + M17 + el servicio sin lote (0.5.7) | **331** | PR #45 - issue #44 | **fusionado** `1fd23d0` |
+| 32 | `feat/fase0-17-stock-lotes-e` | 5-v | el servicio sin lote + la transferencia con una sola cabecera | **224** | PR #47 - issue #46 | **fusionado** `5e53603` |
+| 33 | `feat/fase0-18-impuestos` | 6-i | `TaxCalculator` puro + sus value objects + el test del motor | **360** | PR #49 - issue #48 | **fusionado** `4e773c9` |
+| 34 | `feat/fase0-24-contabilidad-i` | 7-i | M18 (el libro contable) + M19 (gastos) + `LedgerWriter` + los 3 modelos del asiento | **896** | PR #51 - issue #50 | **fusionado** `d23afef` |
+| 35 | `feat/fase0-25-impuestos-b` | 6-ii | el `CheckoutService`: el checkout de dos transacciones + M30 + el resolutor de tasa | **1470** | PR #53 - issue #52 | **fusionado** `44e4740` |
+| 36 | `feat/fase0-26-t2-fiscal` | 6-iii | el T2 fiscal (M31 + `FiscalIssuanceCoordinator`) y el reintento que reutiliza la reserva | **1871** | PR #55 - issue #54 | **fusionado** `23092ff` |
+| 37 | `feat/fase0-27-caja` | 7-ii-a | M20 + M28 + M32 (caja e ingresos) + los 7 modelos contables | **1136** | PR #57 - issue #56 | **fusionado** `e25d6a1` |
+| 38 | `feat/fase0-27-caja-b` | 7-ii-b | el `CashRegisterService` (caja por fecha de negocio) + el comando `ops:check-opening-balances` | **914** | PR #59 - issue #58 | **fusionado** `7e74686` |
+| 39 | `feat/fase0-28-bridges` | 7-iii | los seis bridges y `FiscalDocument` como modelo + los trece nombres canonicos | **1155** | PR #61 - issue #60 | **fusionado** `7e64428` |
+| 40 | `feat/fase0-29-impresion` | 8-i | M23 (el esquema de impresion) + los 4 modelos + el `EscposRenderer` + el congelado del payload | **1364** | PR #63 - issue #62 | **fusionado** `70c0ea5` |
+| 41 | `feat/fase0-30-impresion-endpoints` | 8-ii | los cinco endpoints del agente LAN + la maquina de estados de `print_jobs` + la reimpresion + el corte de papel | **1652** | PR #65 - issue #64 | **fusionado** `26ee98d` |
+| 42 | `feat/fase0-31-secreto-registro` | 8-iii | el secreto de registro por tienda: el registro del agente deja de ser publico | **467** | PR #67 - issue #66 | **fusionado** `530db45` |
+| 43 | `feat/fase0-33-sync-verificador` | 8-iv-a | M24 + el verificador del contrato v2 + los tres rechazos de transporte | **1918** | PR #69 - issue #68 | **fusionado** `97fce21` |
+| 44 | `feat/fase0-34-sync-traductor` | 8-iv-b | el `LegacyStatementTranslator`: el reescritor ligero de identificadores contra el mapa | **1259** | PR #71 - issue #70 | **fusionado** `20f4915` |
+| 45 | `feat/fase0-35-iva-retenido-credito` | 6-iv | el IVA retenido como documento propio + el saldo del cliente derivado + la cuota con interes simple en el servidor | **1185** | PR #73 - issue #72 | **fusionado** `d236777` |
+| 46 | `feat/fase0-36-transferencias` | 6-v | la transferencia: el stock sale del lote origen y entra en el destino, con una sola cabecera | ~500 | - - - | pendiente |
+| 47 | `feat/fase0-37-transfers-numbers` | 6-v-2 | la renumeracion de las migraciones sin colision: M35 y M36 | **40** | - - - | pendiente |
+| 48 | `feat/fase0-35-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` + el job idempotente por `sync_batches` | ~900 | - - - | pendiente |
+| 49 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
+| 50 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
+| 51 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
@@ -324,8 +325,8 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 - [x] **0.6.7-T** Test: `test_un_cobro_reduce_la_deuda_del_cliente_y_el_saldo_se_deriva_de_sus_movimientos` — regla que fija: *el saldo del cliente se deriva de sus movimientos*.
 - [x] **0.6.8** Test de la cuota: interés simple sobre el `payable`, calculado en el servidor y repartido entre las cuotas. Dep: 0.6.7. Aceptación: la suma de las cuotas reproduce el total con el redondeo declarado.
 - [x] **0.6.8-T** Test: `test_la_cuota_se_calcula_en_el_servidor_con_interes_simple_sobre_el_payable_y_se_reparte_entre_cuotas` — regla que fija: *el interés se calcula en el servidor, no en la interfaz*.
-- [ ] **0.6.9** Test de transferencia: el stock sale del **lote origen** y entra en el destino, con **una sola** cabecera. Dep: 0.5.7. Aceptación: `transfer_items.source_lot_id` referencia el lote de salida.
-- [ ] **0.6.9-T** Test: `test_la_transferencia_mueve_el_stock_desde_el_lote_origen_y_registra_una_sola_cabecera` — regla que fija: *una transferencia es un movimiento, no N cabeceras*.
+- [x] **0.6.9** Test de transferencia: el stock sale del **lote origen** y entra en el destino, con **una sola** cabecera. Dep: 0.5.7. Aceptación: `transfer_items.source_lot_id` referencia el lote de salida.
+- [x] **0.6.9-T** Test: `test_la_transferencia_mueve_el_stock_desde_el_lote_origen_y_registra_una_sola_cabecera` — regla que fija: *una transferencia es un movimiento, no N cabeceras*.
 
 ---
 
@@ -404,50 +405,50 @@ Cada PR se verifica **por separado** antes de fusionarse: `npm ci && npm run bui
 
 | # | Capacidad · Requisito | Tareas de implementación | Test |
 |---|---|---|---|
-| 1 | `esquema-dominio` · Esquema destino por migraciones | 0.1.4–0.1.6, 0.4.1–0.4.5, 0.5.1–0.5.3, 0.7.1–0.7.3, 0.8.1–0.8.2, 0.9.1 | 0.9.2-T |
-| 2 | `esquema-dominio` · Una sola fuente de verdad por dato | 0.4.2, 0.4.3, 0.5.2, 0.7.1, 0.7.3, 0.9.2 | 0.4.3-T · 0.7.3-T |
-| 3 | `esquema-dominio` · Atomicidad de toda escritura | 0.3.3, 0.5.4, 0.6.5, 0.9.5 | 0.6.5-T · 0.9.5-T |
-| 4 | `esquema-dominio` · El dominio no contiene literales de país | 0.2.5, 0.9.4 | 0.9.4-T |
-| 5 | `capa-pais-fiscal` · El motor fiscal es dato | 0.2.1–0.2.3, 0.2.6, 0.2.7, 0.6.1, 0.9.11 | 0.2.1-T · 0.6.1-T · 0.9.11-T |
-| 6 | `capa-pais-fiscal` · Actores y modelo de firma como dato | 0.2.4, 0.3.1, 0.3.4 | 0.2.4-T · 0.3.4-T |
-| 7 | `capa-pais-fiscal` · Vocabularios de estado y referencias de autoridad | 0.2.2, 0.3.2 | 0.2.2-T |
-| 8 | `capa-pais-fiscal` · Semilla del perfil venezolano con evidencia | 0.2.3, 0.9.3 | 0.9.3-T |
-| 9 | `documentos-fiscales` · Contenido y render normados | 0.3.6 | 0.3.6-T |
-| 10 | `documentos-fiscales` · Documentos derivados que referencian el original | 0.3.7, 0.6.4 | 0.3.7-T · 0.6.4-T |
-| 11 | `documentos-fiscales` · Evidencia e integridad del comprobante | 0.3.2, 0.3.8 | 0.3.2-T · 0.3.8-T |
-| 12 | `documentos-fiscales` · Contingencia exclusivamente en papel | 0.3.9 | 0.3.9-T |
-| 13 | `numeracion-fiscal` · Dos series con dos reservas atómicas | 0.3.1, 0.3.3 | 0.3.1-T · 0.3.3-T |
-| 14 | `numeracion-fiscal` · El número no retrocede | 0.3.8 | 0.3.8-T |
-| 15 | `numeracion-fiscal` · Primera asignación de control | 0.3.5 | 0.3.5-T |
-| 16 | `numeracion-fiscal` · Invariante del número de control | 0.3.4 | 0.3.4-T |
-| 17 | `numeracion-fiscal` · T1–T3 sin `RefreshDatabase` | 0.1.2, 0.3.10–0.3.12, 0.9.5 (arnés) | 0.3.10-T, 0.3.11-T, 0.3.12-T |
-| 18 | `motor-impuestos` · `TaxCalculator` puro | 0.6.1, 0.2.7 | 0.6.1-T |
-| 19 | `motor-impuestos` · Cinco categorías y snapshots congelados | 0.2.3, 0.6.3, 0.4.4 | 0.6.3-T |
-| 20 | `motor-impuestos` · Redondeo por línea con ajuste visible | 0.6.2 | 0.6.2-T |
-| 21 | `motor-impuestos` · El IVA retenido es documento propio | 0.6.4, 0.3.7 | 0.6.4-T |
-| 22 | `inventario-lotes` · Aritmética sin estado mutable | 0.5.1 | 0.5.1-T |
-| 23 | `inventario-lotes` · FIFO determinista con bloqueo por salto | 0.5.4 | 0.5.4-T |
-| 24 | `inventario-lotes` · Devolución repone el lote exacto | 0.5.5 | 0.5.5-T |
-| 25 | `inventario-lotes` · Invariante de stock y no sobreventa | 0.5.6, 0.5.8 | 0.5.6-T · 0.5.8-T |
-| 26 | `impresion-lan` · Un origen de contenido, binario por transporte | 0.8.3, 0.9.11 | 0.8.3-T · 0.9.11-T |
-| 27 | `impresion-lan` · Agente en pull con long-poll | 0.8.4 | 0.8.4-T |
-| 28 | `impresion-lan` · Destinos de impresión admitidos | 0.8.1 | 0.8.1-T |
-| 29 | `impresion-lan` · El perfil de impresora es dato | 0.8.1, 0.8.3 | 0.8.3-T |
-| 30 | `impresion-lan` · La emisión fiscal no depende de la impresión | 0.8.5 | 0.8.5-T |
-| 31 | `adaptador-sync-legacy` · Contrato de wire v2 intacto | 0.8.6 | 0.8.6-T |
-| 32 | `adaptador-sync-legacy` · Traducción por mapa sembrado | 0.8.2, 0.8.7, 0.9.2 | 0.8.2-T · 0.8.7-T |
-| 33 | `adaptador-sync-legacy` · Aplicación idempotente del lote | 0.8.8 | 0.8.8-T |
-| 34 | `adaptador-sync-legacy` · Truncado del log sólo con respuesta exitosa | 0.8.8, 0.9.11 | 0.8.8-T · 0.9.11-T |
-| 35 | `contabilidad-caja` · Asientos con tipo explícito | 0.7.1, 0.7.4, 0.7.7 | 0.7.1-T |
-| 36 | `contabilidad-caja` · `expenses` es la fuente de verdad del gasto | 0.7.2, 0.7.4 | 0.7.4-T |
-| 37 | `contabilidad-caja` · Caja por fecha de negocio | 0.7.2, 0.7.5 | 0.7.5-T |
-| 38 | `contabilidad-caja` · Sin contadores derivados | 0.4.2, 0.7.3 | 0.7.3-T |
-| 39 | `contabilidad-caja` · Saldos de apertura congelados | 0.7.2, 0.7.6 | 0.7.6-T |
-| 40 | `calidad-continua` · CI con PostgreSQL, lint, typecheck, tests y build | 0.9.8 | 0.9.8-T |
-| 41 | `calidad-continua` · Suite Pest del dominio | 0.9.6, 0.9.7 | 0.9.7-T |
-| 42 | `calidad-continua` · Cada test nombra la regla de negocio que fija | 0.9.6 | 0.9.6-T |
-| 43 | `calidad-continua` · Seis ADRs y README de arranque | 0.9.9 | 0.9.9-T |
-| 44 | `calidad-continua` · Baseline verde sin fallos preexistentes | 0.9.7, 0.9.11 | 0.9.7-T · 0.9.11-T |
+| 52 | `esquema-dominio` · Esquema destino por migraciones | 0.1.4–0.1.6, 0.4.1–0.4.5, 0.5.1–0.5.3, 0.7.1–0.7.3, 0.8.1–0.8.2, 0.9.1 | 0.9.2-T |
+| 53 | `esquema-dominio` · Una sola fuente de verdad por dato | 0.4.2, 0.4.3, 0.5.2, 0.7.1, 0.7.3, 0.9.2 | 0.4.3-T · 0.7.3-T |
+| 54 | `esquema-dominio` · Atomicidad de toda escritura | 0.3.3, 0.5.4, 0.6.5, 0.9.5 | 0.6.5-T · 0.9.5-T |
+| 55 | `esquema-dominio` · El dominio no contiene literales de país | 0.2.5, 0.9.4 | 0.9.4-T |
+| 56 | `capa-pais-fiscal` · El motor fiscal es dato | 0.2.1–0.2.3, 0.2.6, 0.2.7, 0.6.1, 0.9.11 | 0.2.1-T · 0.6.1-T · 0.9.11-T |
+| 57 | `capa-pais-fiscal` · Actores y modelo de firma como dato | 0.2.4, 0.3.1, 0.3.4 | 0.2.4-T · 0.3.4-T |
+| 58 | `capa-pais-fiscal` · Vocabularios de estado y referencias de autoridad | 0.2.2, 0.3.2 | 0.2.2-T |
+| 59 | `capa-pais-fiscal` · Semilla del perfil venezolano con evidencia | 0.2.3, 0.9.3 | 0.9.3-T |
+| 60 | `documentos-fiscales` · Contenido y render normados | 0.3.6 | 0.3.6-T |
+| 61 | `documentos-fiscales` · Documentos derivados que referencian el original | 0.3.7, 0.6.4 | 0.3.7-T · 0.6.4-T |
+| 62 | `documentos-fiscales` · Evidencia e integridad del comprobante | 0.3.2, 0.3.8 | 0.3.2-T · 0.3.8-T |
+| 63 | `documentos-fiscales` · Contingencia exclusivamente en papel | 0.3.9 | 0.3.9-T |
+| 64 | `numeracion-fiscal` · Dos series con dos reservas atómicas | 0.3.1, 0.3.3 | 0.3.1-T · 0.3.3-T |
+| 65 | `numeracion-fiscal` · El número no retrocede | 0.3.8 | 0.3.8-T |
+| 66 | `numeracion-fiscal` · Primera asignación de control | 0.3.5 | 0.3.5-T |
+| 67 | `numeracion-fiscal` · Invariante del número de control | 0.3.4 | 0.3.4-T |
+| 68 | `numeracion-fiscal` · T1–T3 sin `RefreshDatabase` | 0.1.2, 0.3.10–0.3.12, 0.9.5 (arnés) | 0.3.10-T, 0.3.11-T, 0.3.12-T |
+| 69 | `motor-impuestos` · `TaxCalculator` puro | 0.6.1, 0.2.7 | 0.6.1-T |
+| 70 | `motor-impuestos` · Cinco categorías y snapshots congelados | 0.2.3, 0.6.3, 0.4.4 | 0.6.3-T |
+| 71 | `motor-impuestos` · Redondeo por línea con ajuste visible | 0.6.2 | 0.6.2-T |
+| 72 | `motor-impuestos` · El IVA retenido es documento propio | 0.6.4, 0.3.7 | 0.6.4-T |
+| 73 | `inventario-lotes` · Aritmética sin estado mutable | 0.5.1 | 0.5.1-T |
+| 74 | `inventario-lotes` · FIFO determinista con bloqueo por salto | 0.5.4 | 0.5.4-T |
+| 75 | `inventario-lotes` · Devolución repone el lote exacto | 0.5.5 | 0.5.5-T |
+| 76 | `inventario-lotes` · Invariante de stock y no sobreventa | 0.5.6, 0.5.8 | 0.5.6-T · 0.5.8-T |
+| 77 | `impresion-lan` · Un origen de contenido, binario por transporte | 0.8.3, 0.9.11 | 0.8.3-T · 0.9.11-T |
+| 78 | `impresion-lan` · Agente en pull con long-poll | 0.8.4 | 0.8.4-T |
+| 79 | `impresion-lan` · Destinos de impresión admitidos | 0.8.1 | 0.8.1-T |
+| 80 | `impresion-lan` · El perfil de impresora es dato | 0.8.1, 0.8.3 | 0.8.3-T |
+| 81 | `impresion-lan` · La emisión fiscal no depende de la impresión | 0.8.5 | 0.8.5-T |
+| 82 | `adaptador-sync-legacy` · Contrato de wire v2 intacto | 0.8.6 | 0.8.6-T |
+| 83 | `adaptador-sync-legacy` · Traducción por mapa sembrado | 0.8.2, 0.8.7, 0.9.2 | 0.8.2-T · 0.8.7-T |
+| 84 | `adaptador-sync-legacy` · Aplicación idempotente del lote | 0.8.8 | 0.8.8-T |
+| 85 | `adaptador-sync-legacy` · Truncado del log sólo con respuesta exitosa | 0.8.8, 0.9.11 | 0.8.8-T · 0.9.11-T |
+| 86 | `contabilidad-caja` · Asientos con tipo explícito | 0.7.1, 0.7.4, 0.7.7 | 0.7.1-T |
+| 87 | `contabilidad-caja` · `expenses` es la fuente de verdad del gasto | 0.7.2, 0.7.4 | 0.7.4-T |
+| 88 | `contabilidad-caja` · Caja por fecha de negocio | 0.7.2, 0.7.5 | 0.7.5-T |
+| 89 | `contabilidad-caja` · Sin contadores derivados | 0.4.2, 0.7.3 | 0.7.3-T |
+| 90 | `contabilidad-caja` · Saldos de apertura congelados | 0.7.2, 0.7.6 | 0.7.6-T |
+| 91 | `calidad-continua` · CI con PostgreSQL, lint, typecheck, tests y build | 0.9.8 | 0.9.8-T |
+| 92 | `calidad-continua` · Suite Pest del dominio | 0.9.6, 0.9.7 | 0.9.7-T |
+| 93 | `calidad-continua` · Cada test nombra la regla de negocio que fija | 0.9.6 | 0.9.6-T |
+| 94 | `calidad-continua` · Seis ADRs y README de arranque | 0.9.9 | 0.9.9-T |
+| 95 | `calidad-continua` · Baseline verde sin fallos preexistentes | 0.9.7, 0.9.11 | 0.9.7-T · 0.9.11-T |
 
 **Cobertura: 44 / 44 requisitos con tarea de implementación y con test gemelo. 0 huecos.**
 **Tests nombrados: 44 trazables (§E.5) + 6 transversales (§E.2) + 1 de pureza (`0.6.1-T`) = 51**, repartidos en 73 tareas de test gemela (`-T`).
