@@ -112,11 +112,11 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 34 | `feat/fase0-33-sync-verificador` | 8-iv-a | M24 + el verificador del contrato v2 + los tres rechazos de transporte | **1918** | PR #69 - issue #68 | **fusionado** `97fce21` |
 | 35 | `feat/fase0-34-sync-traductor` | 8-iv-b | el `LegacyStatementTranslator`: el reescritor ligero de identificadores contra el mapa | **1259** | PR #71 - issue #70 | **fusionado** `20f4915` |
 | 36 | `feat/fase0-35-iva-retenido-credito` | 6-iv | el IVA retenido como documento propio + el saldo del cliente derivado + la cuota con interes simple en el servidor | **1185** | PR #73 - issue #72 | **fusionado** `d236777` |
-| 6-v | `feat/fase0-36-transferencias` | la transferencia: el stock sale del lote origen y entra en el destino, con una sola cabecera | **857** | PR #75 - issue #74 | **fusionado** `9b0368a` |
-| 39 | `feat/fase0-35-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` + el job idempotente por `sync_batches` | ~900 | - - - | pendiente |
-| 40 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
-| 41 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
-| 42 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
+| 37 | `feat/fase0-36-transferencias` | la transferencia: el stock sale del lote origen y entra en el destino, con una sola cabecera | **857** | PR #75 - issue #74 | **fusionado** `9b0368a` |
+| 38 | `feat/fase0-35-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` + el job idempotente por `sync_batches` | ~900 | - - - | pendiente |
+| 39 | `feat/fase0-21-seed` | 9a | M27 + 6 seeders + `DatabaseSeeder` | **533** | - - - | pendiente |
+| 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
+| 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
 > **Solapamiento del 2026-11-02 (PR #14).** El work unit **3a-i** se abrió como PR #14
 > (squash `88e912c`, issue #13 cerrado) e incluye además un `NumberSeries` propio. Al
