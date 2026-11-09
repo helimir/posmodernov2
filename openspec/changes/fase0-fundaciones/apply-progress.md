@@ -1055,3 +1055,54 @@ El propio docblock del seeder dice lo que **no** se puede decir con este mapa: l
 ### Siguiente unidad
 
 **9-i-b** - 0.9.3: el perfil venezolano con **evidencia trazable** (cada fila declara su `evidence_status` y su `source_ref`; la tasa del 16 % queda `pending_confirmation` hasta confirmarse contra el Decreto del IVA), mas `TaxonomySeeder`, `OpeningBalancesSeeder` y `DemoStoreSeeder`. Y despues **9-ii** (el barrido de los 44 nombres, el arnes de concurrencia y los meta-tests) y **9-iii** (CI, README y los 6 ADR).
+
+---
+
+## PR66-perfil-ve - 9-i-b: el perfil venezolano con evidencia trazable (2026-11-06)
+
+- **Estado**: entregado en el PR #80 (rama `feat/fase0-40-perfil-ve`).
+- **Tareas cerradas**: 0.9.3 y 0.9.3-T (0.9.2 la cierra el conjunto de los seis seeders).
+- **Ficheros**: `database/seeders/{TaxonomySeeder,DemoStoreSeeder,FiscalProfileSeeder,OpeningBalancesSeeder}.php`, `database/seeders/DatabaseSeeder.php`, `tests/Feature/Domain/{VenezuelanProfileSeederTest,SeedersIntegrityTest,DatabaseSeedersTest}.php`.
+- **Evidencia**: `pest` 176 passed (6021 assertions), con `main` en 169 passed (5857 assertions); `pint` limpio; `php -l` limpio; **`migrate:fresh --seed` en verde** sobre la BD de test.
+
+### Lo que siembra cada seeder
+
+| Seeder | Tablas | Filas |
+|---|---|---|
+| `TaxonomySeeder` | 5 monedas, 5 paises, 5 formatos | 15 |
+| `DemoStoreSeeder` | tienda + configuracion + cuenta de caja + su vinculo | 4 |
+| `FiscalProfileSeeder` | 5 perfiles + 1 proveedor + 20 tipos + 15 vocabularios + 3 campos + 5 categorias + 4 tasas + 10 series | 63 |
+| `OpeningBalancesSeeder` | el saldo de caja de apertura, **sin certificar** | 1 |
+
+### La evidencia: un dato no verificado se MARCA, no se afirma
+
+Las **cuatro** tasas del perfil venezolano y sus **cinco** categorias se siembran con `evidence_status = 'pending_confirmation'` y `source_ref = 'G.O. 5.363/1999'` (el Decreto del IVA, Gaceta Oficial 5.363 del 25 de noviembre de 1999). La fila del 16 % se **localiza por su `source_ref`**, que es la aceptacion literal de la 0.9.3.
+
+Las tres `fiscal_profile_fields` del perfil venezolano si van `verified` (el token `serie` del art. 20 y la frase del contribuyente del art. 8.7). Y **ninguna** fila del perfil declara `verified` sin `source_ref`.
+
+### Los saldos de apertura, SIN certificar
+
+Los siembra el `OpeningBalancesSeeder` con `certified_at` y `certified_by` en **NULL**: los firma una persona (la **B1**). El seeder no puede certificarlos, y el test comprueba que el comando `ops:check-opening-balances` sigue bloqueando el arranque.
+
+### Un ciclo de FKs que dicta el orden de los seeders
+
+Las categorias y las tasas las siembra el `FiscalProfileSeeder`, no el de catálogos: `tax_categories.fiscal_profile_id` es FK a `fiscal_profiles`, y el perfil referencia `countries`/`currencies`. Sembrarlas desde el seeder de catálogos exigiria que el perfil existiera **antes** que el pais que lo referencia. El corte lo dicta el **esquema**, no el nombre del seeder. Orden real: `Taxonomy -> DemoStore -> FiscalProfile -> OpeningBalances`.
+
+### Decisiones que el diseno no fijaba
+
+- **`iva_retenido` no lleva tasa sembrada**: la alicuota de retencion la fija el regimen de agentes de retencion (art. 18), no el Decreto del IVA. Sembrar un 16 % ahi afirmaria una alicuota no verificada y materialmente distinta del IVA.
+- **Las tres categorias no gravables llevan tasa 0 %, tambien `pending_confirmation`**: el 0 % es definicional, pero la tabla de alicuotas vive en el Decreto.
+- **El vocabulario de estados mapea el estado generico a si mismo** (`draft`/`issued`/`void`): los codigos nativos de CL, MX y CO **no estan transcritos**, y inventarlos seria afirmar un vocabulario.
+- **Solo Venezuela lleva `fiscal_profile_fields` y `fiscal_providers`**: el token `serie` y la frase del contribuyente son-batch reconnoscidos; para CL/MX/CO/PA no hay tal exigencia.
+- **`as_of` fijo `2026-11-01`**: un saldo de apertura se congela; una semilla que tomara la fecha del reloj sembraria una partida distinta cada dia.
+- Los **rangos de las series son de demostracion** y su `credential_ref` lo dice: el rango real lo concede la autoridad o la imprenta.
+
+### Lo que queda abierto
+
+- `fiscal_profile_environments` **sin sembrar**: la capa fiscal lo necesita cuando lleguen los canales reales.
+- `income_sources` y `expense_categories` **vacias**: el `LedgerEntryTypeSeeder` ya cubre el catalogo que las sustituye.
+- `holes_allowed` en `true` para Colombia y Panama, y `effective_from` solo para Venezuela: no hay fecha de inicio ni tratamiento de huecos transcritos para los otros cuatro.
+
+### Siguiente unidad
+
+**9-ii** - 0.9.4 (`NoCountryLiteralsTest`), 0.9.5 (el arnes de concurrencia reutilizable), 0.9.6 (el barrido de los 44 nombres canonicos) y 0.9.7 (los meta-tests). Despues **9-iii** con el CI, el README y los 6 ADR.
