@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\SalesController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -11,6 +12,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', function () {
         return Inertia::render('dashboard');
     })->name('dashboard');
+
+    // Las ventas: la costura en el navegador. La lista y el detalle.
+    Route::get('ventas', [SalesController::class, 'index'])->name('ventas.index');
+    Route::get('ventas/{sale}', [SalesController::class, 'show'])
+        ->whereNumber('sale')
+        ->name('ventas.show');
 });
 
 require __DIR__.'/settings.php';

@@ -1199,3 +1199,34 @@ Sin el paso, borrar el manifiesto hace fallar un test de pagina con un `ViteMani
 Con 0.9.8 quedan cerradas las **152 tareas** del plan: las nueve fases (0.1 cimientos, 0.2 capa de pais, 0.3 numeracion fiscal, 0.4 catalogo, 0.5 lotes, 0.6 impuestos y checkout, 0.7 contabilidad y caja, 0.8 impresion LAN y sync legacy, 0.9 semilla, suite y CI), con sus 44 nombres canonicos verificados y el test anti-pais ejecutandose de verdad.
 
 **Lo que queda fuera de la Fase 0, por diseno**: la certificacion de los saldos de apertura (**B1**, la firma una persona) y la confirmacion legal del 16 % (**B2**). Y la costura para ver el avance en el navegador, aplazada hasta el final.
+
+---
+
+## PR69-cosatura - la costura: ver el avance (2026-11-06)
+
+- **Estado**: entregado en el PR #85 (rama `feat/fase0-43-cosatura`).
+- **Ficheros**: `app/Console/Commands/SmokeSaleCommand.php`, `app/Http/Controllers/SalesController.php`, `resources/js/pages/sales/{index,show}.tsx`, `routes/web.php`, `resources/js/components/{app-sidebar,nav-main}.tsx`, `tests/Feature/Console/SmokeSaleCommandTest.php`, `tests/Feature/SalesPageTest.php`, `README.md`.
+- **Evidencia**: `pest` 199 passed (6359 assertions); `pint` limpio; `lint:check` y `typecheck` limpios; `npm run build` regenera el manifiesto con las dos paginas nuevas.
+
+### La venta de prueba, por dentro
+
+El comando monta el escenario con los **sembradores del repo** (no con literales: el dominio no inventa un perfil fiscal), ejecuta un **checkout real** e imprime la anatomia completa: la cabecera con sus dos numeros, las lineas con el snapshot de la tasa y su evidencia, los totales con el ajuste de redondeo, el pago, el **asiento** con la comprobacion de que cuadra, las reservas y como bajo el stock.
+
+**Las comprobaciones son el codigo de salida**: si el total no cuadra, si el asiento descuadra o si el stock no bajo lo vendido, el comando sale con codigo distinto de cero. *No mentir* tambien es un codigo de salida.
+
+### Las ventas en el navegador
+
+`/ventas` (la lista) y `/ventas/{id}` (el detalle con lineas, totales, pagos y el asiento), ambas con `auth`. Se anadio la entrada al sidebar: sin ella la pagina existe pero **no se descubre**.
+
+**Verificado en un servidor real** (`php artisan serve` + login por HTTP): `GET /login` -> 200, `POST /login` -> 302, `GET /ventas` -> 200 con la venta, `GET /ventas/1` -> 200 con el detalle, y `GET /ventas` **sin sesion** -> 302 al login.
+
+### Un hueco real que dejo escrito
+
+El repo **no tiene plan de cuentas**: no hay tabla ni configuracion, y `CheckoutInput::` es **dato de la entrada**. El comando declara unas cuentas de demostracion y las **imprime**, para que se vea cuales se usaron. En Fase 1 eso deberia ser dato configurable por tienda.
+
+### Lo que falta para verlo desde el navegador
+
+- Un **VirtualHost** que apunte a `public/` (en desarrollo, `php artisan serve`).
+- `npm ci && npm run build` en el despliegue.
+- La base de datos **migrada y sembrada**: `php artisan migrate --seed`. La de desarrollo (`pos_moderno_v2`) es un **dump parcial**: le faltan 14 de las 39 migraciones y no tiene filas sembradas. El comando lo detecta y dice el nombre de las tablas que faltan.
+- Usuarios reales y el `APP_KEY` del entorno.

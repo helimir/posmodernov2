@@ -95,3 +95,32 @@ Los tests son la documentación de las reglas de negocio: cada test se llama
 como la regla que fija, y hay un test por regla. `tests/Architecture/` sostiene
 las reglas que miran el propio repositorio (el escáner anti-país, el barrido de
 los nombres canónicos y la cobertura de la suite).
+
+## Ver el avance: la costura
+
+El dominio esta completo pero **sin interfaz no se ve**. La costura lo hace visible.
+
+### La venta de prueba, por dentro
+
+```bash
+php artisan migrate:fresh --seed   # sobre la base de datos de desarrollo
+php artisan ops:smoke-sale
+```
+
+El comando monta el escenario (tienda, perfil fiscal, producto, compra y lote), ejecuta un **checkout real** e imprime la anatomia de la venta: la cabecera con sus dos numeros (documento y control), las lineas con el snapshot de la tasa, los totales con el **ajuste de redondeo**, el pago, el **asiento contable** (con la comprobacion de que cuadra), las reservas y como bajo el stock. Las comprobaciones finales **son el codigo de salida**: si una cifra no cuadra, el comando sale con codigo distinto de cero.
+
+### Las ventas en el navegador
+
+| Ruta | Que se ve |
+|---|---|
+| `/ventas` | la lista de ventas: numero, fecha de negocio, cliente, estado y total |
+| `/ventas/{id}` | el detalle: cabecera, lineas, totales, pagos y el asiento contable |
+
+Ambas exigen sesion (`auth`). Con la lista vacia, la pagina sugiere el comando.
+
+### Lo que falta para verlo en produccion
+
+- Un **VirtualHost** que apunte a `public/` (en desarrollo, `php artisan serve` sirve).
+- `npm ci && npm run build` en el despliegue (el manifiesto se regenera).
+- La base de datos **migrada y sembrada**: `php artisan migrate --seed`.
+- Usuarios reales y el `APP_KEY` del entorno.
