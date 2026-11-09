@@ -1244,3 +1244,15 @@ O sea: **el greenfield no funcionaba en un servidor Linux**. No era un problema 
 **La correccion** es `config/inertia.php`, con las rutas reales del repositorio (en minuscula) para el runtime y para los tests. El `vite.config.js` ya usaba `resources/js/app.tsx` en minuscula: ahora los dos lados hablan el mismo idioma.
 
 **La leccion**: una diferencia entre mayusculas y minusculas es invisible en Windows y rota en Linux. El CI en Ubuntu es exactamente el ojo que hace falta para verlo, y por eso el gate de la 0.9.8 no es un tramite: es la unica red de seguridad para esa clase de defecto.
+
+---
+
+## El segundo defecto que la costura destapo: el login no funcionaba (2026-11-06)
+
+Al probar el login **por HTTP de verdad** (no con `actingAs()`), el POST devolvia **419** (CSRF mismatch). La causa: el blade `resources/views/app.blade.php` es una version **personalizada** del starter de Laravel 12, y **le faltaba el `<meta name="csrf-token">`**.
+
+Inertia lee el token de ahi para firmar cada peticion: sin ese meta, **todo POST devuelve 419** y el login no funciona. O sea: **el greenfield no se podia autenticar en el navegador**. Como con el caso de las mayusculas, esto no lo puede ver una maquina de desarrollo en Windows, y el CI tampoco lo ve: el 419 es de una peticion HTTP real, no de la suite.
+
+**La correccion**: el meta vuelve al blade (PR #90), con un comentario que explica por que no se puede volver a quitar. Verificado por HTTP con `curl` y un cookie jar: el HTML trae el token, `POST /login` responde **302 al dashboard**, y `GET /ventas` responde **200** con la venta listada.
+
+**La leccion, la segunda vez en la misma sesion**: el `AGENTS.md` del repo y la documentacion describen el arranque, pero **nadie lo habia probado de verdad**. La costura no solo muestra el avance: **descubre que el arranque no funciona**. Un test con `actingAs()` verifica la pagina; **un login por HTTP verifica el camino**.
