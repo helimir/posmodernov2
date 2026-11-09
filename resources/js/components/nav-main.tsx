@@ -10,7 +10,10 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
             <SidebarMenu>
                 {items.map((item) => (
                     <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild isActive={item.url === page.url}>
+                        {/* La comparacion es por PREFIJO: el detalle de una venta
+                            es `/ventas/{id}`, y sigue siendo la seccion de
+                            ventas la que esta activa. */}
+                        <SidebarMenuButton asChild isActive={page.url === item.url || page.url.startsWith(`${item.url}/`)}>
                             <Link href={item.url} prefetch>
                                 {item.icon && <item.icon />}
                                 <span>{item.title}</span>
