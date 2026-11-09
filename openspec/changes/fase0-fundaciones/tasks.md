@@ -119,6 +119,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 41 | `feat/fase0-41-suite-meta` | 9-ii | el test anti-pais + el arnes de concurrencia + el barrido de los 44 nombres canonicos + los meta-tests | **2510** | PR #83 - issue #82 | **fusionado** `96b4789` |
 | 42 | `feat/fase0-42-ci-gate` | 9-iii | 0.9.8: el gate de calidad del CI, con la precondicion del manifiesto | **72** | PR #85 - issue #84 | **fusionado** `9003a9d` |
 | 43 | `feat/fase0-43-cosatura` | 10 | la costura: el comando `ops:smoke-sale` y las paginas de ventas | **2220** | PR #87 - issue #86 | **fusionado** `bb6e476` |
+| 44 | `feat/fase1-01-caja-backend` | 1.1 | el backend de la caja: catalogo, busqueda y el cobro que escribe la venta real | **2351** | PR #91 - issue #90 | **en curso** |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
@@ -513,3 +514,26 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
 | Artefactos del change | 0.9.10 | `git revert` de `proposal.md` y `design.md`. Sin efecto en runtime. |
 
 > **Punto de no retorno**: desde el primer documento fiscal emitido, el rollback de la numeración es **"apagar", nunca "renumerar"**.
+
+---
+
+## Fase 1 - La aplicacion del POS
+
+> La Fase 0 (el dominio) esta **completa**: 152/152 tareas. La Fase 1 construye la
+> aplicacion sobre ese dominio. Decisiones del mantenedor (2026-11-06): cuatro
+> work units, **datos limpios** en la base nueva (el legacy queda en consulta), y la
+> caja es **touch**, como el legacy.
+
+- [ ] **1.1** El backend de la caja: el catalogo con su precio y su stock, la busqueda de productos y el cobro que escribe la venta real (`CheckoutService`), con la reserva de los dos numeros, el FIFO, el asiento contable y la imputacion del credito del cliente. El **cambio** se registra en `details` del pago, porque el dominio exige coincidencia exacta y no modela el sobrepago. Dep: 0.6.5, 0.7.5.
+- [ ] **1.2** La pantalla de la caja: *touch*. Catalogo a la izquierda, carrito a la derecha, teclado numerico, el cobro, el cambio y el resumen. Dep: 1.1.
+- [ ] **1.3** El catalogo: productos, precios por tienda, categorias e impuestos. Dep: 1.2.
+- [ ] **1.4** Clientes y credito: alta, saldo derivado, cobros y deuda. Dep: 1.2.
+- [ ] **1.5** La caja del dia: apertura y cierre por fecha de negocio, y los reportes basicos. Dep: 0.7.5.
+
+### La leccion de la Fase 0, que la Fase 1 hereda
+
+> El dominio se puede verificar entero con tests y seguir **sin que nadie lo vea**.
+> Y un test con `actingAs()` verifica **la pagina**, no **el camino**: los dos fallos
+> de produccion que aparecieron al probar el arranque por HTTP (el 419 del CSRF y
+> las mayusculas de las rutas de Inertia) **no los veia ni el CI**. La Fase 1 tiene
+> que probarse **por HTTP de verdad**, no solo con tests.
