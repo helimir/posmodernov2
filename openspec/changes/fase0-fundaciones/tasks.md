@@ -115,7 +115,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 37 | `feat/fase0-36-transferencias` | 6-v | la transferencia: el stock sale del lote origen y entra en el destino, con una sola cabecera | **857** | PR #75 - issue #74 | **fusionado** `9b0368a` |
 | 38 | `feat/fase0-38-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` (un lote en una transaccion, idempotente por `sync_batches`) + el job de reintento | **1118** | PR #77 - issue #76 | **fusionado** `3c002de` |
 | 39 | `feat/fase0-39-seeders` | 9-i-a | M28 (los indices que faltaban) + el mapa de traduccion sembrado + el catalogo de tipos de asiento | **1163** | PR #79 - issue #78 | **fusionado** `16e3b44` |
-| 40 | `feat/fase0-40-perfil-ve` | 9-i-b | el perfil venezolano con evidencia trazable + los cuatro seeders que faltaban | **1876** | PR #81 - issue #80 | **en curso** |
+| 40 | `feat/fase0-40-perfil-ve` | 9-i-b | el perfil venezolano con evidencia trazable + los cuatro seeders que faltaban | **1876** | PR #81 - issue #80 | **fusionado** `78c6b5a` |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
