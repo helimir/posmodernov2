@@ -1256,3 +1256,44 @@ Inertia lee el token de ahi para firmar cada peticion: sin ese meta, **todo POST
 **La correccion**: el meta vuelve al blade (PR #90), con un comentario que explica por que no se puede volver a quitar. Verificado por HTTP con `curl` y un cookie jar: el HTML trae el token, `POST /login` responde **302 al dashboard**, y `GET /ventas` responde **200** con la venta listada.
 
 **La leccion, la segunda vez en la misma sesion**: el `AGENTS.md` del repo y la documentacion describen el arranque, pero **nadie lo habia probado de verdad**. La costura no solo muestra el avance: **descubre que el arranque no funciona**. Un test con `actingAs()` verifica la pagina; **un login por HTTP verifica el camino**.
+
+---
+
+## PR90-caja-backend - Fase 1, 1.1: el backend de la caja (2026-11-06)
+
+- **Estado**: entregado en el PR #91 (rama `feat/fase1-01-caja-backend`).
+- **Ficheros**: `app/Http/Controllers/PosController.php`, `app/Support/Pos/{PosContext,PosCatalog,PosAmount}.php`, `config/pos.php`, `routes/web.php`, `app/Providers/AppServiceProvider.php`, `tests/Fixtures/PosFixture.php`, `tests/Feature/Pos/{PosCheckoutTest,PosProductSearchTest}.php`.
+- **Evidencia**: `pest` 213 passed (6545 assertions), con `main` en 199 passed (6359 assertions); `pint` limpio; `lint:check` y `typecheck` limpios; mutation testing que rompe 8 de los 9 tests de cobro.
+
+### El dominio, orquestado: NO reescrito
+
+El endpoint **delega** la venta en el `CheckoutService` (que ya es atomico) y solo resuelve lo que el dominio no puede saber: la tienda activa, las series de la tienda, las fechas por su zona horaria, el plan de cuentas y el precio cobrado. El `CheckoutService` **no se toco**.
+
+### Un fallo de seguridad que los tests encontraron
+
+**El controller de Laravel se reutiliza entre peticiones** dentro de un test (`Route::getController()` cachea la instancia y el RouteCollection vive entre peticiones). Mi primera version **cacheaba el contexto en una propiedad del controller**: la segunda peticion de **otro usuario** abria en la tienda de la primera. En produccion normal no se nota; **en Octane seria un fallo de seguridad**. Corregido: el contexto se crea **dentro de cada accion**, y queda escrito en el docblock, porque es una trampa para cualquier work unit posterior.
+
+### El stock del catalogo es la VERDAD, no el cache
+
+El diseno pedia filtrar por `quantity_in_stock > 0` (el cache) pero el stock real es la suma de los lotes. Se usa la **verdad**: subconsulta agrupada sobre `inventory_lots.available`, sin N+1. **Un servicio siempre aparece**: el legacy tampoco lo ocultaba.
+
+### El cambio, y una contradiccion del propio diseno
+
+`SalePaymentStatus` exige coincidencia **exacta**: con un sobrepago (100 por una venta de 58) la venta queda `confirmed`, no `paid`. El **cambio** se registra en `details` del pago (`cash_received`, `change`) y se devuelve en la respuesta. El **libro contable no se resiente**: el asiento debita el **total**, no lo entregado.
+
+> **Contradiccion del diseno, sin resolver**: el design decia a la vez *"el `amount` de `sale_payments` es lo aplicado al total"* y *"si lo recibido es mayor, la venta queda `confirmed`"*. Si el `amount` fuera lo aplicado (58 = total), la venta seria `paid`. Se ha seguido la segunda regla (la que el propio diseno pide documentar) y la **consecuencia** es que `sale_payments.amount` puede no sumar el total en una venta con sobrepago. Si en Fase 1 se quiere `paid` con sobrepago, la decision es **de dominio**: cambiar `SalePaymentStatus` para aceptar `>=`, o registrar el importe aplicado y tratar el sobrepago como un movimiento aparte. **Queda anotado para tu decision.**
+
+### Decisiones que el diseno no fijaba
+
+- **La tienda activa**: el vinculo del usuario (`user_stores.status='active'` + tienda activa), por `sort_order` y luego id; si no hay, la primera tienda activa del sistema.
+- **Las series**: la del **perfil fiscal del pais de la tienda**, no la primera de la tienda (los sembradores dejan series de los cinco perfiles en la misma tienda, y tomar la primera era arbitrario).
+- **El codigo de barras se busca exacto** (`UPPER(code) = UPPER(q)`), insensible a mayusculas porque el cajero teclea en minusculas; el **nombre** si es prefijo. Los comodines `%` y `_` se escapan: escribir `50%` no devuelve medio catalogo.
+- **El total NO se pre-calcula en el controller**: solo existe cuando el motor ha escrito. Pre-calcularlo obligaria a **replicar** la resolucion de categoria y tasa del dominio (dos verdades que divergen). Se lee de `sale_totals`.
+
+### El contrato de los props (para la pantalla 1-2)
+
+`GET /caja` entrega `store`, `catalog`, `payment_methods`, `document_series_id`, `control_series_id`, `business_date`, `currency_code` y `catalog_page_size`. `GET /caja/productos?q=&page=` devuelve `{ products, page, page_size, total }`. `POST /caja/cobrar` recibe `{ customer_id?, lines: [{ product_id, quantity, unit_price, discount? }], payments: [{ payment_method_id?, amount }] }` y responde **201** con `{ sale_id, invoice_no, control_number, grand_total, status, change }`. Los **importes son texto decimal**.
+
+### Siguiente unidad
+
+**1.2** - la pantalla de la caja *touch*: catalogo, carrito, teclado numerico, cobro, cambio y resumen.
