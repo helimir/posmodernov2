@@ -1230,3 +1230,17 @@ El repo **no tiene plan de cuentas**: no hay tabla ni configuracion, y `Checkout
 - `npm ci && npm run build` en el despliegue.
 - La base de datos **migrada y sembrada**: `php artisan migrate --seed`. La de desarrollo (`pos_moderno_v2`) es un **dump parcial**: le faltan 14 de las 39 migraciones y no tiene filas sembradas. El comando lo detecta y dice el nombre de las tablas que faltan.
 - Usuarios reales y el `APP_KEY` del entorno.
+
+---
+
+## El CI cazó un bug que solo existe en Linux (2026-11-06)
+
+La costura fallo en el **CI** (2 tests) y pasaba en local. La causa: el **finder de Inertia** busca los componentes de pagina en `resource_path('js/Pages')`, con **P mayuscula**, que es el default del paquete; y este repo los tiene en `resources/js/pages`, en **minuscula**.
+
+En **Windows no se nota** (el sistema de ficheros no distingue mayusculas de minusculas, asi que `js/Pages` encuentra `js/pages`). En **Linux si se distingue**, y el finder no encuentra **ninguna** pagina: la aplicacion web no renderiza nada y los tests de Inertia fallan con *"Inertia page component file [x] does not exist"*.
+
+O sea: **el greenfield no funcionaba en un servidor Linux**. No era un problema de la costura: era un defecto de produccion que la costura destapo, y que la maquina de desarrollo no podia ver.
+
+**La correccion** es `config/inertia.php`, con las rutas reales del repositorio (en minuscula) para el runtime y para los tests. El `vite.config.js` ya usaba `resources/js/app.tsx` en minuscula: ahora los dos lados hablan el mismo idioma.
+
+**La leccion**: una diferencia entre mayusculas y minusculas es invisible en Windows y rota en Linux. El CI en Ubuntu es exactamente el ojo que hace falta para verlo, y por eso el gate de la 0.9.8 no es un tramite: es la unica red de seguridad para esa clase de defecto.
