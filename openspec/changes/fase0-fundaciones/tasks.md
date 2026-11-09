@@ -119,7 +119,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 41 | `feat/fase0-41-suite-meta` | 9-ii | el test anti-pais + el arnes de concurrencia + el barrido de los 44 nombres canonicos + los meta-tests | **2510** | PR #83 - issue #82 | **fusionado** `96b4789` |
 | 42 | `feat/fase0-42-ci-gate` | 9-iii | 0.9.8: el gate de calidad del CI, con la precondicion del manifiesto | **72** | PR #85 - issue #84 | **fusionado** `9003a9d` |
 | 43 | `feat/fase0-43-cosatura` | 10 | la costura: el comando `ops:smoke-sale` y las paginas de ventas | **2220** | PR #87 - issue #86 | **fusionado** `bb6e476` |
-| 44 | `feat/fase1-01-caja-backend` | 1.1 | el backend de la caja: catalogo, busqueda y el cobro que escribe la venta real | **2351** | PR #91 - issue #90 | **en curso** |
+| 44 | `feat/fase1-01-caja-backend` | 1.1 | el backend de la caja: catalogo, busqueda y el cobro que escribe la venta real | **2416** | PR #91 - issue #90 | **en curso** |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
