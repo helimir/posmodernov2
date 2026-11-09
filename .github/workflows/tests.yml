@@ -65,6 +65,19 @@ jobs:
       - name: Build Assets
         run: npm run build
 
+      # El manifiesto es la PRECONDICION de la suite: las pruebas de pagina
+      # lo necesitan para resolver los assets. Si falta, Vite lanza una
+      # ViteManifestNotFoundException y el fallo se lee como un defecto de la
+      # aplicacion cuando en realidad es del pipeline. Se comprueba de forma
+      # explicita para que el mensaje diga lo que es: una precondicion.
+      - name: Verify the build manifest
+        shell: sh
+        run: |
+          if [ ! -f public/build/manifest.json ]; then
+            echo "::error::Precondition failed: public/build/manifest.json is missing. Run 'npm ci && npm run build' before the tests."
+            exit 1
+          fi
+
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
@@ -74,11 +87,14 @@ jobs:
       - name: Generate Application Key
         run: php artisan key:generate
 
-      - name: Tests
-        run: ./vendor/bin/pest
+      - name: Code Style
+        run: vendor/bin/pint --test
+
+      - name: Lint
+        run: npm run lint:check
 
       - name: Type Check
         run: npm run typecheck
 
-      - name: Lint
-        run: npm run lint:check
+      - name: Tests
+        run: ./vendor/bin/pest
