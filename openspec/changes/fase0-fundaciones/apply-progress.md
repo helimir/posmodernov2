@@ -1018,3 +1018,40 @@ La solucion: **dos tests, no uno renombrado**. El de #27 vuelve a su nombre (con
 ### La Fase 0.8, completa
 
 Con 0.8.8 y 0.8.9 quedan cerradas las nueve tareas de impresion LAN y sync legacy: el esquema de impresion, los bytes ESC/POS con el corte, los cinco endpoints del agente, el secreto de registro por tienda, el contrato de wire v2, el traductor contra el mapa sembrado, el aplicador idempotente y los modelos.
+
+---
+
+## PR65-seeders - 9-i-a: los indices que faltaban y el mapa sembrado (2026-11-06)
+
+- **Estado**: entregado en el PR #78 (rama `feat/fase0-39-seeders`).
+- **Tareas cerradas**: 0.9.1, 0.9.1-T, 0.9.2 y 0.9.2-T.
+- **Ficheros**: `database/migrations/2026_11_01_000037_add_domain_indexes_and_constraints.php`, `2026_11_01_000039_enlarge_translation_map_transform.php`, `database/seeders/{LegacyTranslationMapSeeder,LedgerEntryTypeSeeder}.php`, `database/seeders/DatabaseSeeder.php`, `tests/Feature/Domain/{DatabaseIntegrityTest,TranslationMapSeederTest,DatabaseSeedersTest}.php`.
+- **Evidencia**: `pest` 169 passed (5857 assertions), con `main` en 166 passed (2112 assertions); `pint` limpio; `php -l` limpio.
+
+### El mapa estaba VACIO
+
+El adaptador del sync (8-iv-c) rechazaba **cualquier** lote real: el mapa de traduccion no tenia ni una fila. Ahora tiene **182**: **76 columnas trasladadas** y **106 descartadas**, sobre las **17 tablas del nucleo** del terminal (16 con tabla destino; `sell_logs` se descarta entero porque no tiene equivalente).
+
+Las 17 son: `selling_info`, `selling_item`, `selling_price`, `payments`, `customer_transactions`, `sell_logs`, `customer_to_store`, `product_to_store`, `purchase_item`, `bank_transaction_info`, `bank_transaction_price`, `bank_accounts`, `bank_account_to_store`, `pos_register`, `installment_orders`, `installment_payments` y `gift_cards`.
+
+### El criterio de que una columna se traslada
+
+Se traslada si el **destino tiene una equivalente con el mismo significado**. Si el destino la **deriva** (un cache, un contador), **no se traslada**: `quantity_in_stock` es un cache de los lotes y no viene del legacy. Y una columna que **no** esta en el mapa se **descarta**, no falla.
+
+El seeder es **idempotente**: hace `upsert` por (`legacy_table`, `legacy_column`), asi que sembrar dos veces actualiza las mismas filas y no duplica ninguna.
+
+### M28: los indices que faltaban
+
+El test canonico **recorre el esquema** y comprueba que **toda** FK tiene indice, que existe el indice **parcial** de los lotes disponibles (`WHERE available > 0`) y que los CHECK de `inventory_lots` rechazan un `quantity_consumed` o un `available` negativos.
+
+### `transform` no cabia
+
+Era `string(50)` y un `cast_enum` con varios pares (`cast_enum:paid:paid:due:confirmed:partial:confirmed`) son **51 caracteres**. **M39** lo ensancha a `string(255)`: sin eso, los conjuntos de enum largos no se pueden declarar.
+
+### Lo que el seeder declara como hueco
+
+El propio docblock del seeder dice lo que **no** se puede decir con este mapa: la cabecera de la compra (`purchase_info`) todavia no esta en el mapa, y el mapa **no puede anadir** una columna que el legacy no envia (por eso `gift_cards.store_id`, que el destino exige NOT NULL, no se puede inyectar todavia).
+
+### Siguiente unidad
+
+**9-i-b** - 0.9.3: el perfil venezolano con **evidencia trazable** (cada fila declara su `evidence_status` y su `source_ref`; la tasa del 16 % queda `pending_confirmation` hasta confirmarse contra el Decreto del IVA), mas `TaxonomySeeder`, `OpeningBalancesSeeder` y `DemoStoreSeeder`. Y despues **9-ii** (el barrido de los 44 nombres, el arnes de concurrencia y los meta-tests) y **9-iii** (CI, README y los 6 ADR).
