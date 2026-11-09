@@ -29,7 +29,7 @@ afterEach(function () {
     FiscalSeriesFixture::truncate();
 });
 
-test('test_la_anulacion_consume_el_correlativo_y_la_siguiente_reserva_devuelve_el_siguiente', function () {
+test('test_la_anulacion_consuma_el_correlativo_y_la_siguiente_reserva_devuelve_el_siguiente', function () {
     $context = FiscalSeriesFixture::context();
 
     $seriesId = FiscalSeriesFixture::series($context, [

@@ -26,7 +26,7 @@ afterEach(function () {
         .' product_stores, products, stores RESTART IDENTITY CASCADE');
 });
 
-test('test_un_servicio_no_genera_lote_ni_consume_stock_y_la_transferencia_tiene_una_sola_cabecera', function () {
+test('test_un_producto_de_servicio_no_genera_lote_ni_consume_stock', function () {
     $store = Store::create(['name' => 'Tienda de prueba']);
     $other = Store::create(['name' => 'Tienda destino']);
 

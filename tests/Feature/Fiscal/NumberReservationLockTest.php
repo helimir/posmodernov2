@@ -21,7 +21,7 @@ afterEach(function () {
     FiscalSeriesFixture::truncate();
 });
 
-test('test_la_reserva_bloqueada_falla_con_sqlstate_55p03_y_el_numero_no_avanza', function () {
+test('test_la_reserva_bloqueada_falla_con_sqlstate_55p03_y_el_rollback_devuelve_el_numero', function () {
     $context = FiscalSeriesFixture::context();
     $seriesId = FiscalSeriesFixture::series($context, [
         'series_role' => 'document',

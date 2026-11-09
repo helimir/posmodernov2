@@ -1121,3 +1121,50 @@ Las categorias y las tasas las siembra el `FiscalProfileSeeder`, no el de catál
 - Mientras no haya un mecanismo equivalente, la **gobernanza de la cadena por work unit** se sostiene en: una rama por unidad, un PR por unidad, `type:feature`, un issue enlazado, el CI como puerta y la evidencia en el `apply-progress.md`.
 
 **Siguiente unidad**: **9-ii** (0.9.4 el test anti-pais, 0.9.5 el arnes de concurrencia, 0.9.6 el barrido de los 44 nombres canonicos, 0.9.7 los meta-tests), con el techo de **2500** lineas por PR.
+
+---
+
+## PR67-suite-meta - 9-ii: el test anti-pais, el arnes y el barrido de los 44 nombres (2026-11-06)
+
+- **Estado**: entregado en el PR #82 (rama `feat/fase0-41-suite-meta`).
+- **Tareas cerradas**: 0.9.4, 0.9.4-T, 0.9.5, 0.9.5-T, 0.9.6, 0.9.6-T, 0.9.7, 0.9.7-T, 0.9.8-T, 0.9.9, 0.9.9-T, 0.9.10, 0.9.10-T, 0.9.11 y 0.9.11-T. **Solo queda 0.9.8** (el workflow del CI).
+- **Ficheros**: 22 nuevos (el escaner, el inventario de la suite, los 44+6 nombres, el arnes, 6 tests de arquitectura, 8 tests nuevos de dominio y el `README.md`) y 10 modificados (8 renombrados, `phpunit.xml` y `tests/Pest.php`).
+- **Evidencia**: `pest` 193 passed (6237 assertions), con `main` en 176 passed (6021 assertions); `pint` limpio en `tests`; `php -l` limpio.
+
+### Los tests de arquitectura NO SE EJECUTABAN
+
+`tests/Architecture/` **no estaba en ningun testsuite** de `phpunit.xml`: los tests de arquitectura eran decorativos**. Por eso el escaner anti-pais (0.9.4) no habria atrapado ni un literal. Ahora la carpeta esta en el suite y `tests/Pest.php` le extiende el `TestCase` (sin `RefreshDatabase`, que no hace falta para leer el esquema).
+
+### Los 44 nombres canonicos, exactamente una vez
+
+El barrido (0.9.6) encontro **28 que ya existian, 7 divergentes que se unificaron y 13 que faltaban** (escritos aqui). Los **6 transversales** de §E.2 tambien: dos divergentes unificados y dos nuevos.
+
+**Un nombre canonico duplicado**: el de la traduccion estaba en dos ficheros. Se dejo el canonico en `tests/Feature/Sync/` (la carpeta que pide la distribucion de la 0.9.6) y se renombro el de `tests/Feature/Domain/`.
+
+**Y una trampa al unificar**: renombrar un test que era el portador de **otro** nombre canonico lo deja huerfano. Se creo un test nuevo con ese nombre: la regla ya estaba cubierta, lo que faltaba era el nombre.
+
+### El escaner anti-pais, con tres decisiones que evitan falsos positivos
+
+- **`serie` se compara como literal EXACTO**: §E.3 lo lista como token, pero en `app/Domain/` hay **seis mensajes legitimos** con la palabra castellana "serie". El token del art. 20 es el literal `'serie'` como valor, no la palabra.
+- **Los codigos ISO y `serie` exactos; los nombres de pais con limite de palabra y sin distinguir mayusculas; las monedas y las autoridades con limite de palabra y CON su caso real**: `sat` en minusculas es el dia de la semana y `nit` un piojo.
+- **La numeracion de linea viene de un tokenizador** (`token_get_all`), no de una expresion regular: el tokenizador da la linea exacta y distingue el literal del comentario.
+
+Y el **anti-vacio**: el escaner tiene que **demostrar que detecta**, con un fixture que contiene un literal prohibido. Un escaner que no escanea nada pasaria en verde.
+
+### El baseline verde no puede lanzar la suite
+
+Un test que **lance** la suite completa desde dentro de la suite es una recursion infinita. El baseline (#44) comprueba que **no hay** `skip`/`todo`/`markTestSkipped` en el arbol, que todo test aserta algo, y que el numero de declaraciones es el esperado. Sin fallos preexistentes **aislados**: nadie se salta una prueba para que el verde sea falso.
+
+### El README, que exige la 0.9.9
+
+El test de los 6 ADR y el README de arranque (#43) exigia un `README.md` que **no existia**: ahora hay uno, con el arranque (precondiciones, `migrate:fresh --seed`, credenciales, PostgreSQL 17 y Redis 7).
+
+### Tres deudas que quedan anotadas
+
+1. **`pint --test` sobre el PROYECTO completo falla en 8 ficheros preexistentes** (`app/Http/Controllers/Auth/*`, `bootstrap/providers.php`, `config/auth.php`, `database/factories/UserFactory.php`). No se tocaron (son de `main`). **Esto bloqueara el paso `pint --test` que la 0.9.8 quiere anadir al CI**: hay que arreglarlos en la 0.9.8 o el gate nacera rojo.
+2. **La tabla de tokens del escaner esta duplicada**: `FiscalDomainEnumsTest` conserva su funcion local `domainLiterals()`. Unificarla con el `CountryLiteralScanner` exigiria tocar un test existente.
+3. **`fiscal_profile_environments` sigue sin sembrar** y `income_sources`/`expense_categories` vacias.
+
+### La ultima unidad
+
+**0.9.8** - el workflow del CI con el orden `npm ci` -> `npm run build` -> `pint --test` -> `lint:check` -> `typecheck` -> `pest`, y un paso explicito que verifique `public/build/manifest.json` **antes** de la suite y falle con un error de precondicion (no con un `ViteManifestNotFoundException`). Y hay que **arreglar antes los 8 ficheros** que hacen fallar `pint --test`, o el gate nacera rojo.
