@@ -1222,7 +1222,7 @@ El comando monta el escenario con los **sembradores del repo** (no con literales
 
 ### Un hueco real que dejo escrito
 
-El repo **no tiene plan de cuentas**: no hay tabla ni configuracion, y `CheckoutInput::` es **dato de la entrada**. El comando declara unas cuentas de demostracion y las **imprime**, para que se vea cuales se usaron. En Fase 1 eso deberia ser dato configurable por tienda.
+El repo **no tiene plan de cuentas**: no hay tabla ni configuracion, y `CheckoutInput::$accounts` es **dato de la entrada**. El comando declara unas cuentas de demostracion y las **imprime**, para que se vea cuales se usaron. En Fase 1 eso deberia ser dato configurable por tienda.
 
 ### Lo que falta para verlo desde el navegador
 
