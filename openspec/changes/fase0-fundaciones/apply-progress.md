@@ -1106,3 +1106,18 @@ Las categorias y las tasas las siembra el `FiscalProfileSeeder`, no el de catál
 ### Siguiente unidad
 
 **9-ii** - 0.9.4 (`NoCountryLiteralsTest`), 0.9.5 (el arnes de concurrencia reutilizable), 0.9.6 (el barrido de los 44 nombres canonicos) y 0.9.7 (los meta-tests). Despues **9-iii** con el CI, el README y los 6 ADR.
+
+---
+
+## El ledger de intentos cambio de version (2026-11-06)
+
+`gentle-ai` se ha actualizado a la **4.0.0** y el subcomando **`sdd-attempt` ya no existe**: `gentle-ai help` no lo lista y `gentle-ai sdd-attempt settle` responde *unknown command*. En la 4.0.0 los comandos son de **`review`** (la revision por recibos, que es otra cosa: `review start`, `review capture-result`, `review mode`, ...).
+
+**Que significa para la cadena**: el mecanismo de *intento acotado* (`acquire` / `begin` / `settle` / `reset`) con el que se ha gobernado cada work unit **ha desaparecido del CLI**. El trabajo de 9-i-b esta **entregado y mergeado** (PR #81, `78c6b5a`) con su evidencia en el PR y aqui, pero su **cierre administrativo en el ledger no llego a registrarse**: el `settle` fallo con *unknown command*.
+
+**Lo que hay que revisar** (queda anotado, no ejecutado):
+- `AGENTS.md` del repositorio y `openspec/config.yaml` describen el flujo de la cadena **con el ledger**: si el ledger ya no existe, esas instrucciones apuntan a un comando inexistente.
+- El `openspec/config.yaml` fija `strict_tdd: true` y las reglas del change: eso sigue vigente.
+- Mientras no haya un mecanismo equivalente, la **gobernanza de la cadena por work unit** se sostiene en: una rama por unidad, un PR por unidad, `type:feature`, un issue enlazado, el CI como puerta y la evidencia en el `apply-progress.md`.
+
+**Siguiente unidad**: **9-ii** (0.9.4 el test anti-pais, 0.9.5 el arnes de concurrencia, 0.9.6 el barrido de los 44 nombres canonicos, 0.9.7 los meta-tests), con el techo de **2500** lineas por PR.
