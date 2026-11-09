@@ -114,7 +114,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 36 | `feat/fase0-35-iva-retenido-credito` | 6-iv | el IVA retenido como documento propio + el saldo del cliente derivado + la cuota con interes simple en el servidor | **1185** | PR #73 - issue #72 | **fusionado** `d236777` |
 | 37 | `feat/fase0-36-transferencias` | 6-v | la transferencia: el stock sale del lote origen y entra en el destino, con una sola cabecera | **857** | PR #75 - issue #74 | **fusionado** `9b0368a` |
 | 38 | `feat/fase0-38-sync-aplicador` | 8-iv-c | el `LegacyBatchApplier` (un lote en una transaccion, idempotente por `sync_batches`) + el job de reintento | **1118** | PR #77 - issue #76 | **fusionado** `3c002de` |
-| 39 | `feat/fase0-39-seeders` | 9-i-a | M28 (los indices que faltaban) + el mapa de traduccion sembrado + el catalogo de tipos de asiento | **1163** | PR #79 - issue #78 | **en curso** |
+| 39 | `feat/fase0-39-seeders` | 9-i-a | M28 (los indices que faltaban) + el mapa de traduccion sembrado + el catalogo de tipos de asiento | **1163** | PR #79 - issue #78 | **fusionado** `16e3b44` |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
