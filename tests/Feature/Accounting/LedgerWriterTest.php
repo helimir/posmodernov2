@@ -147,7 +147,7 @@ test('test_cada_movimiento_contable_tiene_un_unico_entry_type_y_ninguna_bandera_
     expect(DB::table('ledger_entries')->count())->toBe(1);
 });
 
-test('test_el_asiento_de_un_gasto_se_genera_desde_el_gasto_y_no_desde_el_movimiento_bancario', function () {
+test('test_un_gasto_sin_movimiento_bancario_sigue_siendo_gasto_con_su_asiento', function () {
     $store = Store::create(['name' => 'Tienda de gastos']);
     $writer = new LedgerWriter(DB::connection());
 

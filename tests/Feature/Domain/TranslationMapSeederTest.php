@@ -44,7 +44,7 @@ afterEach(function () {
     DB::table('countries')->delete();
 });
 
-test('test_la_traduccion_resuelve_tabla_y_columnas_contra_el_mapa_sembrado', function () {
+test('test_la_semilla_del_mapa_cubre_las_tablas_del_nucleo_del_terminal_y_es_idempotente', function () {
     $this->seed(LegacyTranslationMapSeeder::class);
 
     $mapa = DB::table('legacy_translation_map')->orderBy('legacy_table')->orderBy('legacy_column')->get();

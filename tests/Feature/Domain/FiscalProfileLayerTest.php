@@ -40,7 +40,7 @@ function fiscalLayerProfile(): FiscalProfile
 /**
  * 0.2.2-T — la referencia de verificación de cada país es un par valor + esquema.
  */
-test('test_la_referencia_de_verificacion_se_guarda_como_valor_y_esquema_y_no_como_columna_uuid', function () {
+test('test_cada_pais_guarda_su_referencia_como_valor_y_esquema_sin_columna_uuid', function () {
     // Ninguna tabla de negocio tiene una columna `uuid`: la referencia no es
     // una columna fija. Las 7 tablas de infraestructura de Laravel quedan
     // fuera (design §A.1): `failed_jobs.uuid` es el identificador de la cola.

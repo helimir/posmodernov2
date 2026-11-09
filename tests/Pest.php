@@ -19,6 +19,15 @@ pest()->extend(TestCase::class)
     ->in('Feature');
 
 /*
+ * Los tests de ARQUITECTURA no tocan la base de datos: comprueban el codigo,
+ * el esquema y los ficheros del repositorio. Pero sí arrancan la aplicación,
+ * para que dispongan de los ayudantes de Laravel (`base_path()`, `app_path()`)
+ * y para que se comporten como el resto de la suite.
+ */
+pest()->extend(TestCase::class)
+    ->in('Architecture');
+
+/*
 |--------------------------------------------------------------------------
 | Expectations
 |--------------------------------------------------------------------------

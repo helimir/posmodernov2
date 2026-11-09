@@ -99,7 +99,7 @@ class RecordingInvoiceProvider implements ElectronicInvoiceProvider
  * CONTROL y CONSOLIDAR en tres pasos; el canal que no asigna control devuelve
  * `null` y la consolidación lo admite.
  */
-test('test_el_contrato_del_proveedor_separa_emitir_asignar_control_y_consolidar', function () {
+test('test_la_emision_atraviesa_un_actor_intermedio_que_asigna_el_control_antes_de_consolidar', function () {
     // El contrato expone las seis operaciones y ninguna más.
     $methods = array_map(
         fn (ReflectionMethod $method): string => $method->getName(),

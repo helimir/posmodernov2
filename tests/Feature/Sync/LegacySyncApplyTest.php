@@ -115,7 +115,7 @@ test('test_el_lote_firmado_se_aplica_de_verdad_y_la_venta_existe', function () {
         ->and(DB::table('sync_batches')->count())->toBe(1);
 });
 
-test('test_un_reenvio_identico_al_endpoint_no_vuelve_a_aplicar_el_lote', function () {
+test('test_el_terminal_reenvia_tras_perder_la_respuesta_y_el_maestro_lo_acepta_sin_congelarse', function () {
     SyncFixture::exigirRedis();
 
     $storeId = DB::table('stores')->insertGetId(['name' => 'Tienda del maestro']);
