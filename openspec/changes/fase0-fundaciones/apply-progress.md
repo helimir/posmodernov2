@@ -1168,3 +1168,34 @@ El test de los 6 ADR y el README de arranque (#43) exigia un `README.md` que **n
 ### La ultima unidad
 
 **0.9.8** - el workflow del CI con el orden `npm ci` -> `npm run build` -> `pint --test` -> `lint:check` -> `typecheck` -> `pest`, y un paso explicito que verifique `public/build/manifest.json` **antes** de la suite y falle con un error de precondicion (no con un `ViteManifestNotFoundException`). Y hay que **arreglar antes los 8 ficheros** que hacen fallar `pint --test`, o el gate nacera rojo.
+
+---
+
+## PR68-ci-gate - 9-iii: el gate de calidad del CI (2026-11-06)
+
+- **Estado**: entregado en el PR #84 (rama `feat/fase0-42-ci-gate`). **Con esto la Fase 0 queda COMPLETA.**
+- **Tareas cerradas**: 0.9.8 (0.9.8-T ya estaba cerrada desde 9-ii).
+- **Ficheros**: `.github/workflows/tests.yml` y ocho ficheros del scaffolding de Laravel, **solo de formato**.
+- **Evidencia**: `pint --test` **sobre el proyecto entero** en verde; `pest --filter=QualityGate` 1 passed; suite completa 193 passed (6237 assertions); `lint:check`, `typecheck` y `build` en verde.
+
+### El gate no puede nacer rojo
+
+El paso `pint --test` fallaba en **ocho** ficheros preexistentes del scaffolding (`app/Http/Controllers/Auth/*`, `app/Http/Requests/Auth/LoginRequest.php`, `bootstrap/providers.php`, `config/auth.php`, `database/factories/UserFactory.php`). Anadirlos al workflow sin arreglarlos habria dejado el CI **caido en el primer PR**. Los ocho se arreglaron **solo de formato**: el fixer responsable es `fully_qualified_strict_types` (acorta los FQCN de los docblocks y anade el `use` correspondiente), **no** `declare(strict_types=1)`, que si habria sido un cambio semantico. **Cero lineas de logica tocadas**, y auditado con `git diff`, no con la lista de fixers (que lista los *ejecutados*, no los que alteraron el fichero).
+
+### La precondicion del manifiesto, probada de verdad
+
+Sin el paso, borrar el manifiesto hace fallar un test de pagina con un `ViteManifestNotFoundException` y un `ViewException`: un stack trace **indistinguible** de un defecto de la aplicacion. Con el paso, es una anotacion que dice exactamente que es: **una precondicion del pipeline** (`::error::Precondition failed: public/build/manifest.json is missing. Run 'npm ci && npm run build' before the tests.`), con codigo de salida 1 y **sin** excepcion de Vite. Probado con el manifiesto presente (sale 0) y ausente (sale 1 con el mensaje), y restaurado byte-identico.
+
+### El orden final del gate
+
+`npm ci` -> `npm run build` -> **manifiesto** -> `composer install` -> `.env` -> `key:generate` -> **`pint --test`** -> `lint:check` -> `typecheck` -> `pest`. `typecheck` aparece **una sola vez** (no duplicado). `composer install` queda intercalado porque `pint` vive en `vendor/bin`: sin el, el gate ni siquiera podria ejecutarse.
+
+### Un aviso sobre la fuerza del gate
+
+**No hay `pint.json`**: el preset es el **default de Laravel**, no una politica de estilo propia. El gate esta tan fuerte como lo que ejecuta, y hoy ejecuta el default de otro. El dia que alguien escriba codigo que ese preset considera no conforme, el gate lo rechazara sin que haya una decision de estilo detras. No es un defecto de esta unidad, pero es el siguiente sitio donde el gate puede volverse friccion en vez de garantia. **Decidir si se fija un `pint.json` propio es una unidad aparte.**
+
+### La Fase 0, completa
+
+Con 0.9.8 quedan cerradas las **152 tareas** del plan: las nueve fases (0.1 cimientos, 0.2 capa de pais, 0.3 numeracion fiscal, 0.4 catalogo, 0.5 lotes, 0.6 impuestos y checkout, 0.7 contabilidad y caja, 0.8 impresion LAN y sync legacy, 0.9 semilla, suite y CI), con sus 44 nombres canonicos verificados y el test anti-pais ejecutandose de verdad.
+
+**Lo que queda fuera de la Fase 0, por diseno**: la certificacion de los saldos de apertura (**B1**, la firma una persona) y la confirmacion legal del 16 % (**B2**). Y la costura para ver el avance en el navegador, aplazada hasta el final.
