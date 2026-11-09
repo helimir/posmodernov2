@@ -117,7 +117,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 39 | `feat/fase0-39-seeders` | 9-i-a | M28 (los indices que faltaban) + el mapa de traduccion sembrado + el catalogo de tipos de asiento | **1163** | PR #79 - issue #78 | **fusionado** `16e3b44` |
 | 40 | `feat/fase0-40-perfil-ve` | 9-i-b | el perfil venezolano con evidencia trazable + los cuatro seeders que faltaban | **1876** | PR #81 - issue #80 | **fusionado** `78c6b5a` |
 | 41 | `feat/fase0-41-suite-meta` | 9-ii | el test anti-pais + el arnes de concurrencia + el barrido de los 44 nombres canonicos + los meta-tests | **2510** | PR #83 - issue #82 | **fusionado** `96b4789` |
-| 42 | `feat/fase0-42-ci-gate` | 9-iii | 0.9.8: el gate de calidad del CI, con la precondicion del manifiesto | **72** | PR #84 - issue #83 | **en curso** |
+| 42 | `feat/fase0-42-ci-gate` | 9-iii | 0.9.8: el gate de calidad del CI, con la precondicion del manifiesto | **72** | PR #85 - issue #84 | **en curso** |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
