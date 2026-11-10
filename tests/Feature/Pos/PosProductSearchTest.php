@@ -327,12 +327,19 @@ test('test_el_termino_de_busqueda_escapa_los_comodines_y_la_barra_invertida', fu
  *
  * El motivo es TECNICO y verificado: el `ESCAPE` explicito es REDUNDANTE
  * en PostgreSQL (su escape por defecto ya es la barra invertida), pero no es
- * inocuo: la barra invertida de `ESCAPE '\'` le hace creer al analizador de
+ * inocuo. La barra invertida de `ESCAPE '\'` le hace creer al analizador de
  * PDO que escapa el cierre de la cadena, y cuenta los parametros de la
  * sentencia de mas. Con UN solo `LIKE` la trampa no muerde, y por eso el
  * codigo funcionaba: era ACCIDENTALMENTE correcto. En cuanto la consulta
- * lleva un segundo `LIKE`, la sentencia se prepara con menos parametros de
- * los que tiene y el error es "Invalid parameter number".
+ * lleva un segundo `LIKE`, la sentencia se puede preparar con menos
+ * parametros de los que tiene, y el error es "Invalid parameter number".
+ *
+ * QUE EL FALLO SEA INTERMITENTE NO LO HACE MENOS GRAVE: el MISMO codigo
+ * fallo en el CI y funciono en la maquina local, con la misma base de datos
+ * y el mismo modo de preparacion. El fallo depende de la version de PHP y
+ * de libpq, no del codigo. Un fallo que depende del entorno es el peor
+ * fallo que hay: el dia que se arregla la version, se rompe el checkout sin
+ * que nadie haya tocado una linea.
  *
  * Este test es un META-TEST: lee el codigo, porque la regla es sobre el
  * TEXTO de la sentencia y no sobre su resultado.
@@ -348,29 +355,4 @@ test('test_la_consulta_del_catalogo_no_declara_un_escape_explicito', function ()
     expect($codigo)->not->toContain('ESCAPE')
         // Y el escape del termino va en el VALOR, con la barra escapada.
         ->and($fuente)->toContain("['\\\\', '%', '_']");
-});
-
-/**
- * La trampa del `ESCAPE` explicito es REAL, y por eso el catalogo la evita.
- *
- * REGLA que fija este test: *dos `LIKE ... ESCAPE '\'` en la MISMA sentencia
- * se preparan con menos parametros de los que llevan*.
- *
- * Este test documenta la plataforma, no la aplicacion: si PostgreSQL o PDO
- * dejan de contar mal los parametros, el test falla y avisa de que la regla
- * del catalogo puede relajarse.
- */
-test('test_dos_like_con_escape_explicito_preparan_menos_parametros', function () {
-    $pdo = DB::connection()->getPdo();
-
-    // Con UN solo `LIKE`, la sentencia se prepara bien: la trampa no muerde.
-    $uno = $pdo->prepare("SELECT 1 WHERE 'AB' LIKE ? ESCAPE '\\'");
-    $uno->execute(['AB']);
-
-    expect($uno->fetchColumn())->toBe(1);
-
-    // Con DOS, la cuenta de parametros se descuadra y la sentencia se cae.
-    $dos = $pdo->prepare("SELECT 1 WHERE 'AB' LIKE ? ESCAPE '\\' OR 'AB' LIKE ? ESCAPE '\\'");
-
-    expect(fn () => $dos->execute(['AB', 'AB']))->toThrow(PDOException::class);
 });
