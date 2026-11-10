@@ -178,6 +178,44 @@ final class PosContext
     }
 
     /**
+     * La MONEDA de la tienda, con su simbolo y sus separadores.
+     *
+     * REGLA que fija este metodo: *el codigo de la moneda no basta para
+     * enseñar un importe*. Un importe sin el simbolo y sin los separadores no
+     * se lee, asi que la fila de `currencies` viaja entera a la pantalla: el
+     * simbolo, donde va el simbolo, los decimales y los dos separadores.
+     *
+     * Los datos son de la FILA, no de la interfaz: el simbolo y los
+     * separadores cambian de pais a pais, y un literal en la pantalla es un
+     * fork por pais.
+     *
+     * @return array{code: string, symbol: string|null, symbol_position: string|null, decimals: int, thousand_separator: string|null, decimal_separator: string|null}
+     *
+     * @throws RuntimeException Cuando la moneda declarada no existe.
+     */
+    public function currency(): array
+    {
+        $code = $this->currencyCode();
+
+        $row = $this->connection->table('currencies')->where('code', $code)->first();
+
+        if ($row === null) {
+            throw new RuntimeException(
+                'La moneda '.$code.' de la tienda '.$this->store()->id.' no existe en el catalogo.'
+            );
+        }
+
+        return [
+            'code' => (string) $row->code,
+            'symbol' => $row->symbol === null ? null : (string) $row->symbol,
+            'symbol_position' => $row->symbol_position === null ? null : (string) $row->symbol_position,
+            'decimals' => (int) $row->decimals,
+            'thousand_separator' => $row->thousand_separator === null ? null : (string) $row->thousand_separator,
+            'decimal_separator' => $row->decimal_separator === null ? null : (string) $row->decimal_separator,
+        ];
+    }
+
+    /**
      * El PLAN DE CUENTAS de la tienda: rol => codigo de cuenta.
      *
      * REGLA que fija este metodo: *el plan de la tienda gana al plan por

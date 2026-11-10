@@ -11,6 +11,7 @@ use App\Domain\Fiscal\TaxRateResolver;
 use App\Domain\Inventory\LotConsumer;
 use App\Domain\Inventory\StockInvariant;
 use App\Domain\Sales\SalePaymentStatus;
+use App\Support\Pos\PosBudget;
 use Illuminate\Database\Connection;
 use Illuminate\Support\ServiceProvider;
 
@@ -43,6 +44,16 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(CustomerBalanceService::class, function ($app): CustomerBalanceService {
             return new CustomerBalanceService($app->make(Connection::class));
+        });
+
+        // El PRESUPUESTO de la caja: el total que calcula el motor de
+        // impuestos SIN cobrar. Se construye aqui, con la MISMA conexion que
+        // el checkout: el resolvedor de tasas lee de la base de datos, y con
+        // otra conexion no veria la transaccion de la venta.
+        $this->app->singleton(PosBudget::class, function ($app): PosBudget {
+            $connection = $app->make(Connection::class);
+
+            return new PosBudget($connection, new TaxRateResolver($connection));
         });
     }
 
