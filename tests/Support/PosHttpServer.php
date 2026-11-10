@@ -2,8 +2,11 @@
 
 namespace Tests\Support;
 
+use GuzzleHttp\Cookie\CookieJar;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 use Throwable;
@@ -40,6 +43,57 @@ use Throwable;
  */
 final class PosHttpServer
 {
+    /**
+     * Cuanto se espera a que el servidor escuche.
+     *
+     * Son SEGUNDOS, no milisegundos: el proceso `artisan serve` arranca la
+     * aplicacion entera antes de lanzar el servidor de PHP, y ese arranque
+     * tarda mas de veinte segundos en una maquina sin cache de opcode. Con
+     * treinta segundos de margen, el camino por HTTP se caia por tiempo en
+     * el segundo arranque del mismo proceso de pruebas.
+     */
+    private const ESPERA_ARRANQUE = 120;
+
+    /**
+     * El margen de una PETICION, en segundos.
+     *
+     * El cliente HTTP de Laravel espera treinta segundos por defecto, y ese
+     * es el margen de la CONEXION, no el de la respuesta: la primera
+     * peticion paga el arranque de la aplicacion entera, que en una maquina
+     * sin cache de opcode tarda mas de veinte segundos. Con treinta
+     * segundos, el camino se caia por el reloj y no por el camino.
+     */
+    private const ESPERA_PETICION = 180;
+
+    /**
+     * El CLIENTE HTTP del camino: con las cookies de la sesion y con margen.
+     *
+     * REGLA que fija este metodo: *toda peticion del camino sale por aqui*.
+     * Un cliente con el margen por defecto se cae en el primer arranque, y
+     * ese fallo se confunde con un fallo del camino, que es peor: hace
+     * dudar de la aplicacion cuando el problema es el reloj.
+     *
+     * @param  CookieJar|null  $jar  Las cookies de la sesion.
+     * @param  array<string, mixed>  $opciones  Las opciones que se anaden.
+     */
+    public function cliente(?CookieJar $jar = null, array $opciones = []): PendingRequest
+    {
+        $ajuste = [
+            'timeout' => self::ESPERA_PETICION,
+            'connect_timeout' => 30,
+        ];
+
+        // Las cookies SOLO si las hay: Guzzle tira la opcion cuando el valor
+        // es nulo, y el cliente de Laravel la lee igual, y revienta con
+        // "Undefined array key cookies". Un cliente SIN sesion es un cliente
+        // sin la opcion, no un cliente con la opcion a nulo.
+        if ($jar !== null) {
+            $ajuste['cookies'] = $jar;
+        }
+
+        return Http::withOptions(array_merge($ajuste, $opciones));
+    }
+
     /**
      * @param  Process  $process  El servidor, vivo.
      * @param  string  $database  La base de datos del camino, de un solo uso.
@@ -145,10 +199,19 @@ final class PosHttpServer
      *
      * Un servidor que no arranca es un fallo del camino, no un fallo
      * silencioso: el mensaje dice que paso.
+     *
+     * REGLA que fija este metodo: *esperar al servidor es esperar DECISEGUNDOS,
+     * no milisegundos*. El proceso `artisan serve` arranca la aplicacion
+     * entera ANTES de lanzar el servidor de PHP, y en una maquina sin cache de
+     * opcode (el CLI de PHP no la trae) ese arranque son mas de veinte
+     * segundos: medidos, 20,98 s y 24,09 s en dos arranques seguidos en la
+     * misma maquina. Con el limite de treinta segundos, el camino por HTTP se
+     * caia por TIEMPO en el segundo arranque del mismo proceso de pruebas, y
+     * el fallo no era del camino: era del reloj.
      */
     private function esperar(): void
     {
-        $limite = microtime(true) + 30;
+        $limite = microtime(true) + self::ESPERA_ARRANQUE;
 
         while (microtime(true) < $limite) {
             if (! $this->process->isRunning()) {

@@ -1,7 +1,6 @@
 <?php
 
 use GuzzleHttp\Cookie\CookieJar;
-use Illuminate\Support\Facades\Http;
 use Tests\Concerns\WithoutWrappingTransaction;
 use Tests\Fixtures\PosFixture;
 use Tests\Support\PosHttpServer;
@@ -86,7 +85,7 @@ test('test_el_camino_de_la_caja_por_http_loguea_presupuesta_y_cobra', function (
 
         // 2. SIN SESION, la caja NO se sirve: redirige al login. Se comprueba
         //    ANTES de entrar, con un cliente sin cookies.
-        $sinSesion = Http::withOptions(['allow_redirects' => false])
+        $sinSesion = $servidor->cliente(null, ['allow_redirects' => false])
             ->get($servidor->url('/caja'));
 
         expect($sinSesion->status())->toBe(302)
@@ -99,7 +98,7 @@ test('test_el_camino_de_la_caja_por_http_loguea_presupuesta_y_cobra', function (
         //    sesion, y el POST tiene que enviar la MISMA sesion que lo creo.
         $jar = new CookieJar;
 
-        $login = Http::withOptions(['cookies' => $jar])
+        $login = $servidor->cliente($jar)
             ->get($servidor->url('/login'));
 
         expect($login->status())->toBe(200);
@@ -109,7 +108,7 @@ test('test_el_camino_de_la_caja_por_http_loguea_presupuesta_y_cobra', function (
         expect($token)->not->toBe('');
 
         // 4. POST /login: el token firma la peticion y la sesion se abre.
-        $sesion = Http::withOptions(['cookies' => $jar, 'allow_redirects' => false])
+        $sesion = $servidor->cliente($jar, ['allow_redirects' => false])
             ->withHeaders(['X-CSRF-TOKEN' => $token, 'Accept' => 'application/json'])
             ->post($servidor->url('/login'), [
                 'email' => 'caja@camino.test',
@@ -119,7 +118,7 @@ test('test_el_camino_de_la_caja_por_http_loguea_presupuesta_y_cobra', function (
         expect($sesion->status())->toBe(302);
 
         // 5. GET /caja: la pantalla del cajero, con la sesion de verdad.
-        $caja = Http::withOptions(['cookies' => $jar])
+        $caja = $servidor->cliente($jar)
             ->get($servidor->url('/caja'));
 
         expect($caja->status())->toBe(200);
@@ -142,7 +141,7 @@ test('test_el_camino_de_la_caja_por_http_loguea_presupuesta_y_cobra', function (
         expect($token)->not->toBe('');
 
         // 6. POST /caja/presupuesto: el total que calcula el motor.
-        $presupuesto = Http::withOptions(['cookies' => $jar])
+        $presupuesto = $servidor->cliente($jar)
             ->withHeaders([
                 'X-CSRF-TOKEN' => $token,
                 'Accept' => 'application/json',
@@ -163,7 +162,7 @@ test('test_el_camino_de_la_caja_por_http_loguea_presupuesta_y_cobra', function (
             ->and($presupuesto->json('tax_total'))->toBe('8.0000');
 
         // 7. POST /caja/cobrar: la venta se escribe de verdad.
-        $cobro = Http::withOptions(['cookies' => $jar])
+        $cobro = $servidor->cliente($jar)
             ->withHeaders([
                 'X-CSRF-TOKEN' => $token,
                 'Accept' => 'application/json',
@@ -193,7 +192,7 @@ test('test_el_camino_de_la_caja_por_http_loguea_presupuesta_y_cobra', function (
 
         // 8. GET /caja de nuevo: la caja sigue abierta para el siguiente
         //    cliente.
-        $otraVez = Http::withOptions(['cookies' => $jar])
+        $otraVez = $servidor->cliente($jar)
             ->get($servidor->url('/caja'));
 
         expect($otraVez->status())->toBe(200)

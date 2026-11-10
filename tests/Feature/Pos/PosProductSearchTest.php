@@ -241,3 +241,118 @@ test('test_la_pantalla_de_la_caja_entrega_el_contrato_de_sus_props', function ()
         ->where('business_date', $fecha)
         ->etc());
 });
+
+/**
+ * Un producto cuyo NOMBRE lleva, literalmente, comodines del `LIKE`.
+ */
+function producto_con_simbolos(int $storeId, int $taxCategoryId): int
+{
+    $producto = Product::create([
+        'code' => 'HUMO-SIMBOLOS',
+        'name' => 'A%B_C',
+        'tax_category_id' => $taxCategoryId,
+        'type' => 'service',
+    ]);
+
+    ProductStore::create([
+        'product_id' => $producto->id,
+        'store_id' => $storeId,
+        'purchase_price' => '0.0000',
+        'sell_price' => '5.0000',
+        'quantity_in_stock' => '0.0000',
+        'status' => 'active',
+    ]);
+
+    return (int) $producto->id;
+}
+
+/**
+ * Un termino de busqueda es DATO, no un patron.
+ *
+ * REGLA que fija este test: *los comodines del `LIKE` y la barra invertida
+ * se escapan en el VALOR del parametro, y la sentencia no lleva un `ESCAPE`
+ * explicito*.
+ *
+ * El `%` y el `_` son comodines del `LIKE`: sin escapar, escribir `A%` en el
+ * buscador devolveria medio catalogo. Y la barra invertida es el caracter de
+ * ESCAPE del `LIKE` en PostgreSQL: una barra del termino tiene que viajar
+ * escapada, o rompe el patron.
+ */
+test('test_el_termino_de_busqueda_escapa_los_comodines_y_la_barra_invertida', function () {
+    $escenario = PosFixture::escenario();
+    $usuario = PosFixture::usuario($escenario['store_id']);
+
+    $conSimbolos = producto_con_simbolos($escenario['store_id'], $escenario['tax_category_id']);
+
+    // 1. El PORCENTAJE es literal: "A%" encuentra el producto que se llama
+    //    "A%B_C" y NO el catalogo entero.
+    $porcentaje = $this->actingAs($usuario)->getJson('/caja/productos?q=A%25');
+
+    $porcentaje->assertOk();
+
+    expect($porcentaje->json('products'))->toHaveCount(1)
+        ->and((int) $porcentaje->json('products.0.id'))->toBe($conSimbolos);
+
+    // 2. El GUION BAJO tambien es literal: "A_" no encuentra "A%B_C", porque
+    //    "A%B_C" no empieza por "A_".
+    $guionBajo = $this->actingAs($usuario)->getJson('/caja/productos?q=A_');
+
+    $guionBajo->assertOk();
+
+    expect($guionBajo->json('products'))->toBe([]);
+
+    // 3. El nombre COMPLETO si se encuentra: con los tres caracteres
+    //    escapados a la vez.
+    $completo = $this->actingAs($usuario)->getJson('/caja/productos?q=A%25B_C');
+
+    $completo->assertOk();
+
+    expect($completo->json('products'))->toHaveCount(1)
+        ->and((int) $completo->json('products.0.id'))->toBe($conSimbolos);
+
+    // 4. Y la BARRA INVERTIDA es dato, no un modificador del patron: buscar
+    //    "A\" no encuentra nada y NO rompe la consulta.
+    $barra = $this->actingAs($usuario)->getJson('/caja/productos?q=A%5C');
+
+    $barra->assertOk();
+
+    expect($barra->json('products'))->toBe([]);
+});
+
+/**
+ * La consulta del catalogo NO declara un `ESCAPE` explicito.
+ *
+ * REGLA que fija este test: *la sentencia del catalogo no lleva
+ * `ESCAPE '\'`*.
+ *
+ * El motivo es TECNICO y verificado: el `ESCAPE` explicito es REDUNDANTE
+ * en PostgreSQL (su escape por defecto ya es la barra invertida), pero no es
+ * inocuo. La barra invertida de `ESCAPE '\'` le hace creer al analizador de
+ * PDO que escapa el cierre de la cadena, y cuenta los parametros de la
+ * sentencia de mas. Con UN solo `LIKE` la trampa no muerde, y por eso el
+ * codigo funcionaba: era ACCIDENTALMENTE correcto. En cuanto la consulta
+ * lleva un segundo `LIKE`, la sentencia se puede preparar con menos
+ * parametros de los que tiene, y el error es "Invalid parameter number".
+ *
+ * QUE EL FALLO SEA INTERMITENTE NO LO HACE MENOS GRAVE: el MISMO codigo
+ * fallo en el CI y funciono en la maquina local, con la misma base de datos
+ * y el mismo modo de preparacion. El fallo depende de la version de PHP y
+ * de libpq, no del codigo. Un fallo que depende del entorno es el peor
+ * fallo que hay: el dia que se arregla la version, se rompe el checkout sin
+ * que nadie haya tocado una linea.
+ *
+ * Este test es un META-TEST: lee el codigo, porque la regla es sobre el
+ * TEXTO de la sentencia y no sobre su resultado.
+ */
+test('test_la_consulta_del_catalogo_no_declara_un_escape_explicito', function () {
+    $fuente = file_get_contents(app_path('Support/Pos/PosCatalog.php'));
+
+    // Sin los COMENTARIOS: la regla es sobre el TEXTO de la sentencia, y el
+    // codigo explica la regla en prosa, con el termino dentro.
+    $codigo = preg_replace('#/\*.*?\*/#s', '', $fuente);
+    $codigo = preg_replace('#//[^\n]*#', '', (string) $codigo);
+
+    expect($codigo)->not->toContain('ESCAPE')
+        // Y el escape del termino va en el VALOR, con la barra escapada.
+        ->and($fuente)->toContain("['\\\\', '%', '_']");
+});
