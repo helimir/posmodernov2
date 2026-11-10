@@ -90,8 +90,23 @@ final readonly class PosCatalog
 
         return $base->where(function ($filtro) use ($termino): void {
             // Por NOMBRE, como prefijo.
+            //
+            // REGLA que fija esta consulta: *el escape es el de POR DEFECTO
+            // de PostgreSQL, la barra invertida, y NO un `ESCAPE` explicito*.
+            //
+            // El motivo es TECNICO y verificado: el analizador de PDO cuenta
+            // los parametros de la sentencia, y la barra invertida de
+            // `ESCAPE '\'` le engaña (parece escapar el cierre de la cadena).
+            // Una sentencia con DOS `LIKE ... ESCAPE '\'` se prepara con
+            // menos parametros de los que lleva, y el error es "Invalid
+            // parameter number". Con el escape por defecto, la barra invertida
+            // viaja en el VALOR del parametro y no en el texto de la
+            // sentencia, y el patron se comporta igual.
+            //
+            // Con UN solo `LIKE` la trampa no muerde, y por eso este codigo
+            // funcionaba: no era correcto, era ACCIDENTALMENTE correcto.
             $filtro->whereRaw(
-                "UPPER(products.name) LIKE ? ESCAPE '\\'",
+                'UPPER(products.name) LIKE ?',
                 [$this->prefixPattern($termino)]
             )
             // Por CODIGO, exacto: no como prefijo.
@@ -147,6 +162,13 @@ final readonly class PosCatalog
      *
      * Un termino de busqueda es DATO del usuario, no un patron: sin escapar,
      * escribir `50%` en el buscador devolveria medio catalogo.
+     *
+     * REGLA que fija este metodo: *el escape es el de POR DEFECTO de
+     * PostgreSQL, la barra invertida*. Por eso una barra del termino se
+     * escapa con DOS barras en el valor: la barra invertida es el caracter de
+     * escape del `LIKE`, y para que sea literal tiene que ir escapada. La
+     * sentencia NO lleva `ESCAPE` explicito: el explicito no cambia el
+     * resultado, pero engaña al conteo de parametros de PDO.
      */
     private function prefixPattern(string $termino): string
     {
