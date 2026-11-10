@@ -1297,3 +1297,39 @@ El diseno pedia filtrar por `quantity_in_stock > 0` (el cache) pero el stock rea
 ### Siguiente unidad
 
 **1.2** - la pantalla de la caja *touch*: catalogo, carrito, teclado numerico, cobro, cambio y resumen.
+
+---
+
+## PR92-caja-ui - Fase 1, 1.2: la pantalla touch de la caja (2026-11-06)
+
+- **Estado**: entregado en el PR #93 (rama `feat/fase1-02-caja-ui`).
+- **Ficheros**: `resources/js/pages/pos/index.tsx`, `resources/js/layouts/pos-layout.tsx`, `resources/js/lib/pos.ts`, `app/Support/Pos/PosBudget.php`, `app/Http/Controllers/PosController.php`, `app/Support/Pos/PosContext.php`, `routes/web.php`, `tests/Feature/Pos/{PosBudgetTest,PosScreenTest,PosHttpJourneyTest}.php`, `tests/Support/PosHttpServer.php`.
+- **Evidencia**: `pest` 220 passed (6678 assertions), con `main` en 213 passed (6545 assertions); `pint` limpio; `typecheck` y `lint:check` limpios; `php -l` sin errores.
+
+### La prueba POR HTTP, que es lo que faltaba en la Fase 0
+
+La unidad incluye **`PosHttpJourneyTest`**: levanta un **servidor real** y recorre el camino completo — `GET /login` -> `POST /login` -> `GET /caja` -> `POST /caja/presupuesto` -> `POST /caja/cobrar` -> `GET /caja` — y verifica **21 aserciones** en **257 s**.
+
+Es la red de seguridad que la Fase 0 no tenia: los dos fallos de produccion (el 419 del CSRF y las mayusculas de las rutas de Inertia) **no los veia ni el CI**, y aparecieron solo al probar el arranque por HTTP.
+
+### El total lo calcula el MOTOR, no el cliente
+
+El precio con impuesto **no se puede calcular en el navegador** sin replicar la resolucion de categoria y tasa del dominio (y el legacy lo hacia asi, y por eso el impuesto salia mal: defecto P0 #13). Anadido **`POST /caja/presupuesto`**: el mismo motor, **no cobra nada**, y devuelve el total. La UI lo pide cuando cambia el carrito.
+
+### El presupuesto y el cobro dan el MISMO total
+
+Hay un test que lo comprueba: el `grand_total` del presupuesto **coincide exactamente** con el de la venta que luego cobra el mismo carrito. El presupuesto con un descuento **no** coincide con el total sin descuento (el motor aplica el descuento). Y el presupuesto **no** toca nada: ni venta, ni stock, ni asiento.
+
+### La pantalla
+
+**A pantalla completa, con su propio layout**: un punto de venta no quiere navegacion lateral. Barra superior con la tienda, la **fecha de negocio** y el usuario; catalogo en rejilla a la izquierda; carrito a la derecha; y el panel de cobro con el **total del servidor**, el importe recibido (teclado numerico grande **y** teclado fisico), el **cambio**, la forma de pago y el boton COBRAR. Al cobrar, un dialog de resumen con el numero de documento, el de control, el total y el cambio, que vacia el carrito.
+
+El **carrito es estado del cliente**: no hay tabla de carritos y **no debe haberla**.
+
+### La moneda, que faltaba en los props
+
+La 1.1 entregaba `currency_code` pero no el simbolo ni los separadores, y una pantalla sin el simbolo no se lee. Los props ahora llevan `currency`: `{ code, symbol, symbol_position, decimals, thousand_separator, decimal_separator }`.
+
+### Siguiente unidad
+
+**1.3** - el catalogo: productos, precios por tienda, categorias e impuestos.

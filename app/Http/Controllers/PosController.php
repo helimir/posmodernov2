@@ -10,6 +10,7 @@ use App\Domain\Checkout\CheckoutService;
 use App\Domain\Credit\CustomerBalanceService;
 use App\Models\Store;
 use App\Support\Pos\PosAmount;
+use App\Support\Pos\PosBudget;
 use App\Support\Pos\PosCatalog;
 use App\Support\Pos\PosContext;
 use Brick\Math\BigDecimal;
@@ -65,6 +66,7 @@ class PosController extends Controller
         private readonly Connection $connection,
         private readonly CheckoutService $checkout,
         private readonly CustomerBalanceService $balances,
+        private readonly PosBudget $budget,
     ) {
         $this->catalog = new PosCatalog($connection);
     }
@@ -87,6 +89,9 @@ class PosController extends Controller
      *  - `control_series_id`: `int|null`.
      *  - `business_date`: `'Y-m-d'`.
      *  - `currency_code`: `string`.
+     *  - `currency`: `{ code, symbol, symbol_position, decimals,
+     *    thousand_separator, decimal_separator }`. El codigo solo no alcanza:
+     *    un importe sin simbolo ni separadores no se lee.
      *  - `catalog_page_size`: `int`.
      */
     public function index(Request $request): Response
@@ -95,6 +100,7 @@ class PosController extends Controller
             $context = $this->context($request);
             $store = $context->store();
             $currencyCode = $context->currencyCode();
+            $currency = $context->currency();
             $catalog = $this->catalog->products(
                 (int) $store->id,
                 null,
@@ -120,6 +126,7 @@ class PosController extends Controller
             'control_series_id' => $context->controlSeriesId(),
             'business_date' => $context->businessDate()->format('Y-m-d'),
             'currency_code' => $currencyCode,
+            'currency' => $currency,
             'catalog_page_size' => (int) config('pos.catalog_page_size', 24),
         ]);
     }
@@ -154,6 +161,65 @@ class PosController extends Controller
         );
 
         return response()->json($resultado);
+    }
+
+    /**
+     * El PRESUPUESTO: lo que se va a cobrar, SIN cobrarlo.
+     *
+     * Es el mismo pedido que el cobro (`{ customer_id?, lines, payments }`),
+     * pero NO cobra: no reserva numero, no consume stock y no escribe
+     * asiento. Devuelve el total CALCULADO POR EL MOTOR, con su desglose:
+     * `{ subtotal, tax_total, discount, rounding_adjustment, grand_total }`.
+     *
+     * POR QUE EXISTE: el precio con impuesto NO se puede calcular en el
+     * navegador sin replicar la resolucion de categoria y de tasa del
+     * dominio, y una segunda verdad diverge (el legacy multiplicaba el
+     * impuesto por el precio de catalogo: defecto P0 #13). La pantalla pide
+     * el total al servidor y lo ENSENA; si la peticion falla, la pantalla no
+     * deja cobrar, porque cobrar sin total es cobrar a ciegas.
+     *
+     * Los importes son TEXTO decimal, como los del cobro.
+     */
+    public function budget(Request $request): JsonResponse
+    {
+        $datos = $request->all();
+
+        $error = $this->validar($datos, false);
+
+        if ($error !== null) {
+            return response()->json(['errorMsg' => $error], 422);
+        }
+
+        try {
+            $context = $this->context($request);
+            $store = $context->store();
+            $documentSeriesId = $context->documentSeriesId();
+        } catch (RuntimeException $fallo) {
+            return response()->json(['errorMsg' => $fallo->getMessage()], 422);
+        }
+
+        if ($documentSeriesId === null) {
+            return response()->json([
+                'errorMsg' => 'La tienda '.$store->id.' no tiene serie de documento: '
+                    .'sin serie no hay moneda ni tasa con que calcular el total.',
+            ], 422);
+        }
+
+        try {
+            $total = $this->budget->quote(
+                (int) $store->id,
+                $documentSeriesId,
+                $context->issuedAt(),
+                $this->lineas($datos),
+            );
+        } catch (RuntimeException $fallo) {
+            // Sin perfil, sin moneda, sin categoria o sin tasa vigente no hay
+            // total: es un fallo de la OPERACION, no del servidor, y la
+            // pantalla lo enseña en vez de cobrar a ciegas.
+            return response()->json(['errorMsg' => $fallo->getMessage()], 422);
+        }
+
+        return response()->json($total);
     }
 
     /**
@@ -398,21 +464,31 @@ class PosController extends Controller
      * motor de impuestos ni al libro contable.
      *
      * @param  array<string, mixed>  $datos
+     * @param  bool  $conPagos  Si los pagos tienen que venir. El PRESUPUESTO
+     *                          no los necesita: el total no depende de como
+     *                          se paga, y exigir un pago para preguntar el
+     *                          total haria fallar la pantalla cuando el
+     *                          cliente aun no ha dado nada.
      * @return string|null El mensaje del error, o `null` si todo esta bien.
      */
-    private function validar(array $datos): ?string
+    private function validar(array $datos, bool $conPagos = true): ?string
     {
-        $validador = Validator::make($datos, [
+        $reglas = [
             'customer_id' => ['nullable', 'integer', 'min:1'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', 'min:1'],
             'lines.*.quantity' => ['required'],
             'lines.*.unit_price' => ['required'],
             'lines.*.discount' => ['nullable'],
-            'payments' => ['required', 'array', 'min:1'],
-            'payments.*.payment_method_id' => ['nullable', 'integer', 'min:1'],
-            'payments.*.amount' => ['required'],
-        ]);
+        ];
+
+        if ($conPagos) {
+            $reglas['payments'] = ['required', 'array', 'min:1'];
+            $reglas['payments.*.payment_method_id'] = ['nullable', 'integer', 'min:1'];
+            $reglas['payments.*.amount'] = ['required'];
+        }
+
+        $validador = Validator::make($datos, $reglas);
 
         if ($validador->fails()) {
             return (string) $validador->errors()->first();
@@ -438,6 +514,10 @@ class PosController extends Controller
             if ($precio->isNegative()) {
                 return 'El precio de la linea '.($indice + 1).' no puede ser negativo.';
             }
+        }
+
+        if (! $conPagos) {
+            return null;
         }
 
         foreach ($datos['payments'] as $indice => $pago) {

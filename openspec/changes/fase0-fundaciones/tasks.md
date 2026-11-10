@@ -120,6 +120,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 42 | `feat/fase0-42-ci-gate` | 9-iii | 0.9.8: el gate de calidad del CI, con la precondicion del manifiesto | **72** | PR #85 - issue #84 | **fusionado** `9003a9d` |
 | 43 | `feat/fase0-43-cosatura` | 10 | la costura: el comando `ops:smoke-sale` y las paginas de ventas | **2220** | PR #87 - issue #86 | **fusionado** `bb6e476` |
 | 44 | `feat/fase1-01-caja-backend` | 1.1 | el backend de la caja: catalogo, busqueda y el cobro que escribe la venta real | **2416** | PR #92 - issue #91 | **fusionado** `4d9b127` |
+| 45 | `feat/fase1-02-caja-ui` | 1.2 | la pantalla touch de la caja: catalogo, carrito, teclado numerico, presupuesto y cobro | **2101** | PR #94 - issue #93 | **en curso** |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
@@ -525,7 +526,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
 > caja es **touch**, como el legacy.
 
 - [ ] **1.1** El backend de la caja: el catalogo con su precio y su stock, la busqueda de productos y el cobro que escribe la venta real (`CheckoutService`), con la reserva de los dos numeros, el FIFO, el asiento contable y la imputacion del credito del cliente. El **cambio** se registra en `details` del pago, porque el dominio exige coincidencia exacta y no modela el sobrepago. Dep: 0.6.5, 0.7.5.
-- [ ] **1.2** La pantalla de la caja: *touch*. Catalogo a la izquierda, carrito a la derecha, teclado numerico, el cobro, el cambio y el resumen. Dep: 1.1.
+- [x] **1.2** La pantalla de la caja: *touch*. Catalogo a la izquierda, carrito a la derecha, teclado numerico, el cobro, el cambio y el resumen. Dep: 1.1.
 - [ ] **1.3** El catalogo: productos, precios por tienda, categorias e impuestos. Dep: 1.2.
 - [ ] **1.4** Clientes y credito: alta, saldo derivado, cobros y deuda. Dep: 1.2.
 - [ ] **1.5** La caja del dia: apertura y cierre por fecha de negocio, y los reportes basicos. Dep: 0.7.5.
