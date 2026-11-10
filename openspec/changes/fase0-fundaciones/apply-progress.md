@@ -1330,6 +1330,22 @@ El **carrito es estado del cliente**: no hay tabla de carritos y **no debe haber
 
 La 1.1 entregaba `currency_code` pero no el simbolo ni los separadores, y una pantalla sin el simbolo no se lee. Los props ahora llevan `currency`: `{ code, symbol, symbol_position, decimals, thousand_separator, decimal_separator }`.
 
+### El catalogo (1.3)
+
+**El precio vive en `product_stores`, no en `products`**: una tienda vende a su precio, y el mismo producto tiene un precio distinto en cada una. El catalogo edita ese precio donde vive, con una fila por tienda activa.
+
+**La categoria fiscal se guarda donde MANDA.** El selector muestra la efectiva (el override de tienda si existe, si no la del producto) y al guardar escribe exactamente ahi: lo que se ve es lo que se guarda, y las demas tiendas siguen al maestro. Si el producto no tiene categoria fiscal, la ficha lo avisa, porque la caja no cobra en silencio una linea sin tratamiento fiscal.
+
+**El stock NO se edita a mano.** `quantity_in_stock` es un cache derivado de los lotes; su lugar es el stock (la compra o el ajuste), no la ficha. La pantalla muestra el stock **REAL** (la suma de los lotes disponibles), no el cache, y el campo no esta en las reglas de validacion: mandarlo no cambia nada.
+
+### Las dos trampas que aparecieron por el camino
+
+**El `ESCAPE` explicito que funcionaba por accidente.** `PosCatalog` declaraba `ESCAPE '\'`, que en PostgreSQL es **redundante** (su escape por defecto ya es la barra invertida) pero no es inocuo: la barra le hace creer al analizador de PDO que escapa el cierre de la cadena, y cuenta los parametros de mas. Con **un** `LIKE` la trampa no muerde, y por eso el codigo funcionaba. Con **dos**, la sentencia se prepara con menos parametros de los que lleva.
+
+**Y el fallo era INTERMITENTE**: el test que lo reproducia **fallo en el CI y paso en la maquina local**, con el mismo codigo, la misma base y el mismo modo de preparacion. Depende de la version de PHP y de libpq, no del codigo. Por eso el test de reproduccion se **borró**: un test que pasa aqui y falla alla es peor que no tener test, es una loteria en cada corrida. Quedan los deterministas: el meta-test que prohibe el `ESCAPE` explicito y el test de comportamiento que prueba que el termino se escapa (`%`, `_` y la barra invertida).
+
+**El camino por HTTP era una loteria tambien**: el cliente tenia el margen por defecto de Laravel (30 s) y la primera peticion paga el arranque entero de la aplicacion (medido: 20,98 s y 24,09 s sin cache de opcode). Ahora el arnes posee el margen, y toda peticion del camino sale por el.
+
 ### Siguiente unidad
 
-**1.3** - el catalogo: productos, precios por tienda, categorias e impuestos.
+**1.4** - clientes y credito: alta, saldo derivado, cobros y deuda.
