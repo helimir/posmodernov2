@@ -112,9 +112,16 @@ final readonly class CashDay
      * LO QUE ENTRO EN LA CAJA por cada medio de pago, en esa fecha de
      * negocio.
      *
-     * REGLA que fija este metodo: *un pago de tipo CREDITO no es dinero de la
-     * caja*. Es DEUDA, no cobro, y el cajero no lo cuenta: se marca como tal
-     * (`is_cash` a falso) y se ve, pero no suma al total de efectivo.
+     * REGLA que fija este metodo: *lo que entro en la caja es lo que el pago
+     * APLICO a la venta*. Es el `applied`, no el `amount`: el bruto es lo que
+     * entrego el cliente y el aplicado es lo que cubrio la venta. Con un
+     * sobrepago (100 entregados por una venta de 58) en la caja hay 58, y el
+     * desglose tiene que decir 58: si dijera 100, el arqueo se contradiria en
+     * la misma pantalla, con el esperado (derivado del asiento) diciendo 58.
+     *
+     * Y *un pago de tipo CREDITO no es dinero de la caja*. Es DEUDA, no
+     * cobro, y el cajero no lo cuenta: se marca como tal (`is_cash` a falso)
+     * y se ve, pero no suma al total de efectivo.
      *
      * Es el CONTRASTE del cajero: lo que dice el sistema contra lo que
      * cuenta.
@@ -133,7 +140,11 @@ final readonly class CashDay
             ->orderBy('sale_payments.payment_method_id')
             ->selectRaw(
                 'sale_payments.payment_method_id as id, '
-                .'SUM(sale_payments.amount) as amount'
+                // El FALLBACK de las filas VIEJAS (las que no tienen
+                // `applied`): lo aplicado de una fila sin `applied` es su
+                // BRUTO, porque una fila sin `applied` no tiene cambio
+                // registrado (la razon esta en la migracion de la columna).
+                .'SUM(COALESCE(sale_payments.applied, sale_payments.amount)) as amount'
             )
             ->get();
 

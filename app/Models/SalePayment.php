@@ -14,6 +14,7 @@ class SalePayment extends Model
         'sale_id',
         'payment_method_id',
         'amount',
+        'applied',
         'details',
     ];
 
@@ -21,6 +22,9 @@ class SalePayment extends Model
     {
         return [
             'amount' => 'decimal:4',
+            // Lo APLICADO a la venta: lo que el pago cubre. Es distinto del
+            // bruto (`amount`) cuando hay cambio.
+            'applied' => 'decimal:4',
             'details' => 'array',
             'sale_id' => 'integer',
             'payment_method_id' => 'integer',

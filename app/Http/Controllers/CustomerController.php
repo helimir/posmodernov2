@@ -577,7 +577,9 @@ class CustomerController extends Controller
             $limite = $row->credit_limit === null ? null : PosAmount::text($row->credit_limit);
 
             // SOBRE EL LIMITE: lo que DEBE el cliente supera lo que se le
-            // permite deber. Se avisa; no se bloquea.
+            // permite deber. Aqui se AVISA: el BLOQUEO del cobro lo hace el
+            // dominio (`CustomerBalanceService::assertCreditLimit()`), que
+            // compara la deuda NUEVA de la tienda.
             $excede = $limite !== null && bccomp($saldo['due'], $limite, PosAmount::SCALE) > 0;
 
             $clientes[] = [
@@ -631,7 +633,8 @@ class CustomerController extends Controller
 
         $coincide = $this->balances->holds($customerId, $storeId);
 
-        // 3. EL LIMITE DE CREDITO: se muestra y se avisa, pero NO bloquea.
+        // 3. EL LIMITE DE CREDITO: se muestra y se avisa. El BLOQUEO del
+        //    cobro lo hace el dominio, que compara la deuda NUEVA.
         $limite = $customer->credit_limit === null ? null : PosAmount::text($customer->credit_limit);
 
         $excede = $limite !== null && bccomp($deuda, $limite, PosAmount::SCALE) > 0;

@@ -48,9 +48,10 @@ function caja_dia_de_negocio(int $usuarioId): string
  * @param  array<string, int>  $escenario
  * @param  int|null  $clienteId  El cliente de la venta; `null` si es de
  *                               mostrador.
+ * @param  string  $importe  Lo que entrega el cliente.
  * @return array<string, mixed>
  */
-function caja_dia_pedido(array $escenario, ?int $clienteId = null): array
+function caja_dia_pedido(array $escenario, ?int $clienteId = null, string $importe = '58.0000'): array
 {
     $pedido = [
         'lines' => [
@@ -63,7 +64,7 @@ function caja_dia_pedido(array $escenario, ?int $clienteId = null): array
         'payments' => [
             [
                 'payment_method_id' => $escenario['payment_method_id'],
-                'amount' => '58.0000',
+                'amount' => $importe,
             ],
         ],
     ];
@@ -477,6 +478,56 @@ test('test_el_desglose_marca_el_pago_a_credito_como_que_no_es_dinero_de_la_caja'
             // Y el total de efectivo NO lo cuenta: el cajero no lo cuenta.
             ->where('cash_total', '0.0000')
             ->etc());
+});
+
+/**
+ * El DESGLOSE por medio de pago dice lo APLICADO, no lo bruto.
+ *
+ * REGLA que fija: *lo que entro en la caja es lo que el pago APLICO a la
+ * venta*. El cliente entrega 100 por una venta de 58: en el cajon hay 58, y
+ * el desglose tiene que decir 58. Si dijera 100, el arqueo se contradiria en
+ * la misma pantalla: el esperado (derivado del asiento) diria 58 y el
+ * desglose diria 100.
+ *
+ * EL DEFECTO QUE ESTE TEST CIERRA: el desglose sumaba `sale_payments.amount`,
+ * que es lo RECIBIDO. Es el mismo defecto que el del estado de pago, en la
+ * misma clase, y por eso se cierra con la misma verdad: lo aplicado.
+ */
+test('test_el_desglose_por_medio_de_pago_dice_lo_aplicado_y_no_lo_bruto', function () {
+    $escenario = PosFixture::escenario();
+    $usuario = PosFixture::usuarioSinCaja($escenario['store_id']);
+
+    $this->actingAs($usuario)
+        ->postJson('/caja/dia/abrir', ['opening_balance' => '0.0000'])
+        ->assertCreated();
+
+    // El cliente entrega 100 por una venta de 58.
+    $this->actingAs($usuario)
+        ->postJson('/caja/cobrar', caja_dia_pedido($escenario, null, '100.0000'))
+        ->assertCreated()
+        ->assertJsonPath('status', 'paid')
+        ->assertJsonPath('change', '42.0000');
+
+    $this->actingAs($usuario)
+        ->get('/caja/dia')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
+            ->component('cash/day')
+            // El esperado sale del ASIENTO: 58.
+            ->where('running_balance', '58.0000')
+            ->where('expected_balance', '58.0000')
+            // Y el desglose sale de lo APLICADO: 58, no 100.
+            ->where('payments.0.amount', '58.0000')
+            ->where('cash_total', '58.0000')
+            ->etc());
+
+    // Y el ARQUEO CUADRA: se cuenta lo que dice el libro y la diferencia es
+    // CERO.
+    $this->actingAs($usuario)
+        ->postJson('/caja/dia/cerrar', ['closing_balance' => '58.0000'])
+        ->assertCreated()
+        ->assertJsonPath('expected_balance', '58.0000')
+        ->assertJsonPath('difference', '0.0000');
 });
 
 /**

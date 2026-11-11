@@ -248,14 +248,17 @@ class PosController extends Controller
      * fecha de negocio, o si ya esta cerrada, el cobro falla con 422 y la
      * transaccion se revierte entera.
      *
-     * LIMITACION CONOCIDA — EL SOBREPAGO: `SalePaymentStatus` exige que los
-     * pagos cubran el total EXACTAMENTE. Si el cliente entrega de mas, la
-     * suma de lo recibido NO iguala al total y la venta queda `confirmed`, no
-     * `paid`: el dominio no modela el sobrepago y aqui no se cambia. Lo que
-     * se hace es NO perder el dato: el efectivo recibido y el cambio quedan
-     * en el `details` (jsonb) del pago, y el cambio se devuelve en la
-     * respuesta. El libro contable no se resiente: el asiento debita el
-     * TOTAL de la venta, no lo que se entrego en el mostrador.
+     * LIMITACION CONOCIDA — EL PAGO PARCIAL SIN CLIENTE: sin cliente, los pagos
+     * tienen que cubrir el total ENTERO. Lo que no cubren no es deuda: no hay
+     * a quien imputarsela, y una venta a medias no es una venta. Con cliente,
+     * en cambio, esa parte es DEUDA y la venta se cobra.
+     *
+     * Y EL SOBREPAGO NO ES UNA LIMITACION: el cliente entrega 100 por una
+     * venta de 58, sobran 42, y esos 42 son el CAMBIO. La venta queda
+     * `paid`, el efectivo recibido y el cambio quedan en el `details` (jsonb)
+     * del pago, y el cambio se devuelve en la respuesta. El libro contable no
+     * se resiente: el asiento debita el TOTAL de la venta, no lo que se
+     * entrego en el mostrador.
      */
     public function checkout(Request $request): JsonResponse
     {
@@ -441,9 +444,11 @@ class PosController extends Controller
         // Un pago de tipo `credit` NO genera movimiento de pago: es deuda, no
         // cobro, y su importe se queda como saldo a favor de la tienda.
         //
-        // EL LIMITE DE CREDITO NO BLOQUEA LA VENTA: se muestra y se avisa en
-        // la ficha del cliente, pero bloquear es una decision de negocio que
-        // todavia no esta tomada, y tomarla aqui seria inventarla.
+        // EL LIMITE DE CREDITO NO SE COMPRUEBA AQUI: la regla la cumple el
+        // DOMINIO (`CustomerBalanceService::assertCreditLimit()`), que es quien
+        // sabe cuanto debe el cliente y cual es su limite. Aqui no se
+        // reescribe la comprobacion: el fallo del dominio sube como un
+        // RuntimeException y el cobro se revierte entero.
         if ($customerId !== null) {
             $this->balances->registerSale(
                 customerId: $customerId,

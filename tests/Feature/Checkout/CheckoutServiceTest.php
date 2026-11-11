@@ -5,6 +5,7 @@ use App\Domain\Checkout\CheckoutInput;
 use App\Domain\Checkout\CheckoutLineInput;
 use App\Domain\Checkout\CheckoutPaymentInput;
 use App\Domain\Checkout\CheckoutService;
+use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Fiscal\ControlNumberGenerator;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Fiscal\TaxRateResolver;
@@ -228,6 +229,7 @@ function servicioCheckout(): CheckoutService
         new LotConsumer($connection, new StockInvariant($connection)),
         new LedgerWriter($connection),
         new SalePaymentStatus($connection),
+        new CustomerBalanceService($connection),
     );
 }
 
@@ -513,12 +515,14 @@ test('test_una_venta_completa_registra_cabecera_items_totales_pago_y_asiento', f
             4
         ))->toBe(0);
 
-    // 5. El pago quedo con su importe.
+    // 5. El pago quedo con su importe y con lo APLICADO: lo recibido y lo
+    //    que cubre de la venta son dos datos.
     $payments = DB::table('sale_payments')->where('sale_id', $result->saleId)->get();
 
     expect($payments)->toHaveCount(1)
         ->and((int) $payments->first()->payment_method_id)->toBe($escenario['payment_method_id'])
-        ->and((string) $payments->first()->amount)->toBe('58.0000');
+        ->and((string) $payments->first()->amount)->toBe('58.0000')
+        ->and((string) $payments->first()->applied)->toBe('58.0000');
 
     // 6. El asiento contable: el tipo del catalogo, la referencia a la venta
     //    y las lineas CUADRAN con las cuentas del mapa de la entrada.

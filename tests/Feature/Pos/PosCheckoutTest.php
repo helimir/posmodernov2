@@ -17,8 +17,9 @@ use Tests\Fixtures\PosFixture;
  *    ser la suma de los lotes;
  *  - el asiento CUADRA (debitos = creditos) y su importe es el total de la
  *    venta;
- *  - la venta queda `paid` cuando el pago cubre el total EXACTAMENTE, y
- *    `confirmed` cuando no (un pago parcial o un sobrepago);
+ *  - la venta queda `paid` cuando lo COBRADO cubre el total (aunque haya
+ *    cambio: el sobrepago es el caso normal), y `confirmed` cuando queda algo
+ *    por cobrar (un pago parcial o un pago a credito);
  *  - con un cliente, el cobro IMPUTA la VENTA y el COBRO en el libro del
  *    cliente: un movimiento POSITIVO de tipo `sale` por el total y uno
  *    NEGATIVO de tipo `payment` por lo cobrado, y el saldo derivado queda en
@@ -123,6 +124,8 @@ test('test_el_cobro_escribe_la_venta_con_cabecera_lineas_totales_pago_y_asiento'
     expect($payments)->toHaveCount(1)
         ->and((int) $payments->first()->payment_method_id)->toBe($escenario['payment_method_id'])
         ->and((string) $payments->first()->amount)->toBe('58.0000')
+        // Y lo APLICADO: lo que el pago cubre de la venta.
+        ->and((string) $payments->first()->applied)->toBe('58.0000')
         // El detalle lleva el efectivo recibido y el cambio.
         ->and($payments->first()->details['cash_received'])->toBe('58.0000')
         ->and($payments->first()->details['change'])->toBe('0.0000');
@@ -244,9 +247,9 @@ test('test_el_asiento_de_la_venta_cuadra_y_su_importe_es_el_total', function () 
 });
 
 /**
- * La venta queda `paid` cuando el pago cubre el total EXACTAMENTE.
+ * La venta queda `paid` cuando lo COBRADO cubre el total.
  */
-test('test_la_venta_queda_pagada_cuando_el_pago_cubre_el_total_exactamente', function () {
+test('test_la_venta_queda_pagada_cuando_el_pago_cubre_el_total', function () {
     $escenario = PosFixture::escenario();
     $usuario = PosFixture::usuario($escenario['store_id']);
 
@@ -259,15 +262,19 @@ test('test_la_venta_queda_pagada_cuando_el_pago_cubre_el_total_exactamente', fun
 });
 
 /**
- * El SOBREPAGO deja la venta `confirmed` y el cambio no se pierde: queda en
- * el detalle del pago y en la respuesta.
+ * El SOBREPAGO deja la venta PAGADA y el cambio no se pierde: queda en el
+ * detalle del pago y en la respuesta.
  *
- * Es la LIMITACION del dominio, documentada: `SalePaymentStatus` exige que
- * los pagos cubran el total EXACTAMENTE, y el dominio no modela el
- * sobrepago. Aqui no se cambia el dominio: se registra el efectivo recibido
- * y el cambio.
+ * ESTE TEST CAMBIO CON LA UNIDAD 1.6: antes afirmaba que el sobrepago dejaba
+ * la venta `confirmed`, y eso era el DEFECTO. El estado comparaba los
+ * importes BRUTOS con el total y exigia coincidencia EXACTA: el cliente
+ * entrega 100 por una venta de 58, sobran 42, y la venta quedaba `confirmed`
+ * aunque estuviera cobrada. El sobrepago es el caso NORMAL, no un caso limite.
+ *
+ * Ahora la venta queda `paid`, el cambio es de 42,0000, y lo que se persiste
+ * distingue lo RECIBIDO (100,0000) de lo APLICADO (58,0000).
  */
-test('test_el_sobrepago_deja_la_venta_confirmada_y_registra_el_cambio_en_el_pago', function () {
+test('test_el_sobrepago_deja_la_venta_pagada_y_registra_el_cambio_en_el_pago', function () {
     $escenario = PosFixture::escenario();
     $usuario = PosFixture::usuario($escenario['store_id']);
 
@@ -276,7 +283,7 @@ test('test_el_sobrepago_deja_la_venta_confirmada_y_registra_el_cambio_en_el_pago
         ->postJson('/caja/cobrar', pedido_de_caja($escenario, '100.0000'));
 
     $respuesta->assertCreated()
-        ->assertJsonPath('status', 'confirmed')
+        ->assertJsonPath('status', 'paid')
         ->assertJsonPath('change', '42.0000')
         ->assertJsonPath('grand_total', '58.0000');
 
@@ -284,7 +291,9 @@ test('test_el_sobrepago_deja_la_venta_confirmada_y_registra_el_cambio_en_el_pago
     $pago = SalePayment::query()->where('sale_id', (int) $respuesta->json('sale_id'))->first();
 
     expect($pago->details['cash_received'])->toBe('100.0000')
-        ->and($pago->details['change'])->toBe('42.0000');
+        ->and($pago->details['change'])->toBe('42.0000')
+        // Y lo APLICADO es el total de la venta: lo que cubre el pago.
+        ->and((string) $pago->applied)->toBe('58.0000');
 
     // Y el libro contable no se resiente: debita el TOTAL de la venta, no
     // lo que se entrego en el mostrador.

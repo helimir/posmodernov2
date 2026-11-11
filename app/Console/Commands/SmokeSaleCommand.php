@@ -9,6 +9,7 @@ use App\Domain\Checkout\CheckoutLineInput;
 use App\Domain\Checkout\CheckoutPaymentInput;
 use App\Domain\Checkout\CheckoutResult;
 use App\Domain\Checkout\CheckoutService;
+use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Fiscal\ControlNumberGenerator;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Fiscal\TaxRateResolver;
@@ -265,6 +266,7 @@ class SmokeSaleCommand extends Command
             new LotConsumer($this->connection, new StockInvariant($this->connection)),
             new LedgerWriter($this->connection),
             new SalePaymentStatus($this->connection),
+            new CustomerBalanceService($this->connection),
         );
     }
 
@@ -799,9 +801,10 @@ class SmokeSaleCommand extends Command
      * El importe que se COBRA, calculado con el MISMO motor que usa el
      * checkout.
      *
-     * El pago tiene que cubrir el total EXACTO: es la regla del estado de
-     * pago, y un pago que no la cumple deja la venta en `confirmed` en vez de
-     * `paid`.
+     * El pago tiene que CUBRIR el total: es la regla del estado de pago, y un
+     * pago que no la cumple deja la venta en `confirmed` en vez de `paid`.
+     * Sin cliente, ademas, tiene que cubrirlo ENTERO: lo que no cubre no es
+     * deuda y la venta no se cobra.
      *
      * @param  array<string, mixed>  $escenario
      */

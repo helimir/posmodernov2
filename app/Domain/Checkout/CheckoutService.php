@@ -3,6 +3,7 @@
 namespace App\Domain\Checkout;
 
 use App\Domain\Accounting\LedgerWriter;
+use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Fiscal\ControlNumberGenerator;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Fiscal\TaxRateResolver;
@@ -51,6 +52,21 @@ use RuntimeException;
  * entero debita la caja; con cliente, debita la caja lo COBRADO (lo aplicado
  * por los pagos que no son de credito) y debita la cuenta por cobrar lo que
  * QUEDA. Un pago de tipo `credit` no es dinero de la caja.
+ *
+ * LAS REGLAS DEL COBRO, Y DONDE VIVEN:
+ *
+ *  - EL ESTADO DE PAGO lo decide `SalePaymentStatus`: `paid` si lo COBRADO
+ *    (lo aplicado por los pagos que no son de credito) cubre el total, y
+ *    `confirmed` si queda algo por cobrar. El estado se calcula sobre el
+ *    REPARTO, no sobre los importes brutos: el sobrepago es el caso normal y
+ *    una venta cobrada esta pagada;
+ *  - SIN CLIENTE, la venta se cobra COMPLETA: lo que no cubre lo recibido no
+ *    es deuda, porque no hay a quien imputarsela, y una venta a medias no es
+ *    una venta. CON CLIENTE, esa parte es DEUDA, y el reparto del asiento la
+ *    deja en la cuenta por cobrar;
+ *  - EL LIMITE DE CREDITO BLOQUEA la venta que dejaria al cliente por encima
+ *    de su limite. La regla la cumple `CustomerBalanceService`, que es quien
+ *    sabe cuanto debe el cliente.
  */
 final readonly class CheckoutService
 {
@@ -62,6 +78,7 @@ final readonly class CheckoutService
         private LotConsumer $lotConsumer,
         private LedgerWriter $ledgerWriter,
         private SalePaymentStatus $paymentStatus,
+        private CustomerBalanceService $balances,
     ) {}
 
     /**
@@ -154,24 +171,60 @@ final readonly class CheckoutService
                 $input->issuedAt,
             ));
 
-            // 7. LA CABECERA. `fiscal_document_id` queda en `null`: lo cierra
-            //    T2, la emision fiscal.
-            $status = $this->paymentStatus->status($input->payments, $result->grandTotal);
-
-            // 7 bis. EL REPARTO DE LOS PAGOS: lo aplicado a la venta y el
-            //       cambio de cada pago.
+            // 7. EL REPARTO DE LOS PAGOS: lo aplicado a la venta y el
+            //    cambio de cada pago.
             //
-            //       Lo calcula el DOMINIO, UNA VEZ, y ANTES del asiento: el
-            //       asiento necesita saber cuanto entro al cajon de verdad
-            //       (lo aplicado de los pagos que no son de credito) para
-            //       repartir el total entre la caja y las cuentas por cobrar.
+            //    Lo calcula el DOMINIO, UNA VEZ, y ANTES del asiento: el
+            //    asiento necesita saber cuanto entro al cajon de verdad
+            //    (lo aplicado de los pagos que no son de credito) para
+            //    repartir el total entre la caja y las cuentas por cobrar.
             //
-            //       La SEMANTICA es la de siempre: el aplicado de un pago es
-            //       el minimo entre lo recibido y lo que queda del total, en
-            //       el orden de los pagos, y el cambio es lo que sobra. Solo
-            //       cambia quien la calcula y quien la consume.
+            //    La SEMANTICA es la de siempre: el aplicado de un pago es
+            //    el minimo entre lo recibido y lo que queda del total, en
+            //    el orden de los pagos, y el cambio es lo que sobra. Solo
+            //    cambia quien la calcula y quien la consume.
             $reparto = $this->reparto($input->payments, $result->grandTotal);
 
+            // 7 bis. LAS REGLAS DEL COBRO. Se comprueban ANTES de escribir
+            //        nada, y con el REPARTO en la mano: lo que se compara es
+            //        lo que el pago APLICO, no lo que se recibio.
+            $total = BigDecimal::of($result->grandTotal)->toScale(4, RoundingMode::HALF_UP);
+            $cobrado = $this->cobrado($reparto);
+
+            // EL ESTADO DE PAGO: lo decide `SalePaymentStatus`, con la misma
+            // regla que usa el reintento de la emision. Se calcula sobre el
+            // REPARTO: `paid` si lo cobrado (lo aplicado por los pagos que no
+            // son de credito) cubre el total, y `confirmed` si queda algo por
+            // cobrar. El sobrepago no deja la venta sin cobrar.
+            $status = $this->paymentStatus->status($reparto, $result->grandTotal);
+
+            // SIN CLIENTE, LA VENTA SE COBRA COMPLETA: lo que no cubre lo
+            // recibido no es deuda, porque no hay a quien imputarsela, y una
+            // venta a medias no es una venta. CON CLIENTE, esa parte ES
+            // deuda, y el reparto del asiento la deja en la cuenta por cobrar.
+            if ($input->customerId === null) {
+                $faltan = $total->minus($cobrado);
+
+                if ($faltan->isPositive()) {
+                    throw new RuntimeException(
+                        'La venta no esta cobrada: faltan '.$faltan->toScale(4, RoundingMode::HALF_UP).'. '
+                        .'Sin cliente, una venta se cobra completa.'
+                    );
+                }
+            } else {
+                // EL LIMITE DE CREDITO BLOQUEA la venta que dejaria al cliente
+                // por encima de su limite. Solo bloquea lo que AUMENTA la
+                // deuda: una venta cobrada entera, y el pago en efectivo de
+                // un cliente que ya debe de mas, nunca se bloquean.
+                $this->balances->assertCreditLimit(
+                    customerId: $input->customerId,
+                    storeId: $input->storeId,
+                    deuda: (string) $total->minus($cobrado)->toScale(4, RoundingMode::HALF_UP),
+                );
+            }
+
+            // 8. LA CABECERA. `fiscal_document_id` queda en `null`: lo cierra
+            //    T2, la emision fiscal.
             $saleId = (int) $this->connection->table('sales')->insertGetId([
                 'store_id' => $input->storeId,
                 'customer_id' => $input->customerId,
@@ -183,8 +236,8 @@ final readonly class CheckoutService
                 'updated_at' => now(),
             ]);
 
-            // 7 bis. EL ENLACE de la reserva con la venta, DENTRO de la misma
-            //    transaccion: si el enlace falla, revierte T1 entera.
+            // 8 bis. EL ENLACE de la reserva con la venta, DENTRO de la misma
+            //        transaccion: si el enlace falla, revierte T1 entera.
             //
             //    Es lo que permite que el reintento de la emision (T2)
             //    ENCUENTRE la reserva que ya tiene, en vez de reservar un
@@ -197,7 +250,7 @@ final readonly class CheckoutService
             //    del texto seria frágil.
             $this->numberSeries->link($input->documentSeriesId, $documentNumber, 'sale', $saleId);
 
-            // 8. LOS ITEMS. El total y la base de la linea salen del motor,
+            // 9. LOS ITEMS. El total y la base de la linea salen del motor,
             //    linea a linea y en el MISMO orden.
             $items = [];
 
@@ -225,14 +278,14 @@ final readonly class CheckoutService
                 $items[] = [$line, $itemId];
             }
 
-            // 9. EL CONSUMO FIFO. El item ya existe, asi que la traza de
+            // 10. EL CONSUMO FIFO. El item ya existe, asi que la traza de
             //    lotes puede apuntar a el. Si no hay stock, la excepcion
             //    revierte T1 entera.
             foreach ($items as [$line, $itemId]) {
                 $this->lotConsumer->consume($line->productId, $input->storeId, $itemId, $line->quantity);
             }
 
-            // 10. LOS TOTALES.
+            // 11. LOS TOTALES.
             $this->connection->table('sale_totals')->insert([
                 'sale_id' => $saleId,
                 'sub_total' => $result->subtotal,
@@ -245,7 +298,7 @@ final readonly class CheckoutService
                 'updated_at' => now(),
             ]);
 
-            // 11. EL ASIENTO CONTABLE. El tipo sale del catalogo
+            // 12. EL ASIENTO CONTABLE. El tipo sale del catalogo
             //     (`ledger_entry_types`), no de un literal.
             $this->ledgerWriter->write(
                 entryType: 'sale',
@@ -259,19 +312,23 @@ final readonly class CheckoutService
                 description: 'Venta #'.$invoiceNo,
             );
 
-            // 12. LOS PAGOS.
-            foreach ($input->payments as $payment) {
+            // 13. LOS PAGOS. Cada uno guarda las DOS cifras: lo RECIBIDO (el
+            //     bruto, lo que entrego el cliente) y lo APLICADO (lo que
+            //     cubre de la venta). Son el mismo numero cuando el cliente
+            //     paga justo, y DIFIEREN cuando hay cambio.
+            foreach ($input->payments as $indice => $payment) {
                 $this->connection->table('sale_payments')->insert([
                     'sale_id' => $saleId,
                     'payment_method_id' => $payment->paymentMethodId,
                     'amount' => $payment->amount,
+                    'applied' => $reparto[$indice]->applied,
                     'details' => $payment->details,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
             }
 
-            // 13. EL RETORNO.
+            // 14. EL RETORNO.
             return new CheckoutResult(
                 saleId: $saleId,
                 documentNumber: $invoiceNo,
