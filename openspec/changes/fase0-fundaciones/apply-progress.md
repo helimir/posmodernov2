@@ -1372,6 +1372,24 @@ Asi el saldo **es** la deuda, exactamente, y un cliente que paga todo queda en c
 
 **Y una venta a credito queda con `sales.status = 'paid'`**: el `SalePaymentStatus` solo compara importes y no sabe que el medio de pago es de tipo `credit`, asi que un pago a credito del total se confunde con un pago cobrado. El enum `sales.status` es **compartido con el fiscal**, asi que cambiarlo no es cosa de esta unidad: los dos quedan senalados para la siguiente.
 
-### Siguiente unidad
+### La caja del dia (1.5) — y el defecto que el arqueo destapo
 
-**1.5** - la caja del dia: apertura y cierre por fecha de negocio, y los reportes basicos.
+**El cobro EXIGE la caja ABIERTA.** El checkout nunca consultaba la caja: se podia vender sin caja abierta, y `CashRegisterService` estaba ahi, sin usar por el checkout. Ahora `POST /caja/cobrar` llama a `registerFor()` **dentro de la transaccion**, asi que la venta falla con 422 y **no queda ninguna venta**. Verificado por HTTP: *"La caja del dia no esta abierta: abrala antes de cobrar."*
+
+**El saldo en curso es DERIVADO** (de los asientos de esa fecha de negocio, `debito - credito` de la cuenta de efectivo, que es un activo) y el saldo de partida y el contado son **DATOS**: contar una caja es un hecho fisico. El **descuadre** es `contado - esperado`, con su signo.
+
+**Y aqui aparecio el defecto grave que hubo que arreglar antes de poder entregar el arqueo**: `CheckoutService` escribia **un solo asiento por venta y no contabilizaba los pagos**. Sin cliente debita `cash` y todo cuadraba. **Con cliente debita `receivable` y NUNCA toca `cash`**: el efectivo que entra al cajon no llegaba a la cuenta de la caja, y **cada venta con cliente daba un DESCUADRE FALSO**. Un arqueo que miente es peor que no tener arqueo.
+
+La venta ahora **reparte el total** entre la cuenta de efectivo (lo cobrado) y la de clientes (lo que queda a credito), el **reparto de los pagos lo calcula el DOMINIO una sola vez** y el controller lo consume (su propio comentario decia *"una segunda aritmetica es una segunda verdad"*), y el **cobro suelto** escribe su asiento `sale_payment` en la **misma transaccion** que el movimiento del libro del cliente. El saldo de `receivable` contable y el del libro del cliente son **el mismo hecho, contado dos veces**.
+
+**Tambien se arreglo un defecto preexistente del comando de humo**: elegia el perfil fiscal con `->first()` **sin `ORDER BY`**, y un `SELECT` sin orden no tiene orden en PostgreSQL: a veces caia en un perfil sin tasas vigentes.
+
+### Deuda que queda para el mantenedor
+
+1. **Una venta de mostrador con pago PARCIAL** sigue debitando el total entero a la caja: el cajero tiene 30 y el libro dice 58. El descuadre ahi es **real**, no falso, y la venta queda `confirmed`. Es una decision de negocio: **¿se permite vender en mostrador sin cobrar el total?** Hoy si se puede, y eso es un regalo al cajero.
+2. **Una venta a credito queda con `sales.status = 'paid'`**: el `SalePaymentStatus` solo compara importes. El enum es **compartido con el fiscal**.
+3. **El sobrepago** sigue sin resolverse de dominio.
+
+### Siguiente
+
+**Fase 1 COMPLETA** (1.1 a 1.5). Lo que sigue es la **Fase 2**, y las tres decisiones de arriba.
