@@ -1346,6 +1346,32 @@ La 1.1 entregaba `currency_code` pero no el simbolo ni los separadores, y una pa
 
 **El camino por HTTP era una loteria tambien**: el cliente tenia el margen por defecto de Laravel (30 s) y la primera peticion paga el arranque entero de la aplicacion (medido: 20,98 s y 24,09 s sin cache de opcode). Ahora el arnes posee el margen, y toda peticion del camino sale por el.
 
+### El libro del cliente (1.4)
+
+**El saldo del cliente estaba AL REVES.** La venta **no** se registraba en el libro del cliente, y lo cobrado se registraba como cobro: un cliente que compraba por 100 y pagaba 100 en efectivo quedaba con saldo **-100.0000**, es decir, credito a favor. Y un cliente a quien se le debia dinero **no tenia forma** de que su deuda subiera: no existia el movimiento de la venta.
+
+**La regla que lo arregla: el libro del cliente es un MINI-LIBRO — la VENTA SUMA y el COBRO RESTA.**
+
+| Hecho | Movimiento | Importe |
+|---|---|---|
+| La venta | `sale` | **POSITIVO**, por el **TOTAL** — la venta es un hecho entero |
+| Un pago que no sea de tipo `credit` | `payment` | **NEGATIVO**, por lo **APLICADO** (el cambio se devolvio y no reduce una deuda) |
+| Un pago de tipo `credit` | *ninguno* | es deuda, no cobro |
+
+Asi el saldo **es** la deuda, exactamente, y un cliente que paga todo queda en cero.
+
+**Un test existente AFIRMABA el defecto**: `PosCheckoutTest` fijaba `-58.0000` como el saldo esperado de un cliente que acababa de pagar todo. Eso era el bug, escrito como si fuera la regla. Ese test y la regla nueva son incompatibles, asi que se reescribio, y su nombre **dice la regla** en vez del defecto.
+
+**La ficha muestra el saldo DERIVADO, no el cache**, y avisa cuando el cache no coincide: el cache puede desfasarse, la verdad no. Y el **limite de credito avisa pero NO bloquea** la venta: bloquear es una decision de negocio que no esta tomada.
+
+**Las paginas son Inertia y las escrituras son JSON**: `GET /clientes` es la pagina, `GET /api/clientes` es la API. La caja lleva selector de cliente y **cobra a credito**: si el medio de pago es de tipo `credit`, el importe recibido es el total y el servidor **rechaza** un cobro a credito sin cliente ("una deuda sin destino no se registra").
+
+### Hallazgos fuera de alcance (NO tocados)
+
+`CheckoutService::ledgerLines()` debita la cuenta `receivable` por el **total** cuando hay cliente, pero **no acredita el cobro recibido**: la cuenta contable de clientes queda por encima de la deuda real del libro del cliente (que ahora si es correcta).
+
+**Y una venta a credito queda con `sales.status = 'paid'`**: el `SalePaymentStatus` solo compara importes y no sabe que el medio de pago es de tipo `credit`, asi que un pago a credito del total se confunde con un pago cobrado. El enum `sales.status` es **compartido con el fiscal**, asi que cambiarlo no es cosa de esta unidad: los dos quedan senalados para la siguiente.
+
 ### Siguiente unidad
 
-**1.4** - clientes y credito: alta, saldo derivado, cobros y deuda.
+**1.5** - la caja del dia: apertura y cierre por fecha de negocio, y los reportes basicos.
