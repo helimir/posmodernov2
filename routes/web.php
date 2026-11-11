@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\CashDayController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\SalesController;
+use App\Http\Controllers\StockReportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -34,6 +36,23 @@ Route::middleware(['auth'])->group(function () {
     Route::get('caja/productos', [PosController::class, 'products'])->name('caja.productos');
     Route::post('caja/presupuesto', [PosController::class, 'budget'])->name('caja.presupuesto');
     Route::post('caja/cobrar', [PosController::class, 'checkout'])->name('caja.cobrar');
+
+    // La CAJA DEL DIA: la pantalla con sus tres estados (no hay caja, esta
+    // abierta, esta cerrada), la apertura y el cierre.
+    //
+    // LA PAGINA es Inertia y las ESCRITURAS son JSON, como en el resto del
+    // repositorio: la pantalla se pide con un GET y lo que se escribe viaja
+    // por la API, con el mismo contrato de siempre (422 con `{"errorMsg"}`).
+    //
+    // NO SE COBRA SIN CAJA ABIERTA: el cobro de la caja lo exige, y por eso
+    // la apertura y el cierre son hechos, no un numero que se puede repetir.
+    Route::get('caja/dia', [CashDayController::class, 'index'])->name('caja.dia');
+    Route::post('caja/dia/abrir', [CashDayController::class, 'abrir'])->name('caja.dia.abrir');
+    Route::post('caja/dia/cerrar', [CashDayController::class, 'cerrar'])->name('caja.dia.cerrar');
+
+    // El REPORTE DE STOCK BAJO: los productos de la tienda que se estan
+    // acabando, con su stock REAL.
+    Route::get('reportes/stock', [StockReportController::class, 'index'])->name('reportes.stock');
 
     // Los CLIENTES y su CREDITO: las PAGINAS y la API.
     //

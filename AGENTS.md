@@ -25,11 +25,18 @@ rule the implementation serves. Both close together or not at all.
 
 ## The chain: 18 stacked PRs, and how it advances
 
-`stacked-to-main`, **2500 changed lines per PR**. Each PR opens against `main` **after the
+`stacked-to-main`, **10000 changed lines per PR**. Each PR opens against `main` **after the
 previous one merged**, and is implemented on the previous PR's branch, then rebased onto
 `main` after the merge. `tasks.md` §"Corte final" is the authoritative list with the
 per-PR status; the older 16-PR tables in the same file are the historical measurement —
 use the 18-PR one.
+
+**The ceiling moved from 2500 to 10000 on 2026-11-11**, by the maintainer's decision, to
+stop units from being split where the split fights the domain: a sale without its ledger
+entry is not a reviewable unit, and the credit book without its own sign rule is worse.
+The ceiling is a **budget of attention, not a target**. A unit that splits cleanly should
+be split, one that cannot should not be, and no unit is allowed to grow just because the
+ceiling allows it.
 
 Non-negotiable rules of the chain:
 

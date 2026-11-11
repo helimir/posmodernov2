@@ -2,9 +2,11 @@
 
 namespace Tests\Fixtures;
 
+use App\Domain\Accounting\CashRegisterService;
 use App\Models\Product;
 use App\Models\ProductStore;
 use App\Models\User;
+use App\Support\Pos\PosContext;
 use Database\Seeders\DemoStoreSeeder;
 use Database\Seeders\FiscalProfileSeeder;
 use Database\Seeders\PaymentMethodSeeder;
@@ -132,12 +134,47 @@ final class PosFixture
     }
 
     /**
+     * Un USUARIO con su vinculo por la tienda de la caja, CON la caja del dia
+     * ABIERTA.
+     *
+     * REGLA que fija este fixture: *el escenario de la caja trae la caja del
+     * dia abierta*. No se cobra sin caja abierta (regla de la unidad 1.5), y
+     * un escenario que no la trae obliga a cada test a abrirla antes de
+     * cobrar: el mismo paso repetido en treinta sitios es el mismo paso
+     * olvidado en uno.
+     *
+     * El SALDO DE PARTIDA es CERO: es un DATO (el dinero que hay en la caja al
+     * empezar, contado a mano) y el escenario no cuenta dinero, solo deja la
+     * caja lista para cobrar.
+     */
+    public static function usuario(int $storeId): User
+    {
+        $usuario = self::creaUsuario($storeId);
+
+        self::abreLaCajaDelDia($usuario);
+
+        return $usuario;
+    }
+
+    /**
+     * Un USUARIO con su vinculo por la tienda de la caja y SIN caja del dia.
+     *
+     * Es el escenario del cobro SIN CAJA: la regla que dice que no se cobra
+     * sin caja abierta necesita un usuario sin caja, y por eso existe esta
+     * variante y no una bandera.
+     */
+    public static function usuarioSinCaja(int $storeId): User
+    {
+        return self::creaUsuario($storeId);
+    }
+
+    /**
      * Un USUARIO con su vinculo por la tienda de la caja.
      *
      * El vinculo (`user_stores`) es lo que hace que la caja abra en ESA
      * tienda: sin el, la tienda activa seria la primera del sistema.
      */
-    public static function usuario(int $storeId): User
+    private static function creaUsuario(int $storeId): User
     {
         $usuario = User::factory()->create();
 
@@ -151,6 +188,27 @@ final class PosFixture
         ]);
 
         return $usuario;
+    }
+
+    /**
+     * Abre la caja del dia de la tienda del usuario.
+     *
+     * La FECHA DE NEGOCIO la dice el CONTEXTO (`PosContext`), no un
+     * `DAY()/MONTH()/YEAR()` calculado: es la fecha de la TIENDA, con su
+     * zona horaria, y el reloj del servidor no tiene nada que ver con el
+     * negocio.
+     */
+    private static function abreLaCajaDelDia(User $usuario): void
+    {
+        $contexto = new PosContext(DB::connection(), (int) $usuario->id);
+
+        (new CashRegisterService(DB::connection()))->open(
+            (int) $contexto->store()->id,
+            $contexto->businessDate(),
+            '0.0000',
+            null,
+            (int) $usuario->id
+        );
     }
 
     /**
@@ -174,6 +232,38 @@ final class PosFixture
             'quantity_in_stock' => '0.0000',
             'status' => 'active',
         ]);
+
+        return (int) $producto->id;
+    }
+
+    /**
+     * Un producto con una cantidad de stock CONCRETA, abierto por una compra.
+     *
+     * El CACHE de la tienda (`product_stores.quantity_in_stock`) se escribe a
+     * PROPOSITO con otro numero: el reporte de stock bajo tiene que enseñar
+     * el stock REAL, que es la suma de los lotes, y no el cache. Un cache que
+     * dice la verdad no distingue una cosa de la otra.
+     */
+    public static function productoConStock(int $storeId, int $categoryId, string $stock): int
+    {
+        $producto = Product::create([
+            'code' => 'HUMO-CAJA-STOCK-'.str_replace('.', '-', $stock),
+            'name' => 'Producto con stock de la caja',
+            'tax_category_id' => $categoryId,
+            'type' => 'product',
+        ]);
+
+        ProductStore::create([
+            'product_id' => $producto->id,
+            'store_id' => $storeId,
+            'purchase_price' => self::PRECIO_COMPRA,
+            'sell_price' => self::PRECIO_VENTA,
+            // El cache miente: el reporte enseña los lotes.
+            'quantity_in_stock' => '999.0000',
+            'status' => 'active',
+        ]);
+
+        self::lote($storeId, (int) $producto->id, $stock);
 
         return (int) $producto->id;
     }
@@ -294,6 +384,19 @@ final class PosFixture
      */
     private static function stock(int $storeId, int $productId): void
     {
+        self::lote($storeId, $productId, self::UNIDADES_LOTE);
+    }
+
+    /**
+     * Un LOTE con una cantidad dada, abierto por una COMPRA.
+     *
+     * El lote no se inventa: `inventory_lots.purchase_item_id` es NOT NULL y
+     * UNIQUE (el lote y su linea de compra son 1:1), asi que el stock tiene
+     * que venir de una compra real, como en el legacy y en el
+     * `SmokeSaleCommand`.
+     */
+    private static function lote(int $storeId, int $productId, string $cantidad): void
+    {
         $purchaseId = DB::table('purchases')->insertGetId([
             'store_id' => $storeId,
             'purchase_date' => now()->format('Y-m-d'),
@@ -307,7 +410,7 @@ final class PosFixture
             'purchase_id' => $purchaseId,
             'product_id' => $productId,
             'store_id' => $storeId,
-            'quantity' => self::UNIDADES_LOTE,
+            'quantity' => $cantidad,
             'unit_price' => self::PRECIO_COMPRA,
             'discount' => '0.0000',
             'tax_rate_snapshot' => '16.0000',
@@ -320,7 +423,7 @@ final class PosFixture
             'product_id' => $productId,
             'store_id' => $storeId,
             'purchase_item_id' => $purchaseItemId,
-            'quantity_received' => self::UNIDADES_LOTE,
+            'quantity_received' => $cantidad,
             'quantity_consumed' => '0.0000',
             'quantity_returned' => '0.0000',
             'unit_cost' => self::PRECIO_COMPRA,

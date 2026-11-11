@@ -13,6 +13,7 @@ use App\Domain\Tax\TaxDocumentInput;
 use App\Domain\Tax\TaxDocumentResult;
 use App\Domain\Tax\TaxLineInput;
 use App\Models\FiscalProfile;
+use App\Models\PaymentMethod;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Database\Connection;
@@ -39,6 +40,17 @@ use RuntimeException;
  *
  * Las cuentas contables son DATO de la entrada (`CheckoutInput::$accounts`):
  * el dominio no inventa un plan de cuentas.
+ *
+ * EL REPARTO DE LOS PAGOS lo calcula ESTE servicio, una sola vez, y antes del
+ * asiento: el `applied` de un pago es el minimo entre lo recibido y lo que
+ * queda del total, y el `change` es lo que sobra. El resultado lo CONSUME el
+ * controlador, que ya no recalcula nada: una segunda aritmetica de la misma
+ * verdad es una segunda verdad.
+ *
+ * Y EL ASIENTO REPARTE ENTRE EFECTIVO Y CLIENTES: sin cliente, el total
+ * entero debita la caja; con cliente, debita la caja lo COBRADO (lo aplicado
+ * por los pagos que no son de credito) y debita la cuenta por cobrar lo que
+ * QUEDA. Un pago de tipo `credit` no es dinero de la caja.
  */
 final readonly class CheckoutService
 {
@@ -146,6 +158,20 @@ final readonly class CheckoutService
             //    T2, la emision fiscal.
             $status = $this->paymentStatus->status($input->payments, $result->grandTotal);
 
+            // 7 bis. EL REPARTO DE LOS PAGOS: lo aplicado a la venta y el
+            //       cambio de cada pago.
+            //
+            //       Lo calcula el DOMINIO, UNA VEZ, y ANTES del asiento: el
+            //       asiento necesita saber cuanto entro al cajon de verdad
+            //       (lo aplicado de los pagos que no son de credito) para
+            //       repartir el total entre la caja y las cuentas por cobrar.
+            //
+            //       La SEMANTICA es la de siempre: el aplicado de un pago es
+            //       el minimo entre lo recibido y lo que queda del total, en
+            //       el orden de los pagos, y el cambio es lo que sobra. Solo
+            //       cambia quien la calcula y quien la consume.
+            $reparto = $this->reparto($input->payments, $result->grandTotal);
+
             $saleId = (int) $this->connection->table('sales')->insertGetId([
                 'store_id' => $input->storeId,
                 'customer_id' => $input->customerId,
@@ -226,7 +252,7 @@ final readonly class CheckoutService
                 storeId: $input->storeId,
                 occurredAt: $input->issuedAt,
                 businessDate: $input->businessDate,
-                lines: $this->ledgerLines($input, $result),
+                lines: $this->ledgerLines($input, $result, $reparto),
                 referenceType: 'sale',
                 referenceId: $saleId,
                 actorId: $input->actorId,
@@ -252,6 +278,7 @@ final readonly class CheckoutService
                 controlNumber: $controlNumber,
                 grandTotal: $result->grandTotal,
                 status: $status,
+                payments: $reparto,
             );
         });
     }
@@ -368,19 +395,97 @@ final readonly class CheckoutService
     }
 
     /**
+     * El REPARTO de los pagos: lo aplicado a la venta y el cambio.
+     *
+     * REGLA que fija este metodo: *el reparto de los pagos entre lo aplicado a
+     * la venta y el cambio lo calcula el DOMINIO, una sola vez*.
+     *
+     * La regla es la de siempre, sin cambios: el `applied` de un pago es el
+     * MINIMO entre lo recibido y lo que QUEDA del total, y los pagos se
+     * recorren en su ORDEN; el `change` es lo que sobra, y se devuelve al
+     * cliente.
+     *
+     * @param  list<CheckoutPaymentInput>  $pagos  Los pagos de la entrada.
+     * @param  string  $total  El total de la venta, como texto decimal.
+     * @return list<CheckoutPaymentAllocation>
+     */
+    private function reparto(array $pagos, string $total): array
+    {
+        $restante = BigDecimal::of($total)->toScale(4, RoundingMode::HALF_UP);
+        $reparto = [];
+
+        foreach ($pagos as $indice => $pago) {
+            $recibido = BigDecimal::of($pago->amount)->toScale(4, RoundingMode::HALF_UP);
+
+            // Lo APLICADO es lo recibido, hasta donde alcanza el total: lo
+            // que sobra es el CAMBIO.
+            $aplicado = $recibido->isGreaterThan($restante) ? $restante : $recibido;
+            $cambio = $recibido->minus($aplicado);
+
+            $restante = $restante->minus($aplicado);
+
+            $reparto[] = new CheckoutPaymentAllocation(
+                index: $indice,
+                received: (string) $recibido,
+                applied: (string) $aplicado,
+                change: (string) $cambio,
+                type: $pago->paymentMethodType,
+            );
+        }
+
+        return $reparto;
+    }
+
+    /**
+     * LO COBRADO: la suma de lo APLICADO por los pagos que NO son de credito.
+     *
+     * REGLA que fija este metodo: *un pago de tipo `credit` NO es dinero de la
+     * caja*. Es DEUDA, no cobro: no entra al cajon, y lo que no cubre queda en
+     * la cuenta por cobrar del cliente.
+     *
+     * @param  list<CheckoutPaymentAllocation>  $reparto
+     */
+    private function cobrado(array $reparto): BigDecimal
+    {
+        $cobrado = BigDecimal::zero()->toScale(4, RoundingMode::HALF_UP);
+
+        foreach ($reparto as $pago) {
+            if ($pago->type === PaymentMethod::TYPE_CREDIT) {
+                continue;
+            }
+
+            $cobrado = $cobrado->plus(BigDecimal::of($pago->applied));
+        }
+
+        return $cobrado->toScale(4, RoundingMode::HALF_UP);
+    }
+
+    /**
      * Las lineas del asiento de la venta.
      *
-     * El asiento CUADRA: el debito del cobro es el total y el credito es el
-     * ingreso mas el impuesto. Cuando el total redondeado no es exactamente
-     * la base mas el impuesto, esa diferencia es DEL INGRESO: es parte de lo
-     * cobrado, no un descuadre.
+     * REGLA que fija este metodo: *una venta con cliente reparte el total
+     * entre la cuenta de efectivo (lo cobrado) y la cuenta de clientes (lo que
+     * queda a credito)*.
+     *
+     *  - SIN CLIENTE: el total entero debita la caja, como antes. No hay
+     *    cliente a quien debitarle.
+     *  - CON CLIENTE: debita la caja lo COBRADO (la suma de lo aplicado por
+     *    los pagos que no son de credito) y debita la cuenta por cobrar lo que
+     *    QUEDA. Un pago de tipo `credit` no es dinero de la caja: no aporta al
+     *    efectivo, y lo que no cubre se queda como deuda del cliente.
+     *
+     * El asiento CUADRA: el debe es el total y el haber es el ingreso mas el
+     * impuesto. Cuando el total redondeado no es exactamente la base mas el
+     * impuesto, esa diferencia es DEL INGRESO: es parte de lo cobrado, no un
+     * descuadre.
      *
      * Una linea sin importe NO es una linea contable, y el libro no admite
      * una linea a cero en los dos sentidos: las lineas vacias no se escriben.
      *
+     * @param  list<CheckoutPaymentAllocation>  $reparto  El reparto de los pagos.
      * @return array<int, array{account: string, debit: string, credit: string}>
      */
-    private function ledgerLines(CheckoutInput $input, TaxDocumentResult $result): array
+    private function ledgerLines(CheckoutInput $input, TaxDocumentResult $result, array $reparto): array
     {
         $total = BigDecimal::of($result->grandTotal)->toScale(4, RoundingMode::HALF_UP);
         $ingreso = BigDecimal::of($result->subtotal)->toScale(4, RoundingMode::HALF_UP);
@@ -388,22 +493,49 @@ final readonly class CheckoutService
 
         $diferencia = $total->minus($ingreso)->minus($impuesto)->toScale(4, RoundingMode::HALF_UP);
 
-        $lines = [
-            [
-                'account' => $this->account($input, $input->customerId === null ? 'cash' : 'receivable'),
+        $lines = [];
+
+        if ($input->customerId === null) {
+            // SIN CLIENTE: el total entero va a la caja.
+            $lines[] = [
+                'account' => $this->account($input, 'cash'),
                 'debit' => (string) $total,
                 'credit' => '0',
-            ],
-            [
-                'account' => $this->account($input, 'revenue'),
-                'debit' => '0',
-                'credit' => (string) $ingreso,
-            ],
-            [
-                'account' => $this->account($input, 'tax_payable'),
-                'debit' => '0',
-                'credit' => (string) $impuesto,
-            ],
+            ];
+        } else {
+            // CON CLIENTE: lo cobrado va a la caja y lo que queda, a la cuenta
+            // por cobrar del cliente.
+            $cobrado = $this->cobrado($reparto);
+
+            if (! $cobrado->isZero()) {
+                $lines[] = [
+                    'account' => $this->account($input, 'cash'),
+                    'debit' => (string) $cobrado,
+                    'credit' => '0',
+                ];
+            }
+
+            $aCobrar = $total->minus($cobrado)->toScale(4, RoundingMode::HALF_UP);
+
+            if (! $aCobrar->isZero()) {
+                $lines[] = [
+                    'account' => $this->account($input, 'receivable'),
+                    'debit' => (string) $aCobrar,
+                    'credit' => '0',
+                ];
+            }
+        }
+
+        $lines[] = [
+            'account' => $this->account($input, 'revenue'),
+            'debit' => '0',
+            'credit' => (string) $ingreso,
+        ];
+
+        $lines[] = [
+            'account' => $this->account($input, 'tax_payable'),
+            'debit' => '0',
+            'credit' => (string) $impuesto,
         ];
 
         if (! $diferencia->isZero()) {

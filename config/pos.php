@@ -71,4 +71,22 @@ return [
 
     'customer_page_size' => 25,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Umbral de stock bajo
+    |--------------------------------------------------------------------------
+    |
+    | Por debajo de este numero de unidades, un producto de la tienda entra
+    | en el reporte de stock bajo. Es un tope de LECTURA del reporte, no una
+    | regla de negocio del almacen: el reporte es una ayuda para reponer, y
+    | el numero que dispara la alerta lo decide quien configura el negocio.
+    |
+    | El stock que mira el reporte es el REAL (la suma de los lotes
+    | disponibles), no el cache de la tienda: el cache es una copia, y una
+    | copia puede estar desfasada.
+    |
+    */
+
+    'low_stock_threshold' => 5,
+
 ];
