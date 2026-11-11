@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Accounting\CashRegisterService;
 use App\Domain\Checkout\CheckoutInput;
 use App\Domain\Checkout\CheckoutLineInput;
 use App\Domain\Checkout\CheckoutPaymentInput;
@@ -69,6 +70,7 @@ class PosController extends Controller
         private readonly CheckoutService $checkout,
         private readonly CustomerBalanceService $balances,
         private readonly PosBudget $budget,
+        private readonly CashRegisterService $registers,
     ) {
         $this->catalog = new PosCatalog($connection);
     }
@@ -237,6 +239,15 @@ class PosController extends Controller
      * Responde 201 con `{ sale_id, invoice_no, control_number, grand_total,
      * status, change }`. Los importes son TEXTO decimal.
      *
+     * NO SE COBRA SIN CAJA DEL DIA ABIERTA.
+     *
+     * REGLA que fija este metodo: *no se cobra sin la caja del dia ABIERTA*.
+     * Una venta sin caja es una venta sin contra que contrastar, y el
+     * descuadre del dia se pierde antes de empezar. El dominio lo dice
+     * (`CashRegisterService::registerFor()`): si la caja no existe para esa
+     * fecha de negocio, o si ya esta cerrada, el cobro falla con 422 y la
+     * transaccion se revierte entera.
+     *
      * LIMITACION CONOCIDA — EL SOBREPAGO: `SalePaymentStatus` exige que los
      * pagos cubran el total EXACTAMENTE. Si el cliente entrega de mas, la
      * suma de lo recibido NO iguala al total y la venta queda `confirmed`, no
@@ -300,6 +311,11 @@ class PosController extends Controller
                 $customerId,
                 $actorId
             ): array {
+                // LA CAJA DEL DIA, antes de cobrar. Va DENTRO de la
+                // transaccion: si la caja no esta abierta, la venta no se
+                // escribe, y si se escribe, la caja estaba abierta.
+                $this->exigeLaCajaAbierta((int) $store->id, $context);
+
                 $resultado = $this->checkout->checkout(new CheckoutInput(
                     storeId: (int) $store->id,
                     customerId: $customerId,
@@ -313,12 +329,13 @@ class PosController extends Controller
                     actorId: $actorId,
                 ));
 
-                return $this->trasLaVenta($resultado, $pagos, $context, $store, $customerId);
+                return $this->trasLaVenta($resultado, $context, $store, $customerId);
             });
         } catch (RuntimeException $fallo) {
             // Un fallo del dominio (no hay stock, falta una cuenta, la serie
-            // esta agotada) es un fallo de la OPERACION, no del servidor: la
-            // caja lo enseña y la transaccion se revierte entera.
+            // esta agotada, la caja no esta abierta) es un fallo de la
+            // OPERACION, no del servidor: la caja lo enseña y la transaccion
+            // se revierte entera.
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
 
@@ -326,66 +343,71 @@ class PosController extends Controller
     }
 
     /**
-     * LO QUE PASA DESPUES de que el dominio cobro: el cambio, el detalle del
-     * pago y la imputacion del credito del cliente.
+     * EXIGE la caja del dia ABIERTA.
+     *
+     * REGLA que fija este metodo: *no se cobra sin la caja del dia ABIERTA*.
+     *
+     * La llamada es `CashRegisterService::registerFor()`: el DOMINIO sabe si
+     * la caja existe para esa fecha de negocio y si sigue abierta, y su
+     * mensaje dice por que falla. Aqui no se reescribe la comprobacion: se
+     * llama al dominio y se traduce su fallo al mensaje que el cajero
+     * entiende ("abrala antes de cobrar"), con el detalle del dominio
+     * detras.
+     *
+     * @throws RuntimeException Cuando no hay caja para esa fecha de negocio,
+     *                          o cuando ya esta cerrada.
+     */
+    private function exigeLaCajaAbierta(int $storeId, PosContext $context): void
+    {
+        try {
+            $this->registers->registerFor($storeId, $context->businessDate());
+        } catch (RuntimeException $fallo) {
+            throw new RuntimeException(
+                'La caja del dia no esta abierta: abrala antes de cobrar. '.$fallo->getMessage(),
+                0,
+                $fallo
+            );
+        }
+    }
+
+    /**
+     * LO QUE PASA DESPUES de que el dominio cobro: el detalle del pago y la
+     * imputacion del credito del cliente.
      *
      * Va DENTRO de la misma transaccion de la venta: si la imputacion del
      * credito falla, la venta tampoco. Y si la venta falla, no queda ningun
      * movimiento de credito.
      *
-     * @param  list<CheckoutPaymentInput>  $pagos  Los pagos de la entrada.
+     * EL REPARTO DE LOS PAGOS NO SE RECALCULA AQUI: lo calcula el DOMINIO
+     * (`CheckoutService`) y lo trae el resultado. Este metodo lo CONSUME: el
+     * detalle del pago y la imputacion del credito salen de ese reparto. Una
+     * segunda aritmetica de la misma verdad es una segunda verdad, y las dos
+     * divergen.
+     *
      * @return array<string, mixed>
      */
     private function trasLaVenta(
         CheckoutResult $resultado,
-        array $pagos,
         PosContext $context,
         Store $store,
         ?int $customerId
     ): array {
-        // El TOTAL: lo que calculo el motor de impuestos. Se LEE de lo que
-        // el dominio escribio, no se recalcula: una segunda aritmetica es una
-        // segunda verdad.
-        $total = PosAmount::decimal(
-            $this->connection->table('sale_totals')
-                ->where('sale_id', $resultado->saleId)
-                ->value('grand_total')
-        );
-
         $pagosEscritos = $this->connection->table('sale_payments')
             ->where('sale_id', $resultado->saleId)
             ->orderBy('id')
             ->get();
 
-        // Los TIPOS de los medios de pago, de UNA consulta: el tipo decide si
-        // un pago es un cobro o es deuda.
-        $tipos = $this->tiposDeMedioDePago(
-            $pagosEscritos->map(fn ($pago): ?int => $pago->payment_method_id === null
-                ? null
-                : (int) $pago->payment_method_id)->all()
-        );
-
-        $restante = $total;
         $cambioTotal = BigDecimal::zero()->toScale(PosAmount::SCALE, RoundingMode::HALF_UP);
-        $aplicados = [];
 
-        foreach ($pagosEscritos as $indice => $pago) {
-            $recibido = PosAmount::decimal($pagos[$indice]->amount);
+        foreach ($resultado->payments as $reparto) {
+            $pago = $pagosEscritos->get($reparto->index);
 
-            // Lo APLICADO a la venta es lo recibido, hasta donde alcanza el
-            // total: lo que sobra es el CAMBIO, que se devuelve al cliente.
-            $aplicado = $recibido->isGreaterThan($restante) ? $restante : $recibido;
-            $cambio = $recibido->minus($aplicado);
+            if ($pago === null) {
+                continue;
+            }
 
-            $restante = $restante->minus($aplicado);
-
-            $aplicados[] = [
-                'importe' => $aplicado,
-                'tipo' => $tipos[(int) $pago->payment_method_id] ?? null,
-            ];
-
-            if (! $cambio->isZero()) {
-                $cambioTotal = $cambioTotal->plus($cambio);
+            if (! BigDecimal::of($reparto->change)->isZero()) {
+                $cambioTotal = $cambioTotal->plus($reparto->change);
             }
 
             // El detalle del pago: el efectivo recibido y el cambio. El
@@ -396,8 +418,8 @@ class PosController extends Controller
                 ->where('id', $pago->id)
                 ->update([
                     'details' => [
-                        'cash_received' => (string) $recibido,
-                        'change' => (string) $cambio,
+                        'cash_received' => $reparto->received,
+                        'change' => $reparto->change,
                     ],
                     'updated_at' => now(),
                 ]);
@@ -426,25 +448,27 @@ class PosController extends Controller
             $this->balances->registerSale(
                 customerId: $customerId,
                 storeId: (int) $store->id,
-                amount: (string) $total,
+                amount: $resultado->grandTotal,
                 referenceNo: $resultado->documentNumber,
                 entryDate: $context->businessDate(),
                 saleId: $resultado->saleId,
             );
 
-            foreach ($aplicados as $aplicado) {
-                if ($aplicado['importe']->isZero() || $aplicado['importe']->isNegative()) {
+            foreach ($resultado->payments as $reparto) {
+                if ($reparto->type === PaymentMethod::TYPE_CREDIT) {
                     continue;
                 }
 
-                if ($aplicado['tipo'] === PaymentMethod::TYPE_CREDIT) {
+                $aplicado = BigDecimal::of($reparto->applied);
+
+                if ($aplicado->isZero() || $aplicado->isNegative()) {
                     continue;
                 }
 
                 $this->balances->registerPayment(
                     customerId: $customerId,
                     storeId: (int) $store->id,
-                    amount: (string) $aplicado['importe'],
+                    amount: $reparto->applied,
                     referenceNo: $resultado->documentNumber,
                     entryDate: $context->businessDate(),
                     saleId: $resultado->saleId,
@@ -466,6 +490,9 @@ class PosController extends Controller
      * El TIPO decide si un pago es un COBRO o es DEUDA, y una DEUDA sin
      * CLIENTE no tiene destino: no se registra.
      *
+     * El TIPO viene en el propio pago: lo resuelve `pagos()`, en UNA
+     * consulta, antes de construir la entrada del dominio.
+     *
      * @param  list<CheckoutPaymentInput>  $pagos
      * @return string|null El mensaje del error, o `null` si el cobro es valido.
      */
@@ -475,20 +502,8 @@ class PosController extends Controller
             return null;
         }
 
-        $ids = [];
-
         foreach ($pagos as $pago) {
-            $ids[] = $pago->paymentMethodId;
-        }
-
-        $tipos = $this->tiposDeMedioDePago($ids);
-
-        foreach ($pagos as $pago) {
-            if ($pago->paymentMethodId === null) {
-                continue;
-            }
-
-            if (($tipos[(int) $pago->paymentMethodId] ?? null) === PaymentMethod::TYPE_CREDIT) {
+            if ($pago->paymentMethodType === PaymentMethod::TYPE_CREDIT) {
                 return 'Un pago a credito necesita un cliente: una deuda sin destino no se registra.';
             }
         }
@@ -504,7 +519,7 @@ class PosController extends Controller
      * fila (`payment_methods.type`), no un literal del codigo.
      *
      * @param  list<int|null>  $ids
-     * @return array<int, string> Medio de pago => su tipo.
+     * @return array<int, string|null> Medio de pago => su tipo.
      */
     private function tiposDeMedioDePago(array $ids): array
     {
@@ -527,7 +542,9 @@ class PosController extends Controller
         $tipos = [];
 
         foreach ($filas as $id => $tipo) {
-            $tipos[(int) $id] = (string) $tipo;
+            // Un medio de pago SIN tipo declarado cobra en efectivo: el tipo
+            // es DATO de la fila, y su DEFECTO es el efectivo.
+            $tipos[(int) $id] = $tipo === null ? null : (string) $tipo;
         }
 
         return $tipos;
@@ -800,20 +817,36 @@ class PosController extends Controller
     /**
      * Los PAGOS de la venta, tal como los cobra el dominio.
      *
-     * El importe del pago es lo que ENTREGO el cliente: el cambio se calcula
-     * despues, cuando el dominio ya ha dicho cuanto es el total.
+     * El importe del pago es lo que ENTREGO el cliente: el cambio lo calcula
+     * el DOMINIO, cuando ya sabe cuanto es el total.
+     *
+     * El TIPO del medio de pago se resuelve ANTES, en UNA consulta, y viaja
+     * en el pago: el dominio no consulta la base de datos para saber si un
+     * pago es un cobro o es deuda. El tipo decide el reparto (que se aplica
+     * a la venta) y el asiento (que entra a la caja y que no).
      *
      * @param  array<string, mixed>  $datos
      * @return list<CheckoutPaymentInput>
      */
     private function pagos(array $datos): array
     {
-        $pagos = [];
+        $ids = [];
 
         foreach ($datos['payments'] as $pago) {
+            $ids[] = isset($pago['payment_method_id']) ? (int) $pago['payment_method_id'] : null;
+        }
+
+        $tipos = $this->tiposDeMedioDePago($ids);
+
+        $pagos = [];
+
+        foreach ($datos['payments'] as $indice => $pago) {
+            $medioId = $ids[$indice];
+
             $pagos[] = new CheckoutPaymentInput(
-                paymentMethodId: isset($pago['payment_method_id']) ? (int) $pago['payment_method_id'] : null,
+                paymentMethodId: $medioId,
                 amount: PosAmount::declare($pago['amount'], 'importe del pago'),
+                paymentMethodType: $medioId === null ? null : ($tipos[$medioId] ?? null),
             );
         }
 

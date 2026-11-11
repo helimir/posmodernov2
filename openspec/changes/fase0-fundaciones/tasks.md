@@ -526,6 +526,12 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
 > aplicacion sobre ese dominio. Decisiones del mantenedor (2026-11-06): cuatro
 > work units, **datos limpios** en la base nueva (el legacy queda en consulta), y la
 > caja es **touch**, como el legacy.
+>
+> **Techo de revision de la Fase 1: 10000 lineas por PR** (decision del mantenedor del
+> 2026-11-11; subio de 2500). Es un **presupuesto de atencion, no una meta**: una unidad
+> que se parte limpio se parte, y una que no, no. Y el `AGENTS.md` es el sitio vivo de
+> ese techo; el forecast de 400/800 lineas de mas arriba es la medida historica de la
+> Fase 0.
 
 - [x] **1.1** El backend de la caja: el catalogo con su precio y su stock, la busqueda de productos y el cobro que escribe la venta real (`CheckoutService`), con la reserva de los dos numeros, el FIFO, el asiento contable y la imputacion del credito del cliente. El **cambio** se registra en `details` del pago, porque el dominio exige coincidencia exacta y no modela el sobrepago. Dep: 0.6.5, 0.7.5.
 - [x] **1.2** La pantalla de la caja: *touch*. Catalogo a la izquierda, carrito a la derecha, teclado numerico, el cobro, el cambio y el resumen. Dep: 1.1.

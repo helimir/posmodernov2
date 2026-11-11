@@ -7,9 +7,17 @@ namespace App\Domain\Checkout;
  *
  * `controlNumber` es `null` cuando la venta no lleva serie de control: el
  * numero de control no se inventa, se reserva.
+ *
+ * `payments` es el REPARTO de los pagos: lo aplicado a la venta y el cambio
+ * de cada uno, con el indice que lo situa en la lista de la entrada. Lo
+ * calcula el DOMINIO y lo CONSUME el controlador: una segunda aritmetica de
+ * la misma verdad es una segunda verdad.
  */
 final readonly class CheckoutResult
 {
+    /**
+     * @param  list<CheckoutPaymentAllocation>  $payments  El reparto de cada pago.
+     */
     public function __construct(
         public int $saleId,
         /** El numero del documento, con el prefijo que declara la serie. */
@@ -19,5 +27,6 @@ final readonly class CheckoutResult
         public string $grandTotal,
         /** `paid` si los pagos cubren el total; `confirmed` si no. */
         public string $status,
+        public array $payments = [],
     ) {}
 }

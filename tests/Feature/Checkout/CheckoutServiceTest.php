@@ -603,6 +603,9 @@ test('test_el_redondeo_que_no_cuadra_va_al_ingreso_y_el_asiento_sigue_cuadrando'
             new CheckoutPaymentInput(
                 paymentMethodId: $escenario['payment_method_id'],
                 amount: '11.6100',
+                // El TIPO del medio de pago es DATO de la entrada: el dominio
+                // no consulta la base de datos para saberlo.
+                paymentMethodType: 'cash',
             ),
         ],
         accounts: cuentasCheckout(),
@@ -619,12 +622,14 @@ test('test_el_redondeo_que_no_cuadra_va_al_ingreso_y_el_asiento_sigue_cuadrando'
         ->and((string) $totals->grand_total)->toBe('11.6100')
         ->and((string) $totals->rounding_adjustment)->toBe('0.0000');
 
-    // El asiento tiene CUATRO lineas: con cliente, el debito es de la cuenta
-    // por cobrar; el redondeo va al ingreso.
+    // El asiento tiene CUATRO lineas: con cliente pagada en efectivo, el
+    // debito es de la CAJA (lo cobrado), NO hay linea de cuenta por cobrar
+    // (lo que quedo a credito es cero), y el redondeo va al ingreso.
     $entry = DB::table('ledger_entries')->where('reference_id', $result->saleId)->first();
     $lines = DB::table('ledger_lines')->where('ledger_entry_id', $entry->id)->orderBy('id')->get();
 
-    expect($lines->pluck('account_code')->all())->toBe(['1200000', '4010000', '2110000', '4010000'])
+    expect($lines->pluck('account_code')->all())->toBe(['1100000', '4010000', '2110000', '4010000'])
+        ->and(bccomp((string) $lines[0]->debit, '11.6100', 4))->toBe(0)
         ->and(bccomp((string) $lines[3]->credit, '0.0042', 4))->toBe(0);
 
     $debe = '0';

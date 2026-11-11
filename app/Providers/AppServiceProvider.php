@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Domain\Accounting\CashDay;
+use App\Domain\Accounting\CashRegisterService;
 use App\Domain\Accounting\LedgerWriter;
 use App\Domain\Checkout\CheckoutService;
 use App\Domain\Credit\CustomerBalanceService;
+use App\Domain\Credit\CustomerPaymentService;
 use App\Domain\Fiscal\ControlNumberGenerator;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Fiscal\TaxRateResolver;
@@ -46,6 +49,18 @@ class AppServiceProvider extends ServiceProvider
             return new CustomerBalanceService($app->make(Connection::class));
         });
 
+        // El COBRO de un cliente: el movimiento de su libro y el asiento
+        // contable, en la MISMA transaccion. Los dos colaboradores usan la
+        // MISMA conexion que el cobro, asi que el savepoint del libro del
+        // cliente y el del asiento son el mismo.
+        $this->app->singleton(CustomerPaymentService::class, function ($app): CustomerPaymentService {
+            return new CustomerPaymentService(
+                $app->make(Connection::class),
+                $app->make(CustomerBalanceService::class),
+                $app->make(LedgerWriter::class),
+            );
+        });
+
         // El PRESUPUESTO de la caja: el total que calcula el motor de
         // impuestos SIN cobrar. Se construye aqui, con la MISMA conexion que
         // el checkout: el resolvedor de tasas lee de la base de datos, y con
@@ -54,6 +69,20 @@ class AppServiceProvider extends ServiceProvider
             $connection = $app->make(Connection::class);
 
             return new PosBudget($connection, new TaxRateResolver($connection));
+        });
+
+        // La CAJA DEL DIA: el registro de caja y las cifras que se derivan de
+        // los asientos y de los pagos.
+        //
+        // Los dos se construyen aqui, con la MISMA conexion que el checkout:
+        // el saldo en curso se deriva de los asientos, y leerlos por otra
+        // conexion seria leer una foto de la venta en vez de la venta.
+        $this->app->singleton(CashRegisterService::class, function ($app): CashRegisterService {
+            return new CashRegisterService($app->make(Connection::class));
+        });
+
+        $this->app->singleton(CashDay::class, function ($app): CashDay {
+            return new CashDay($app->make(Connection::class));
         });
     }
 

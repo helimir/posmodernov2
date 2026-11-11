@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Accounting\CashRegisterService;
 use App\Domain\Accounting\LedgerWriter;
 use App\Domain\Checkout\CheckoutInput;
 use App\Domain\Checkout\CheckoutLineInput;
@@ -168,7 +169,7 @@ class SmokeSaleCommand extends Command
         'inventory_lots', 'payment_methods', 'payment_method_stores', 'customers', 'sales',
         'sale_items', 'sale_totals', 'sale_payments', 'sale_item_lot_consumptions', 'ledger_entries',
         'ledger_lines', 'ledger_entry_types', 'fiscal_series', 'fiscal_document_reservations',
-        'tax_categories', 'tax_rates',
+        'tax_categories', 'tax_rates', 'cash_registers',
     ];
 
     public function __construct(private readonly Connection $connection)
@@ -201,7 +202,7 @@ class SmokeSaleCommand extends Command
             [$productoId, $precio] = $this->producto($escenario);
             $loteAntes = $this->asegurarStock($escenario, $productoId, $cantidad);
             $clienteId = $this->cliente();
-            $medioPagoId = $this->medioDePago($escenario);
+            [$medioPagoId, $tipoMedioPago] = $this->medioDePago($escenario);
 
             $linea = new CheckoutLineInput(
                 productId: $productoId,
@@ -214,6 +215,10 @@ class SmokeSaleCommand extends Command
             // checkout: el comando no replica la aritmetica, la pide.
             $importe = $this->importeACobrar($escenario, $linea);
 
+            // LA CAJA DEL DIA: el comando vende de verdad, y una venta sin
+            // caja es una venta sin contra que contrastar.
+            $this->asegurarCajaDelDia($escenario);
+
             $resultado = $this->servicio()->checkout(new CheckoutInput(
                 storeId: $escenario['store']->id,
                 customerId: $clienteId,
@@ -224,6 +229,10 @@ class SmokeSaleCommand extends Command
                     new CheckoutPaymentInput(
                         paymentMethodId: $medioPagoId,
                         amount: $importe,
+                        // El TIPO del medio de pago es DATO: el dominio no
+                        // consulta la base de datos para saber si el pago es
+                        // un cobro o es deuda.
+                        paymentMethodType: $tipoMedioPago,
                     ),
                 ],
                 accounts: self::CUENTAS,
@@ -313,39 +322,6 @@ class SmokeSaleCommand extends Command
             throw new RuntimeException("La tienda {$storeId} no existe.");
         }
 
-        $documentSeries = $this->connection->table('fiscal_series')
-            ->where('store_id', $storeId)
-            ->where('series_role', 'document')
-            ->first();
-
-        $controlSeries = $this->connection->table('fiscal_series')
-            ->where('store_id', $storeId)
-            ->where('series_role', 'control')
-            ->first();
-
-        if ($documentSeries === null || $controlSeries === null) {
-            throw new RuntimeException(
-                "La tienda {$storeId} no tiene las DOS series fiscales (la del documento y la del control): "
-                .'ejecuta `php artisan db:seed` para sembrar el perfil fiscal y sus series.'
-            );
-        }
-
-        $profile = FiscalProfile::query()
-            ->with(['defaultCurrency', 'fields'])
-            ->find((int) $documentSeries->fiscal_profile_id);
-
-        if ($profile === null) {
-            throw new RuntimeException("El perfil fiscal de la tienda {$storeId} no existe.");
-        }
-
-        $currency = $profile->defaultCurrency;
-
-        if ($currency === null) {
-            throw new RuntimeException("El perfil fiscal {$profile->id} no tiene moneda.");
-        }
-
-        $context = $profile->taxContext($currency);
-
         // Las dos fechas: la de EMISION (el instante) y la de NEGOCIO (la que
         // manda la caja). La zona horaria es la de la TIENDA, no la del
         // servidor.
@@ -358,7 +334,33 @@ class SmokeSaleCommand extends Command
         $issuedAt = new DateTimeImmutable('now', $zona);
         $businessDate = new DateTimeImmutable($issuedAt->format('Y-m-d'), $zona);
 
-        [$category, $rate] = $this->categoriaYTasa((int) $profile->id, $businessDate);
+        // EL PERFIL Y SUS DOS SERIES.
+        //
+        // REGLA que fija este metodo: *el perfil se elige por lo que HACE*,
+        // por su tratamiento fiscal TRANSCRITO (categorias con tasa
+        // vigente), y sus dos series son las SUyas.
+        //
+        // El sembrador siembra un perfil por regimen, pero solo transcribe el
+        // detalle fiscal de uno: los demas son su catalogo sin categorias ni
+        // tasas. Y "la primera serie que sale" NO es una eleccion: un SELECT
+        // sin ORDER BY no tiene orden, y la misma tienda puede devolver otra
+        // serie en otra ejecucion. Una prueba de humo que a veces vende con
+        // el regimen equivocado no es una prueba de humo.
+        //
+        // Las DOS series son del MISMO perfil: el numero de control lo
+        // compone la serie del control, y su identificador es el del perfil.
+        [$profile, $documentSeries, $controlSeries, [$category, $rate]] = $this->perfilYSeries(
+            $storeId,
+            $businessDate
+        );
+
+        $currency = $profile->defaultCurrency;
+
+        if ($currency === null) {
+            throw new RuntimeException("El perfil fiscal {$profile->id} no tiene moneda.");
+        }
+
+        $context = $profile->taxContext($currency);
 
         return [
             'store' => $store,
@@ -373,6 +375,64 @@ class SmokeSaleCommand extends Command
             'business_date' => $businessDate,
             'timezone' => $zona->getName(),
         ];
+    }
+
+    /**
+     * El PERFIL con tratamiento fiscal vigente y SUS DOS series.
+     *
+     * @param  int  $storeId  La tienda de la venta.
+     * @param  DateTimeImmutable  $fecha  La fecha de negocio de la venta.
+     * @return array{0: FiscalProfile, 1: object, 2: object, 3: array{0: object, 1: array<string, mixed>}}
+     *
+     * @throws RuntimeException Cuando la tienda no tiene un perfil con
+     *                          tratamiento fiscal vigente, o sus series.
+     */
+    private function perfilYSeries(int $storeId, DateTimeImmutable $fecha): array
+    {
+        $series = $this->connection->table('fiscal_series')
+            ->where('store_id', $storeId)
+            ->where('series_role', 'document')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($series as $documentSeries) {
+            $perfilId = (int) $documentSeries->fiscal_profile_id;
+
+            $categoria = $this->categoriaYTasa($perfilId, $fecha);
+
+            if ($categoria === null) {
+                // Este perfil no tiene tratamiento fiscal transcrito: no es
+                // el regimen de esta prueba de humo.
+                continue;
+            }
+
+            $controlSeries = $this->connection->table('fiscal_series')
+                ->where('store_id', $storeId)
+                ->where('fiscal_profile_id', $perfilId)
+                ->where('series_role', 'control')
+                ->orderBy('id')
+                ->first();
+
+            if ($controlSeries === null) {
+                continue;
+            }
+
+            $profile = FiscalProfile::query()
+                ->with(['defaultCurrency', 'fields'])
+                ->find($perfilId);
+
+            if ($profile === null) {
+                throw new RuntimeException("El perfil fiscal {$perfilId} no existe.");
+            }
+
+            return [$profile, $documentSeries, $controlSeries, $categoria];
+        }
+
+        throw new RuntimeException(
+            "La tienda {$storeId} no tiene un perfil fiscal con tratamiento vigente el "
+            .$fecha->format('Y-m-d').' y sus dos series (la del documento y la del control): '
+            .'ejecuta `php artisan db:seed` para sembrar el perfil fiscal y sus series.'
+        );
     }
 
     /**
@@ -412,9 +472,13 @@ class SmokeSaleCommand extends Command
      * con tasa) y se prefiere la que tenga una tasa DISTINTA de cero: es la
      * que hace que la venta tenga impuesto de verdad.
      *
-     * @return array{0: object, 1: array<string, mixed>}
+     * Devuelve `null` cuando el perfil NO tiene ninguna tasa vigente: es lo
+     * que le dice al comando que este perfil no es el regimen de la prueba
+     * de humo, y no un fallo de la operacion.
+     *
+     * @return array{0: object, 1: array<string, mixed>}|null
      */
-    private function categoriaYTasa(int $profileId, DateTimeImmutable $fecha): array
+    private function categoriaYTasa(int $profileId, DateTimeImmutable $fecha): ?array
     {
         $resolver = new TaxRateResolver($this->connection);
 
@@ -437,13 +501,6 @@ class SmokeSaleCommand extends Command
             if (! BigDecimal::of($rate['percentage'])->isZero()) {
                 return [$category, $rate];
             }
-        }
-
-        if ($elegida === null) {
-            throw new RuntimeException(
-                "El perfil fiscal {$profileId} no tiene ninguna tasa vigente el "
-                .$fecha->format('Y-m-d').': no se cobra en silencio una linea sin impuesto.'
-            );
         }
 
         return $elegida;
@@ -631,22 +688,75 @@ class SmokeSaleCommand extends Command
     }
 
     /**
-     * El MEDIO DE PAGO de la venta.
+     * La CAJA DEL DIA de la tienda de la venta.
+     *
+     * REGLA que fija este metodo: *el comando vende como la caja*: no vende
+     * con la caja del dia CERRADA, y abre la que no existe.
+     *
+     *  - SIN CAJA: el comando la ABRE, con el saldo de partida en CERO y con
+     *    quien sea el actor. Un comando de humo que exige una preparacion
+     *    manual no es un comando de humo: su trabajo es ensejar el dominio, y
+     *    el dominio empieza por tener una caja donde vender.
+     *  - CAJA CERRADA: el comando FALLA con un mensaje claro. Una caja
+     *    cerrada es un dia que ya se arqueo: vender en ella es vender fuera
+     *    del periodo, y el arqueo de ese dia ya no podria contrastar nada.
      *
      * @param  array<string, mixed>  $escenario
+     *
+     * @throws RuntimeException Cuando la caja del dia ya esta cerrada.
      */
-    private function medioDePago(array $escenario): int
+    private function asegurarCajaDelDia(array $escenario): void
+    {
+        $storeId = (int) $escenario['store']->id;
+        $fecha = $escenario['business_date'];
+        $dia = $fecha->format('Y-m-d');
+
+        $caja = $this->connection->table('cash_registers')
+            ->where('store_id', $storeId)
+            ->where('business_date', $dia)
+            ->first();
+
+        if ($caja === null) {
+            // NO HAY CAJA: el comando la abre, con el saldo de partida en
+            // CERO y con el actor que sea.
+            (new CashRegisterService($this->connection))
+                ->open($storeId, $fecha, '0.0000', null, $this->actor());
+
+            return;
+        }
+
+        if ((string) $caja->status === 'closed') {
+            throw new RuntimeException(
+                "La caja del dia de la tienda {$storeId} para la fecha de negocio {$dia} ya esta cerrada: "
+                .'un dia ya arqueado no admite ventas.'
+            );
+        }
+    }
+
+    /**
+     * El MEDIO DE PAGO de la venta, con su TIPO.
+     *
+     * El TIPO es DATO de la fila (`payment_methods.type`), y el dominio lo
+     * necesita: uno de tipo `credit` no es un cobro, es deuda, y no entra al
+     * cajon.
+     *
+     * @param  array<string, mixed>  $escenario
+     * @return array{0: int, 1: string|null}
+     */
+    private function medioDePago(array $escenario): array
     {
         $storeId = (int) $escenario['store']->id;
 
         $paymentId = $this->opcion('payment');
 
         if ($paymentId !== null) {
-            if (! $this->connection->table('payment_methods')->where('id', $paymentId)->exists()) {
+            $fila = $this->connection->table('payment_methods')->where('id', $paymentId)->first();
+
+            if ($fila === null) {
                 throw new RuntimeException("El medio de pago {$paymentId} no existe.");
             }
 
-            return $paymentId;
+            return [$paymentId, $fila->type === null ? null : (string) $fila->type];
         }
 
         $existente = $this->connection->table('payment_methods')
@@ -655,10 +765,13 @@ class SmokeSaleCommand extends Command
             // verdad un pago.
             ->where('type', '!=', PaymentMethod::TYPE_CREDIT)
             ->orderBy('id')
-            ->value('id');
+            ->first();
 
         if ($existente !== null) {
-            return (int) $existente;
+            return [
+                (int) $existente->id,
+                $existente->type === null ? null : (string) $existente->type,
+            ];
         }
 
         $paymentId = (int) $this->connection->table('payment_methods')->insertGetId([
@@ -679,7 +792,7 @@ class SmokeSaleCommand extends Command
             'updated_at' => now(),
         ]);
 
-        return $paymentId;
+        return [$paymentId, null];
     }
 
     /**

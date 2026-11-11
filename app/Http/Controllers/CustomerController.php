@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Credit\CustomerBalanceService;
+use App\Domain\Credit\CustomerPaymentService;
 use App\Models\Customer;
 use App\Models\Store;
 use App\Support\Pos\PosAmount;
@@ -68,6 +69,7 @@ class CustomerController extends Controller
     public function __construct(
         private readonly Connection $connection,
         private readonly CustomerBalanceService $balances,
+        private readonly CustomerPaymentService $payments,
     ) {}
 
     /**
@@ -341,6 +343,11 @@ class CustomerController extends Controller
      *
      * Un cliente SIN FICHA en la tienda no tiene credito en ella, y su cobro
      * se rechaza con un 422 que lo dice.
+     *
+     * EL COBRO SE CONTABILIZA: el movimiento del libro del cliente y el
+     * asiento contable se escriben en la MISMA transaccion, y el efectivo
+     * cobrado llega a la cuenta de caja de la tienda. El detalle es del
+     * dominio (`CustomerPaymentService`): aqui solo se orchestra.
      */
     public function cobro(Request $request, Customer $customer): JsonResponse
     {
@@ -369,16 +376,20 @@ class CustomerController extends Controller
             : $context->businessDate();
 
         try {
-            $entryId = $this->balances->registerPayment(
+            $entryId = $this->payments->collect(
                 customerId: $customerId,
                 storeId: $storeId,
                 amount: (string) $datos['amount'],
                 referenceNo: (string) $datos['reference_no'],
                 entryDate: $entryDate,
+                accounts: $context->accounts(),
                 saleId: null,
+                actorId: $request->user()?->id,
+                occurredAt: $context->issuedAt(),
             );
         } catch (RuntimeException $fallo) {
-            // El cliente no tiene ficha en la tienda: su credito en ella no
+            // El cliente no tiene ficha en la tienda, o el plan de cuentas no
+            // declara la cuenta que el cobro necesita: su credito en ella no
             // existe, y un cobro sin destino no se registra.
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
