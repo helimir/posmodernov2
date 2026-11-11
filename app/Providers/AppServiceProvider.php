@@ -42,6 +42,7 @@ class AppServiceProvider extends ServiceProvider
                 new LotConsumer($connection, new StockInvariant($connection)),
                 new LedgerWriter($connection),
                 new SalePaymentStatus($connection),
+                new CustomerBalanceService($connection),
             );
         });
 

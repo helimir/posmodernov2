@@ -25,7 +25,10 @@ final readonly class CheckoutResult
         public ?string $controlNumber,
         /** El total de la venta, como texto decimal. */
         public string $grandTotal,
-        /** `paid` si los pagos cubren el total; `confirmed` si no. */
+        /**
+         * `paid` si lo cobrado cubre el total; `confirmed` si queda algo por
+         * cobrar.
+         */
         public string $status,
         public array $payments = [],
     ) {}

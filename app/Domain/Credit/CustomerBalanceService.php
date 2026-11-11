@@ -34,6 +34,11 @@ use RuntimeException;
  * actualizan DESPUES de cada movimiento, en la MISMA transaccion, a partir
  * del saldo derivado. El cache se puede desfasar; la verdad no se desfasa.
  *
+ * EL LIMITE DE CREDITO es la tercera cifra del credito, y vive en el MAESTRO
+ * (`customers.credit_limit`): es un limite del cliente, no un saldo de una
+ * tienda. La regla que lo hace cumplir es de ESTA clase, porque es la que
+ * sabe cuanto debe el cliente: `assertCreditLimit()`.
+ *
  * Los importes viajan como TEXTO decimal (`'120.0000'`), nunca como float.
  */
 final readonly class CustomerBalanceService
@@ -108,6 +113,78 @@ final readonly class CustomerBalanceService
         }
 
         return $saldos;
+    }
+
+    /**
+     * El LIMITE DE CREDITO del cliente: el del MAESTRO, o `null` si no lo
+     * tiene.
+     *
+     * El limite vive en `customers.credit_limit` y NO en la ficha de tienda:
+     * es un limite del cliente, no un saldo de una tienda. Y `null` NO es un
+     * limite de cero: es la AUSENCIA de limite, y un cliente sin limite no se
+     * bloquea nunca.
+     */
+    public function creditLimit(int $customerId): ?string
+    {
+        $limite = $this->connection->table('customers')
+            ->where('id', $customerId)
+            ->value('credit_limit');
+
+        if ($limite === null) {
+            return null;
+        }
+
+        return $this->decimal($limite);
+    }
+
+    /**
+     * EXIGE que la deuda que AUMENTA la venta quepa en el limite de credito.
+     *
+     * REGLA que fija este metodo: *el limite de credito BLOQUEA lo que
+     * AUMENTA la deuda*.
+     *
+     *  - SIN LIMITE (`credit_limit` en `null`): no bloquea nunca;
+     *  - lo que NO aumenta la deuda no bloquea nunca: una venta cobrada
+     *    completa (deuda nueva = deuda actual) se cobra siempre, y un cliente
+     *    que ya esta por encima de su limite puede PAGAR en efectivo, porque
+     *    el pago le BAJA la deuda y bloquearlo seria una tonteria;
+     *  - la deuda que se compara es la NUEVA: la deuda DERIVADA de esa tienda
+     *    (no el cache) MAS lo que la venta deja sin cobrar.
+     *
+     * @param  string  $deuda  Lo que la venta deja SIN cobrar, como texto
+     *                         decimal. Cero significa que la venta esta
+     *                         cobrada entera, y no aumenta la deuda.
+     *
+     * @throws RuntimeException Cuando la deuda nueva pasa del limite.
+     */
+    public function assertCreditLimit(int $customerId, int $storeId, string $deuda): void
+    {
+        $limite = $this->creditLimit($customerId);
+
+        if ($limite === null) {
+            return;
+        }
+
+        $aumento = BigDecimal::of($this->decimal($deuda))->toScale(self::SCALE, RoundingMode::HALF_UP);
+
+        // Lo que NO aumenta la deuda no se bloquea: una venta cobrada entera
+        // deja la deuda como estaba, la tenga el cliente por encima de su
+        // limite o no.
+        if (! $aumento->isGreaterThan(BigDecimal::zero())) {
+            return;
+        }
+
+        $actual = BigDecimal::of($this->due($customerId, $storeId))->toScale(self::SCALE, RoundingMode::HALF_UP);
+        $nuevo = $actual->plus($aumento)->toScale(self::SCALE, RoundingMode::HALF_UP);
+        $tope = BigDecimal::of($limite)->toScale(self::SCALE, RoundingMode::HALF_UP);
+
+        if ($nuevo->isLessThanOrEqualTo($tope)) {
+            return;
+        }
+
+        throw new RuntimeException(
+            "El cliente debe {$actual} y su limite es {$tope}: esta venta lo dejaria en {$nuevo}."
+        );
     }
 
     /**
