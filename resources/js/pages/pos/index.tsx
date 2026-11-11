@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import PosLayout from '@/layouts/pos-layout';
+import { getJson, postJson } from '@/lib/api';
 import {
     type PosCurrency,
     addAmount,
@@ -15,7 +16,7 @@ import {
     subtractAmount,
 } from '@/lib/pos';
 import { Head } from '@inertiajs/react';
-import { Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
+import { Loader2, Minus, Plus, Search, Trash2, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
@@ -45,7 +46,32 @@ export interface PosPaymentMethod {
     id: number;
     code: string;
     name: string;
+    /**
+     * The TYPE of the payment method: `cash`, `card`, `transfer` or `credit`.
+     *
+     * The type is what says if a payment is a CASH COLLECTION or a DEBT. It
+     * is DATA of the row (`payment_methods.type`), not a name: the name is
+     * how it is shown, the type is what it means.
+     */
+    type: string;
 }
+
+/**
+ * A customer of the till: the one whose credit the sale is charged to.
+ */
+export interface PosCustomer {
+    id: number;
+    name: string;
+    tax_id: string | null;
+    balance: string;
+    due: string;
+}
+
+/**
+ * The TYPE of the payment method that is DEBT: a payment with it is not a
+ * cash collection, it is what the customer owes.
+ */
+const CREDIT_TYPE = 'credit';
 
 export interface PosIndexProps {
     store: PosStore;
@@ -97,41 +123,6 @@ interface CartLine {
 }
 
 /**
- * The CSRF token of the page. Every POST has to be signed with it: without
- * it the server answers 419 and the till does not work.
- */
-function csrfToken(): string {
-    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
-}
-
-/**
- * A POST of the till, with the CSRF token and with the answer en JSON.
- *
- * A failed answer throws with the message of the server: the till shows it
- * instead of charging blindly.
- */
-async function postJson<T>(url: string, payload: unknown): Promise<T> {
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': csrfToken(),
-        },
-        body: JSON.stringify(payload),
-    });
-
-    const data = (await response.json().catch(() => ({}))) as { errorMsg?: string };
-
-    if (!response.ok) {
-        throw new Error(data.errorMsg ?? `The request failed with the status ${response.status}.`);
-    }
-
-    return data as T;
-}
-
-/**
  * The line amount of the cart: price times quantity, minus the discount.
  *
  * It is trivial arithmetic and it carries NO tax: the tax with the rate in
@@ -170,6 +161,15 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
     const [charging, setCharging] = useState(false);
     const [chargeError, setChargeError] = useState<string | null>(null);
     const [sale, setSale] = useState<PosSale | null>(null);
+
+    // EL CLIENTE: el que compra a credito. Vive en la pantalla, no en el
+    // servidor: el servidor solo recibe su id en el cobro.
+    const [customer, setCustomer] = useState<PosCustomer | null>(null);
+    const [customerOpen, setCustomerOpen] = useState(false);
+    const [customerQuery, setCustomerQuery] = useState('');
+    const [customerResults, setCustomerResults] = useState<PosCustomer[]>([]);
+    const [customerSearching, setCustomerSearching] = useState(false);
+    const [customerError, setCustomerError] = useState<string | null>(null);
 
     const firstSearch = useRef(true);
 
@@ -211,15 +211,7 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
             setSearchError(null);
 
             try {
-                const response = await fetch(`/caja/productos?q=${encodeURIComponent(query)}`, {
-                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                });
-
-                if (!response.ok) {
-                    throw new Error(`The search failed with the status ${response.status}.`);
-                }
-
-                const data = (await response.json()) as { products?: PosProduct[] };
+                const data = await getJson<{ products?: PosProduct[] }>(`/caja/productos?q=${encodeURIComponent(query)}`);
 
                 if (!cancelled) {
                     setProducts(data.products ?? []);
@@ -240,6 +232,51 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
             clearTimeout(timer);
         };
     }, [query]);
+
+    /**
+     * The CUSTOMER SEARCH: the selector asks the server who has a sheet in
+     * this store, and the server answers with their derived balance.
+     *
+     * It is the SAME search of the customers screen, against the API of the
+     * till: by NAME (as a prefix) or by DOCUMENT (exact). With an empty term
+     * it brings the first page of the customers of the store, so the selector
+     * opens with something to read.
+     */
+    useEffect(() => {
+        if (!customerOpen) {
+            return;
+        }
+
+        let cancelled = false;
+
+        const timer = setTimeout(async () => {
+            setCustomerSearching(true);
+            setCustomerError(null);
+
+            try {
+                const data = await getJson<{ customers?: PosCustomer[] }>(
+                    `/api/caja/clientes?q=${encodeURIComponent(customerQuery)}`,
+                );
+
+                if (!cancelled) {
+                    setCustomerResults(data.customers ?? []);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    setCustomerError((error as Error).message);
+                }
+            } finally {
+                if (!cancelled) {
+                    setCustomerSearching(false);
+                }
+            }
+        }, 250);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [customerQuery, customerOpen]);
 
     /**
      * The TOTALS: the server asks the tax engine and answers.
@@ -326,17 +363,45 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
 
     /**
      * Empties the cart.
+     *
+     * The CUSTOMER goes with it: el cliente pertenece a la venta, y la
+     * siguiente venta es de otro cliente.
      */
     const clearCart = useCallback(() => {
         setCart([]);
         setReceived('');
         setChargeError(null);
+        setCustomer(null);
     }, []);
 
     /**
      * The digits of the keypad: the amount the customer hands over.
      */
     const receivedAmount = useMemo(() => keypadAmount(received, currency), [received, currency]);
+
+    /**
+     * The CREDIT MODE: the chosen payment method is of type `credit`.
+     *
+     * A payment with a method of that type is not a cash collection: it is
+     * DEBT. So there is no money to count: the whole total goes on the
+     * account of the customer, and the button says so.
+     */
+    const creditMode = useMemo(
+        () => payment_methods.find((method) => String(method.id) === paymentMethodId)?.type === CREDIT_TYPE,
+        [payment_methods, paymentMethodId],
+    );
+
+    /**
+     * The AMOUNT that is charged: the total when it is credit, and what the
+     * customer hands over when it is not.
+     */
+    const chargedAmount = useMemo(() => {
+        if (!creditMode) {
+            return receivedAmount;
+        }
+
+        return budget?.grand_total ?? '0.0000';
+    }, [budget, creditMode, receivedAmount]);
 
     /**
      * The CHANGE: what is left after paying the total.
@@ -351,6 +416,9 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
 
     /**
      * The physical keyboard: the same keys as the on-screen keypad.
+     *
+     * In CREDIT MODE the keypad is off: there is no money to count, the
+     * whole total goes to the account of the customer.
      */
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -383,8 +451,28 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
     }, []);
 
     /**
+     * The PAYMENT METHOD changes.
+     *
+     * In CREDIT MODE there is no money to count, so the keypad starts from
+     * zero: the digits that were typed for another method are not money.
+     */
+    const changePaymentMethod = useCallback(
+        (methodId: string) => {
+            setPaymentMethodId(methodId);
+
+            if (payment_methods.find((method) => String(method.id) === methodId)?.type === CREDIT_TYPE) {
+                setReceived('');
+            }
+        },
+        [payment_methods],
+    );
+
+    /**
      * Charges the cart: the server writes the sale and answers with the
      * document number, the control number, the total and the change.
+     *
+     * The CUSTOMER travels with the sale when there is one: es el destino de
+     * la deuda cuando el pago es a credito.
      */
     const charge = useCallback(async () => {
         if (!budget || cart.length === 0) {
@@ -404,11 +492,12 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
 
         try {
             const result = await postJson<PosSale>('/caja/cobrar', {
+                customer_id: customer?.id ?? null,
                 lines,
                 payments: [
                     {
                         payment_method_id: Number(paymentMethodId),
-                        amount: receivedAmount,
+                        amount: chargedAmount,
                     },
                 ],
             });
@@ -419,7 +508,7 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
         } finally {
             setCharging(false);
         }
-    }, [budget, cart.length, lines, paymentMethodId, receivedAmount]);
+    }, [budget, cart.length, chargedAmount, customer, lines, paymentMethodId]);
 
     /**
      * Closes the summary and empties the cart: the next customer starts from
@@ -431,7 +520,7 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
     }, [clearCart]);
 
     const canCharge = budget !== null && budgetError === null && cart.length > 0 && !charging;
-    const shortPayment = budget !== null && compareAmounts(receivedAmount, budget.grand_total) < 0;
+    const shortPayment = !creditMode && budget !== null && compareAmounts(receivedAmount, budget.grand_total) < 0;
 
     return (
         <PosLayout storeName={store.name} businessDate={business_date}>
@@ -618,6 +707,26 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
 
                     {/* THE PAYMENT: the amount to charge, the amount received and the change. */}
                     <div className="bg-muted/30 shrink-0 border-t p-3">
+                        {/* THE CUSTOMER: who buys on credit. */}
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            {customer === null ? (
+                                <span className="text-muted-foreground text-sm">This sale has no customer.</span>
+                            ) : (
+                                <span className="text-sm">
+                                    <span className="font-medium">{customer.name}</span>
+                                    {customer.tax_id && <span className="text-muted-foreground ml-2">{customer.tax_id}</span>}
+                                    <span className="text-muted-foreground ml-2">Due: {formatAmount(customer.due, currency)}</span>
+                                </span>
+                            )}
+
+                            {customer !== null && (
+                                <Button type="button" variant="ghost" size="sm" onClick={() => setCustomer(null)}>
+                                    <X />
+                                    Remove
+                                </Button>
+                            )}
+                        </div>
+
                         <div className="flex flex-col gap-3 sm:flex-row">
                             <div className="flex-1 space-y-2">
                                 <div className="bg-card rounded-lg border p-3">
@@ -628,8 +737,22 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                                 </div>
 
                                 <div className="bg-card rounded-lg border p-3">
-                                    <span className="text-muted-foreground text-xs uppercase">Received</span>
-                                    <div className="text-3xl font-semibold tabular-nums">{formatAmount(receivedAmount, currency)}</div>
+                                    <span className="text-muted-foreground text-xs uppercase">
+                                        {creditMode ? 'On credit' : 'Received'}
+                                    </span>
+                                    <div className="text-3xl font-semibold tabular-nums">
+                                        {creditMode
+                                            ? budget === null
+                                                ? '—'
+                                                : formatAmount(budget.grand_total, currency)
+                                            : formatAmount(receivedAmount, currency)}
+                                    </div>
+
+                                    {creditMode && (
+                                        <p className="text-muted-foreground text-xs">
+                                            There is no money to count: the whole total goes to the account of the customer.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="bg-card rounded-lg border p-3">
@@ -641,18 +764,25 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                                     {shortPayment && <p className="text-destructive text-sm">The amount received is less than the total.</p>}
                                 </div>
 
-                                <Select value={paymentMethodId} onValueChange={setPaymentMethodId}>
-                                    <SelectTrigger className="h-11 w-full">
-                                        <SelectValue placeholder="Payment method" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {payment_methods.map((method) => (
-                                            <SelectItem key={method.id} value={String(method.id)}>
-                                                {method.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <div className="flex items-center gap-2">
+                                    <Select value={paymentMethodId} onValueChange={changePaymentMethod}>
+                                        <SelectTrigger className="h-11 flex-1">
+                                            <SelectValue placeholder="Payment method" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {payment_methods.map((method) => (
+                                                <SelectItem key={method.id} value={String(method.id)}>
+                                                    {method.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+
+                                    <Button type="button" variant="outline" className="h-11" onClick={() => setCustomerOpen(true)}>
+                                        <UserRound />
+                                        Customer
+                                    </Button>
+                                </div>
                             </div>
 
                             <div className="grid w-full shrink-0 grid-cols-3 gap-2 sm:w-64">
@@ -662,6 +792,7 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                                         type="button"
                                         variant="outline"
                                         className="h-14 text-xl"
+                                        disabled={creditMode}
                                         onClick={() => setReceived((current) => (current + digit).slice(0, 12))}
                                     >
                                         {digit}
@@ -672,12 +803,19 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                                     type="button"
                                     variant="outline"
                                     className="h-14 text-xl"
+                                    disabled={creditMode}
                                     onClick={() => setReceived((current) => (current + '00').slice(0, 12))}
                                 >
                                     00
                                 </Button>
 
-                                <Button type="button" variant="outline" className="h-14 text-xl" onClick={() => setReceived('')}>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-14 text-xl"
+                                    disabled={creditMode}
+                                    onClick={() => setReceived('')}
+                                >
                                     C
                                 </Button>
 
@@ -685,6 +823,7 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                                     type="button"
                                     variant="outline"
                                     className="h-14 text-xl"
+                                    disabled={creditMode}
                                     onClick={() => setReceived((current) => current.slice(0, -1))}
                                 >
                                     ⌫
@@ -692,7 +831,7 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
 
                                 <Button type="button" className="col-span-3 h-16 text-lg" onClick={charge} disabled={!canCharge}>
                                     {charging ? <Loader2 className="animate-spin" /> : null}
-                                    Charge
+                                    {creditMode ? 'Charge on credit' : 'Charge'}
                                 </Button>
                             </div>
                         </div>
@@ -703,6 +842,67 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                     </div>
                 </section>
             </div>
+
+            {/* THE CUSTOMER SELECTOR: who buys on credit. */}
+            <Dialog open={customerOpen} onOpenChange={setCustomerOpen}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Customer</DialogTitle>
+                        <DialogDescription>
+                            Search by name or document. Only the customers with a sheet in this store are offered: the credit of
+                            a customer is per store.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="relative">
+                        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                        <Input
+                            value={customerQuery}
+                            onChange={(event) => setCustomerQuery(event.target.value)}
+                            placeholder="Search by name or document"
+                            aria-label="Search by name or document"
+                            autoComplete="off"
+                            autoFocus
+                            className="pl-9"
+                        />
+                    </div>
+
+                    {customerError !== null && <p className="text-destructive text-sm">{customerError}</p>}
+
+                    <div className="max-h-80 overflow-y-auto">
+                        {customerSearching && <p className="text-muted-foreground py-4 text-center text-sm">Searching…</p>}
+
+                        {!customerSearching && customerResults.length === 0 && (
+                            <p className="text-muted-foreground py-4 text-center text-sm">
+                                There is no customer with that name or document.
+                            </p>
+                        )}
+
+                        {customerResults.map((result) => (
+                            <div key={result.id} className="flex items-center justify-between gap-3 border-b py-2 last:border-0">
+                                <div>
+                                    <span className="font-medium">{result.name}</span>
+                                    {result.tax_id && <span className="text-muted-foreground ml-2 text-sm">{result.tax_id}</span>}
+                                    <span className="text-muted-foreground block text-sm">
+                                        Due: {formatAmount(result.due, currency)}
+                                    </span>
+                                </div>
+
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => {
+                                        setCustomer(result);
+                                        setCustomerOpen(false);
+                                    }}
+                                >
+                                    Choose
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* THE SUMMARY: what was sold, and the way out. */}
             <Dialog open={sale !== null} onOpenChange={(open) => !open && closeSummary()}>
