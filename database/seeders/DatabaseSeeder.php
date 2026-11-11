@@ -28,10 +28,13 @@ class DatabaseSeeder extends Seeder
      *  4. `DemoStoreSeeder`: la tienda de demostracion, con su configuracion y
      *     su cuenta de caja. Las SERIES son por tienda, asi que la tienda tiene
      *     que existir antes de sembrarlas.
-     *  5. `FiscalProfileSeeder`: el perfil fiscal de cada pais, con sus tipos
+     *  5. `PaymentMethodSeeder`: el medio de pago de CREDITO y su vinculo por
+     *     tienda. El vinculo es por tienda, asi que la tienda tiene que existir
+     *     antes.
+     *  6. `FiscalProfileSeeder`: el perfil fiscal de cada pais, con sus tipos
      *     de documento, su vocabulario de estados, su catalogo de claves, sus
      *     categorias de IVA con sus tasas y sus dos series.
-     *  6. `OpeningBalancesSeeder`: el saldo de apertura de caja de la tienda,
+     *  7. `OpeningBalancesSeeder`: el saldo de apertura de caja de la tienda,
      *     SIN CERTIFICAR (la certificacion es un acto humano).
      *
      * Las CATEGORIAS DE IVA y las TASAS los siembra `FiscalProfileSeeder` y no
@@ -61,6 +64,7 @@ class DatabaseSeeder extends Seeder
             LegacyTranslationMapSeeder::class,
             TaxonomySeeder::class,
             DemoStoreSeeder::class,
+            PaymentMethodSeeder::class,
             FiscalProfileSeeder::class,
             OpeningBalancesSeeder::class,
         ]);

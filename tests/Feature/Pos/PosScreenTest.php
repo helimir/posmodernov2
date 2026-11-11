@@ -77,6 +77,9 @@ test('test_la_pantalla_de_la_caja_entrega_el_contrato_de_sus_props_con_la_moneda
             ->has('payment_methods', 1)
             ->where('payment_methods.0.id', $escenario['payment_method_id'])
             ->where('payment_methods.0.code', 'HUMO-EFECTIVO')
+            // El TIPO del medio de pago: la caja necesita saber cual es el de
+            // CREDITO para poder cobrar a credito.
+            ->where('payment_methods.0.type', 'cash')
             // La MONEDA: el codigo, el simbolo, donde va el simbolo, los
             // decimales y los dos separadores.
             ->where('currency.code', 'VES')
@@ -93,6 +96,34 @@ test('test_la_pantalla_de_la_caja_entrega_el_contrato_de_sus_props_con_la_moneda
     $respuesta->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
         ->where('business_date', $fecha)
         ->etc());
+});
+
+/**
+ * La pantalla de la caja trae el TIPO de cada medio de pago: el que es de
+ * tipo `credit` es DEUDA, no cobro, y la caja lo necesita para cobrar a
+ * credito.
+ */
+test('test_la_pantalla_de_la_caja_trae_el_tipo_de_cada_medio_de_pago', function () {
+    $escenario = PosFixture::escenario();
+    $credito = PosFixture::medioDePagoDeCredito($escenario['store_id']);
+    $usuario = PosFixture::usuario($escenario['store_id']);
+
+    $this->actingAs($usuario)
+        ->get('/caja')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
+            ->component('pos/index')
+            ->has('payment_methods', 2)
+            ->where('payment_methods', function ($medios) use ($escenario, $credito): bool {
+                $efectivo = collect($medios)->firstWhere('id', $escenario['payment_method_id']);
+                $deCredito = collect($medios)->firstWhere('id', $credito);
+
+                return $efectivo !== null
+                    && $efectivo['type'] === 'cash'
+                    && $deCredito !== null
+                    && $deCredito['type'] === 'credit';
+            })
+            ->etc());
 });
 
 /**

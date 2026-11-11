@@ -18,6 +18,7 @@ use App\Domain\Tax\TaxCalculator;
 use App\Domain\Tax\TaxDocumentInput;
 use App\Domain\Tax\TaxLineInput;
 use App\Models\FiscalProfile;
+use App\Models\PaymentMethod;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Database\Seeders\DemoStoreSeeder;
@@ -648,7 +649,13 @@ class SmokeSaleCommand extends Command
             return $paymentId;
         }
 
-        $existente = $this->connection->table('payment_methods')->orderBy('id')->value('id');
+        $existente = $this->connection->table('payment_methods')
+            // Un metodo de tipo `credit` NO es un cobro: es deuda. La venta
+            // de humo es una venta de MOSTRADOR, y su pago tiene que ser de
+            // verdad un pago.
+            ->where('type', '!=', PaymentMethod::TYPE_CREDIT)
+            ->orderBy('id')
+            ->value('id');
 
         if ($existente !== null) {
             return (int) $existente;

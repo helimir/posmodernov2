@@ -7,6 +7,7 @@ use App\Models\ProductStore;
 use App\Models\User;
 use Database\Seeders\DemoStoreSeeder;
 use Database\Seeders\FiscalProfileSeeder;
+use Database\Seeders\PaymentMethodSeeder;
 use Database\Seeders\TaxonomySeeder;
 use Illuminate\Support\Facades\DB;
 
@@ -50,6 +51,12 @@ final class PosFixture
     private const CODIGO_CATEGORIA = 'gravable';
 
     /**
+     * El codigo de la categoria fiscal EXENTA: la que no grava, y la que
+     * permite una venta de importe redondo (100,0000) sin impuesto.
+     */
+    private const CODIGO_CATEGORIA_EXENTA = 'exento';
+
+    /**
      * Las unidades que trae el lote de demostracion.
      */
     private const UNIDADES_LOTE = '10.0000';
@@ -73,6 +80,7 @@ final class PosFixture
      *     document_series_id: int,
      *     control_series_id: int,
      *     tax_category_id: int,
+     *     exempt_tax_category_id: int,
      *     product_id: int,
      *     payment_method_id: int
      * }
@@ -94,6 +102,11 @@ final class PosFixture
             ->where('code', self::CODIGO_CATEGORIA)
             ->value('id');
 
+        $exemptCategoryId = (int) DB::table('tax_categories')
+            ->where('fiscal_profile_id', $profileId)
+            ->where('code', self::CODIGO_CATEGORIA_EXENTA)
+            ->value('id');
+
         $productId = self::producto($storeId, $categoryId);
         self::stock($storeId, $productId);
         $paymentMethodId = self::medioDePago($storeId);
@@ -112,6 +125,7 @@ final class PosFixture
                 ->where('series_role', 'control')
                 ->value('id'),
             'tax_category_id' => $categoryId,
+            'exempt_tax_category_id' => $exemptCategoryId,
             'product_id' => $productId,
             'payment_method_id' => $paymentMethodId,
         ];
@@ -187,6 +201,65 @@ final class PosFixture
         ]);
 
         return (int) $servicio->id;
+    }
+
+    /**
+     * Un SERVICIO EXENTO: su categoria fiscal no grava, asi que dos unidades
+     * de 50,0000 son una venta de 100,0000 EXACTOS.
+     *
+     * El escenario de la caja necesita una venta redonda para comprobar que
+     * la parte a credito queda como deuda y la cobrada no.
+     */
+    public static function servicioExento(int $storeId, int $categoryId): int
+    {
+        $servicio = Product::create([
+            'code' => 'HUMO-CAJA-SERVICIO-EXENTO',
+            'name' => 'Servicio exento de la caja',
+            'tax_category_id' => $categoryId,
+            'type' => 'service',
+        ]);
+
+        ProductStore::create([
+            'product_id' => $servicio->id,
+            'store_id' => $storeId,
+            'purchase_price' => '0.0000',
+            'sell_price' => '50.0000',
+            'quantity_in_stock' => '0.0000',
+            'status' => 'active',
+        ]);
+
+        return (int) $servicio->id;
+    }
+
+    /**
+     * El MEDIO DE PAGO DE CREDITO de la tienda.
+     *
+     * Es el metodo cuyo TIPO es `credit`: un pago con el no es un cobro, es
+     * deuda. Lo siembra el mismo seeder que siembra la instalacion, y su
+     * vinculo por tienda se busca antes de escribirse (esa tabla no tiene
+     * restriccion unica).
+     */
+    public static function medioDePagoDeCredito(int $storeId): int
+    {
+        $medioId = PaymentMethodSeeder::medioDeCredito();
+
+        $vinculo = DB::table('payment_method_stores')
+            ->where('payment_method_id', $medioId)
+            ->where('store_id', $storeId)
+            ->value('id');
+
+        if ($vinculo === null) {
+            DB::table('payment_method_stores')->insert([
+                'payment_method_id' => $medioId,
+                'store_id' => $storeId,
+                'status' => 'active',
+                'sort_order' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $medioId;
     }
 
     /**

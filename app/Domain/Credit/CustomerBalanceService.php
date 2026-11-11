@@ -22,6 +22,13 @@ use RuntimeException;
  * NEGATIVO es lo que ha pagado o devuelto. El `type` (`sale`, `payment`,
  * `return`, `adjustment`) dice QUE paso, no en que sentido.
  *
+ * EL LIBRO DEL CLIENTE ES UN MINI-LIBRO: la VENTA SUMA y el COBRO RESTA.
+ * Por eso una venta genera un movimiento de tipo `sale` con el importe
+ * POSITIVO (el TOTAL de lo que el cliente debe) y un cobro genera uno de
+ * tipo `payment` con el importe NEGATIVO (lo que el cliente paga). Un cliente
+ * que compra por 100 y paga 100 en efectivo queda en CERO: ni deudor ni
+ * acreedor.
+ *
  * `customer_stores.balance` y `customer_stores.due` son un CACHE con
  * invariante, como `product_stores.quantity_in_stock` con los lotes: se
  * actualizan DESPUES de cada movimiento, en la MISMA transaccion, a partir
@@ -59,11 +66,94 @@ final readonly class CustomerBalanceService
      */
     public function due(int $customerId, int $storeId): string
     {
-        $balance = BigDecimal::of($this->balance($customerId, $storeId));
+        return $this->deudaDe($this->balance($customerId, $storeId));
+    }
 
-        return $balance->isNegative()
-            ? (string) BigDecimal::zero()->toScale(self::SCALE, RoundingMode::HALF_UP)
-            : (string) $balance;
+    /**
+     * Los saldos DERIVADOS de VARIOS clientes de una tienda, de una sola vez.
+     *
+     * La lista de clientes y el selector de la caja muestran el saldo de
+     * cada uno, y derivarlos uno a uno es un N+1: una consulta por cliente
+     * en cada pagina. Aqui sale de UNA consulta agrupada.
+     *
+     * @param  list<int>  $customerIds
+     * @return array<int, array{balance: string, due: string}> Cliente => saldo y deuda.
+     */
+    public function balances(int $storeId, array $customerIds): array
+    {
+        $saldos = [];
+
+        foreach ($customerIds as $customerId) {
+            $saldos[$customerId] = ['balance' => '0.0000', 'due' => '0.0000'];
+        }
+
+        if ($saldos === []) {
+            return $saldos;
+        }
+
+        $rows = $this->connection->table('customer_ledger_entries')
+            ->selectRaw('customer_id, SUM(amount) as balance')
+            ->where('store_id', $storeId)
+            ->whereIn('customer_id', array_keys($saldos))
+            ->groupBy('customer_id')
+            ->get();
+
+        foreach ($rows as $row) {
+            $saldo = $this->decimal($row->balance ?? '0');
+
+            $saldos[(int) $row->customer_id] = [
+                'balance' => $saldo,
+                'due' => $this->deudaDe($saldo),
+            ];
+        }
+
+        return $saldos;
+    }
+
+    /**
+     * Registra una VENTA del cliente y devuelve el id del movimiento.
+     *
+     * REGLAS que fija este metodo:
+     *
+     *  1. Una venta AUMENTA lo que el cliente debe: su importe es SIEMPRE
+     *     POSITIVO. El signo del llamante no decide el signo del movimiento:
+     *     una venta no es un reintegro, y un reintegro se registra con su
+     *     propio tipo.
+     *  2. El importe es el TOTAL de la venta, no solo la parte que el
+     *     cliente no pago: el libro del cliente es un MINI-LIBRO, y la venta
+     *     es un hecho entero. Lo que el cliente paga se registra aparte,
+     *     como cobro, y lo que queda a credito se queda como deuda.
+     *  3. El `balance_after` es el saldo DERIVADO tras el movimiento, y el
+     *     cache se refresca en la MISMA transaccion del movimiento.
+     *
+     * @param  string  $amount  El total de la venta, como texto decimal.
+     * @param  string  $referenceNo  El comprobante de la venta.
+     * @param  DateTimeImmutable  $entryDate  La fecha del movimiento.
+     * @param  int|null  $saleId  La venta a la que se imputa el movimiento.
+     *
+     * @throws RuntimeException Cuando el cliente no tiene ficha en la tienda.
+     */
+    public function registerSale(
+        int $customerId,
+        int $storeId,
+        string $amount,
+        string $referenceNo,
+        DateTimeImmutable $entryDate,
+        ?int $saleId = null,
+    ): int {
+        $importe = BigDecimal::of($this->decimal($amount))
+            ->abs()
+            ->toScale(self::SCALE, RoundingMode::HALF_UP);
+
+        return $this->registraMovimiento(
+            customerId: $customerId,
+            storeId: $storeId,
+            type: 'sale',
+            amount: (string) $importe,
+            referenceNo: $referenceNo,
+            entryDate: $entryDate,
+            saleId: $saleId,
+        );
     }
 
     /**
@@ -100,46 +190,15 @@ final readonly class CustomerBalanceService
             ->multipliedBy('-1')
             ->toScale(self::SCALE, RoundingMode::HALF_UP);
 
-        return $this->connection->transaction(function () use (
-            $customerId,
-            $storeId,
-            $importe,
-            $referenceNo,
-            $entryDate,
-            $saleId
-        ): int {
-            // El credito del cliente vive en su ficha de tienda: sin ella no
-            // hay donde dejar el cache del saldo.
-            $this->assertFicha($customerId, $storeId);
-
-            $entryId = (int) $this->connection->table('customer_ledger_entries')->insertGetId([
-                'customer_id' => $customerId,
-                'store_id' => $storeId,
-                'type' => 'payment',
-                'reference_no' => $referenceNo,
-                'ref_invoice_id' => $saleId,
-                'amount' => (string) $importe,
-                'entry_date' => $entryDate->format('Y-m-d'),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            // El `balance_after` es el saldo DERIVADO tras el movimiento: se
-            // recalcula DESDE los movimientos, con este ya dentro.
-            $saldo = $this->balance($customerId, $storeId);
-
-            $this->connection->table('customer_ledger_entries')
-                ->where('id', $entryId)
-                ->update([
-                    'balance_after' => $saldo,
-                    'updated_at' => now(),
-                ]);
-
-            // El cache se actualiza en la MISMA transaccion del movimiento.
-            $this->refreshCache($customerId, $storeId);
-
-            return $entryId;
-        });
+        return $this->registraMovimiento(
+            customerId: $customerId,
+            storeId: $storeId,
+            type: 'payment',
+            amount: (string) $importe,
+            referenceNo: $referenceNo,
+            entryDate: $entryDate,
+            saleId: $saleId,
+        );
     }
 
     /**
@@ -166,6 +225,69 @@ final readonly class CustomerBalanceService
     }
 
     /**
+     * REGISTRA un movimiento en el libro del cliente.
+     *
+     * La parte COMUN de `registerSale()` y `registerPayment()`: escribir el
+     * movimiento, recalcular su `balance_after` desde los movimientos y
+     * refrescar el cache, todo en la MISMA transaccion. Vive aqui y no
+     * duplicada en los dos metodos publicos porque el codigo que se duplica
+     * DIVERGE: dos copias del cache y del `balance_after` son dos verdades.
+     *
+     * @throws RuntimeException Cuando el cliente no tiene ficha en la tienda.
+     */
+    private function registraMovimiento(
+        int $customerId,
+        int $storeId,
+        string $type,
+        string $amount,
+        string $referenceNo,
+        DateTimeImmutable $entryDate,
+        ?int $saleId
+    ): int {
+        return $this->connection->transaction(function () use (
+            $customerId,
+            $storeId,
+            $type,
+            $amount,
+            $referenceNo,
+            $entryDate,
+            $saleId
+        ): int {
+            // El credito del cliente vive en su ficha de tienda: sin ella no
+            // hay donde dejar el cache del saldo.
+            $this->assertFicha($customerId, $storeId);
+
+            $entryId = (int) $this->connection->table('customer_ledger_entries')->insertGetId([
+                'customer_id' => $customerId,
+                'store_id' => $storeId,
+                'type' => $type,
+                'reference_no' => $referenceNo,
+                'ref_invoice_id' => $saleId,
+                'amount' => $amount,
+                'entry_date' => $entryDate->format('Y-m-d'),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // El `balance_after` es el saldo DERIVADO tras el movimiento: se
+            // recalcula DESDE los movimientos, con este ya dentro.
+            $saldo = $this->balance($customerId, $storeId);
+
+            $this->connection->table('customer_ledger_entries')
+                ->where('id', $entryId)
+                ->update([
+                    'balance_after' => $saldo,
+                    'updated_at' => now(),
+                ]);
+
+            // El cache se actualiza en la MISMA transaccion del movimiento.
+            $this->refreshCache($customerId, $storeId);
+
+            return $entryId;
+        });
+    }
+
+    /**
      * Refresca el cache desde el saldo derivado.
      */
     private function refreshCache(int $customerId, int $storeId): void
@@ -178,6 +300,21 @@ final readonly class CustomerBalanceService
                 'due' => $this->due($customerId, $storeId),
                 'updated_at' => now(),
             ]);
+    }
+
+    /**
+     * La DEUDA que corresponde a un saldo: el max(0, saldo).
+     *
+     * Un saldo NEGATIVO es credito a favor del cliente: no se debe nada, y la
+     * deuda es cero, no un numero negativo.
+     */
+    private function deudaDe(string $saldo): string
+    {
+        $balance = BigDecimal::of($saldo);
+
+        return $balance->isNegative()
+            ? (string) BigDecimal::zero()->toScale(self::SCALE, RoundingMode::HALF_UP)
+            : (string) $balance;
     }
 
     /**

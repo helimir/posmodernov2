@@ -10,9 +10,18 @@ class PaymentMethod extends Model
 {
     use HasFactory;
 
+    /**
+     * El TIPO del medio de pago de CREDITO.
+     *
+     * Un pago con un metodo de este tipo NO es un cobro: es DEUDA del
+     * cliente, y por eso no genera movimiento de pago en su libro.
+     */
+    public const TYPE_CREDIT = 'credit';
+
     protected $fillable = [
         'code',
         'name',
+        'type',
         'country_rules',
     ];
 
@@ -20,6 +29,7 @@ class PaymentMethod extends Model
     {
         return [
             'country_rules' => 'array',
+            'type' => 'string',
         ];
     }
 
