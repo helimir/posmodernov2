@@ -124,6 +124,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 46 | `feat/fase1-03-catalogo` | 1.3 | el catalogo: productos, precios por tienda, la categoria fiscal que manda y el stock que no se edita | **2876** | PR #96 - issue #95 | **fusionado** `e70433c` |
 | 47 | `feat/fase1-04-credito-backend` | 1.4 | el libro del cliente, la ficha con su extracto, los cobros y el cobro a credito en la caja | **4670** | PR #98 - issue #97 | **fusionado** `5746e96` |
 | 48 | `feat/fase1-05-caja-dia` | 1.5 | la caja del dia (apertura, cierre y arqueo), el reporte de stock bajo y el reparto contable entre efectivo y clientes | **3962** | PR #100 - issue #99 | **fusionado** `3652467` |
+| 49 | `feat/fase1-06-reglas-cobro` | 1.6 | las cuatro reglas del cobro: el estado sobre lo aplicado, el cobro completo sin cliente, el limite que bloquea y el desglose de la caja | **1212** | PR #102 - issue #101 | **fusionado** `c6fef85` |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
@@ -539,6 +540,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
 - [x] **1.3** El catalogo: productos, precios por tienda, categorias e impuestos. Dep: 1.2. El **precio vive en `product_stores`**, no en `products`; la **categoria fiscal se guarda donde manda** (el override de tienda si existe); el **stock no se edita a mano** (es un cache derivado de los lotes, y su lugar es el stock).
 - [x] **1.4** Clientes y credito: alta, saldo derivado, cobros y deuda. Dep: 1.2. El libro del cliente es un **mini-libro**: la **venta suma** (movimiento `sale` por el total, positivo) y el **cobro resta** (movimiento `payment` por lo aplicado, negativo); un pago de tipo `credit` **no** registra movimiento. El saldo **es** la deuda.
 - [x] **1.5** La caja del dia: apertura y cierre por fecha de negocio, y los reportes basicos. Dep: 0.7.5. El **saldo en curso es DERIVADO** de los asientos de esa fecha de negocio; el saldo de partida y el contado son **DATOS** (contar una caja es un hecho fisico). El **descuadre** = `contado - esperado`, con su signo. **El cobro exige la caja ABIERTA** (antes se vendia sin caja: un agujero de negocio). Y el asiento de la venta **reparte el total entre efectivo y clientes**: con cliente, el efectivo **si llega a la cuenta de la caja**.
+- [x] **1.6** Las reglas del cobro (decisiones del mantenedor del 2026-11-11). Dep: 1.1, 1.4, 1.5. (a) El **estado se calcula sobre lo APLICADO** y un pago de credito **no es dinero cobrado**: el sobrepago queda `paid` y la venta a credito queda `confirmed`, sin anadir valores al enum `sales.status` (compartido con el fiscal). (b) **Sin cliente, la venta se cobra completa**: si los pagos no cubren el total, 422. (c) El **limite de credito BLOQUEA**, pero solo lo que **aumenta** la deuda. (d) El **desglose por medio de pago** de la caja suma lo aplicado. La verdad es la columna **`sale_payments.applied`**.
 
 ### La leccion de la Fase 0, que la Fase 1 hereda
 

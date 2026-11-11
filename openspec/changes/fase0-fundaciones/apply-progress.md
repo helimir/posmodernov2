@@ -1390,6 +1390,25 @@ La venta ahora **reparte el total** entre la cuenta de efectivo (lo cobrado) y l
 2. **Una venta a credito queda con `sales.status = 'paid'`**: el `SalePaymentStatus` solo compara importes. El enum es **compartido con el fiscal**.
 3. **El sobrepago** sigue sin resolverse de dominio.
 
+### Las reglas del cobro (1.6) — las cuatro decisiones del mantenedor
+
+El 2026-11-11 el mantenedor cerro **cuatro decisiones de dominio**, y las cuatro se implementaron en una unidad (PR #102).
+
+**La verdad es UNA COLUMNA: `sale_payments.applied`** es lo que el pago **cubre** de la venta. `amount` sigue siendo lo que dio el cliente, y `details` guarda el efectivo recibido y el cambio para el cajero. Los cuatro consumidores (el estado, el desglose de la caja, el libro del cliente y el asiento) leen la misma verdad. Las filas viejas no la tienen: el fallback es su bruto, resuelto en SQL con `COALESCE(applied, amount)`.
+
+1. **El estado se calcula sobre lo APLICADO**, y un pago de tipo `credit` **no es dinero cobrado**: `paid` si el total esta cubierto por pagos que no son de credito. **El sobrepago queda `paid`** (es el caso NORMAL: un billete de 100 por una compra de 58) y **la venta a credito queda `confirmed`** (nadie cobro un peso). Antes se comparaban los importes BRUTOS con coincidencia EXACTA, asi que las dos cosas estaban al reves. **No se anadio ningun valor al enum `sales.status`**, que es compartido con el emisor fiscal.
+2. **Sin cliente, la venta se cobra COMPLETA**: si los pagos no cubren el total, 422 y no queda venta. Con cliente, la parte no cubierta es deuda y se registra.
+3. **El limite de credito BLOQUEA**, pero **solo lo que AUMENTA la deuda**: una venta pagada en efectivo nunca se bloquea, aunque el cliente ya este por encima de su limite (pagarle le BAJA la deuda).
+4. **El desglose por medio de pago de la caja suma lo APLICADO**: antes, con un sobrepago, decia 100 mientras el esperado decia 58, **en la misma pantalla**.
+
+**Verificado por HTTP real**: sobrepago -> `paid` y cambio 71 · parcial sin cliente -> 422 *"faltan 14.0000"* · parcial con cliente -> `confirmed` · a credito -> `confirmed` · sobre el limite -> 422 *"El cliente debe 72.0000 y su limite es 10.0000..."* · **en efectivo estando sobre el limite -> 201, no bloqueado** · el desglose y el saldo en curso coinciden.
+
+**Un test afirmaba el defecto**: el test del sobrepago fijaba `confirmed` como esperado. Se reescribio: el nombre ahora dice la regla.
+
+### Deuda que queda
+
+- **El detalle de venta** enseña el `amount` bruto del pago (100) y no el `applied` (58): en un sobrepago, la ficha muestra 100 en una venta de 58. Es informacion incompleta, no una mala interpretacion, y es un cambio de UI fuera de la unidad. **Senalado.**
+
 ### Siguiente
 
-**Fase 1 COMPLETA** (1.1 a 1.5). Lo que sigue es la **Fase 2**, y las tres decisiones de arriba.
+**Fase 1 COMPLETA** (1.1 a 1.6). Lo que sigue es la **Fase 2**: el T2 fiscal conectado al checkout, el comprobante (que no tiene ni controller ni vista) y el plan de cuentas por tienda.
