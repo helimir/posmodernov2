@@ -8,6 +8,7 @@ use App\Domain\Checkout\CheckoutPaymentInput;
 use App\Domain\Checkout\CheckoutResult;
 use App\Domain\Checkout\CheckoutService;
 use App\Domain\Credit\CustomerBalanceService;
+use App\Models\PaymentMethod;
 use App\Models\Store;
 use App\Support\Pos\PosAmount;
 use App\Support\Pos\PosBudget;
@@ -16,6 +17,7 @@ use App\Support\Pos\PosContext;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Database\Connection;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -84,7 +86,9 @@ class PosController extends Controller
      *  - `catalog`: lista de
      *    `{ id, code, name, type, sell_price, quantity_in_stock, unit_name }`.
      *    Los importes son TEXTO decimal.
-     *  - `payment_methods`: lista de `{ id, code, name }`.
+     *  - `payment_methods`: lista de `{ id, code, name, type }`. El TIPO
+     *    (`cash`, `card`, `transfer`, `credit`) es lo que dice si un pago es
+     *    un COBRO o es DEUDA, y la caja lo necesita para cobrar a credito.
      *  - `document_series_id`: `int|null`.
      *  - `control_series_id`: `int|null`.
      *  - `business_date`: `'Y-m-d'`.
@@ -272,6 +276,20 @@ class PosController extends Controller
         $customerId = isset($datos['customer_id']) ? (int) $datos['customer_id'] : null;
         $actorId = $request->user()?->id;
 
+        // UN PAGO A CREDITO SIN CLIENTE ES UN ERROR.
+        //
+        // REGLA que fija este metodo: *cobrar a credito sin cliente no se
+        // cobra*. Un pago de tipo `credit` es DEUDA, y una deuda sin destino
+        // no se registra: el movimiento del libro necesita un cliente al que
+        // imputarse. Y la pantalla NO lo bloquea en el navegador: lo manda al
+        // servidor y el servidor lo dice, porque el navegador no es la
+        // verdad de que un medio de pago sea de credito.
+        $fallo = $this->creditoSinCliente($pagos, $customerId);
+
+        if ($fallo !== null) {
+            return response()->json(['errorMsg' => $fallo], 422);
+        }
+
         try {
             $resultado = $this->connection->transaction(function () use (
                 $context,
@@ -339,6 +357,14 @@ class PosController extends Controller
             ->orderBy('id')
             ->get();
 
+        // Los TIPOS de los medios de pago, de UNA consulta: el tipo decide si
+        // un pago es un cobro o es deuda.
+        $tipos = $this->tiposDeMedioDePago(
+            $pagosEscritos->map(fn ($pago): ?int => $pago->payment_method_id === null
+                ? null
+                : (int) $pago->payment_method_id)->all()
+        );
+
         $restante = $total;
         $cambioTotal = BigDecimal::zero()->toScale(PosAmount::SCALE, RoundingMode::HALF_UP);
         $aplicados = [];
@@ -352,7 +378,11 @@ class PosController extends Controller
             $cambio = $recibido->minus($aplicado);
 
             $restante = $restante->minus($aplicado);
-            $aplicados[] = $aplicado;
+
+            $aplicados[] = [
+                'importe' => $aplicado,
+                'tipo' => $tipos[(int) $pago->payment_method_id] ?? null,
+            ];
 
             if (! $cambio->isZero()) {
                 $cambioTotal = $cambioTotal->plus($cambio);
@@ -373,21 +403,48 @@ class PosController extends Controller
                 ]);
         }
 
-        // La IMPUTACION del credito del cliente: un cobro reduce la deuda, y
-        // el importe es el APLICADO a la venta (el cambio se devolvio al
-        // cliente, no le reduce una deuda). El servicio se encarga de poner
-        // el importe en negativo: lo que el cliente DEBE es positivo, lo que
-        // paga es negativo.
+        // LA IMPUTACION DEL CREDITO DEL CLIENTE.
+        //
+        // EL LIBRO DEL CLIENTE ES UN MINI-LIBRO: LA VENTA SUMA y el COBRO
+        // RESTA.
+        //
+        //  1. LA VENTA: un movimiento de tipo `sale` con el TOTAL de la
+        //     venta, POSITIVO, porque lo que el cliente DEBE. Es el total, no
+        //     solo la parte que no se pagó: la venta es un hecho entero.
+        //  2. LOS COBROS: un movimiento de tipo `payment` por cada pago que
+        //     NO sea de tipo `credit`, con lo APLICADO a la venta, NEGATIVO.
+        //     El importe es el APLICADO, no el recibido: el cambio se
+        //     devolvio al cliente y no le reduce una deuda.
+        //
+        // Un pago de tipo `credit` NO genera movimiento de pago: es deuda, no
+        // cobro, y su importe se queda como saldo a favor de la tienda.
+        //
+        // EL LIMITE DE CREDITO NO BLOQUEA LA VENTA: se muestra y se avisa en
+        // la ficha del cliente, pero bloquear es una decision de negocio que
+        // todavia no esta tomada, y tomarla aqui seria inventarla.
         if ($customerId !== null) {
+            $this->balances->registerSale(
+                customerId: $customerId,
+                storeId: (int) $store->id,
+                amount: (string) $total,
+                referenceNo: $resultado->documentNumber,
+                entryDate: $context->businessDate(),
+                saleId: $resultado->saleId,
+            );
+
             foreach ($aplicados as $aplicado) {
-                if ($aplicado->isZero() || $aplicado->isNegative()) {
+                if ($aplicado['importe']->isZero() || $aplicado['importe']->isNegative()) {
+                    continue;
+                }
+
+                if ($aplicado['tipo'] === PaymentMethod::TYPE_CREDIT) {
                     continue;
                 }
 
                 $this->balances->registerPayment(
                     customerId: $customerId,
                     storeId: (int) $store->id,
-                    amount: (string) $aplicado,
+                    amount: (string) $aplicado['importe'],
                     referenceNo: $resultado->documentNumber,
                     entryDate: $context->businessDate(),
                     saleId: $resultado->saleId,
@@ -406,9 +463,188 @@ class PosController extends Controller
     }
 
     /**
+     * El TIPO decide si un pago es un COBRO o es DEUDA, y una DEUDA sin
+     * CLIENTE no tiene destino: no se registra.
+     *
+     * @param  list<CheckoutPaymentInput>  $pagos
+     * @return string|null El mensaje del error, o `null` si el cobro es valido.
+     */
+    private function creditoSinCliente(array $pagos, ?int $customerId): ?string
+    {
+        if ($customerId !== null) {
+            return null;
+        }
+
+        $ids = [];
+
+        foreach ($pagos as $pago) {
+            $ids[] = $pago->paymentMethodId;
+        }
+
+        $tipos = $this->tiposDeMedioDePago($ids);
+
+        foreach ($pagos as $pago) {
+            if ($pago->paymentMethodId === null) {
+                continue;
+            }
+
+            if (($tipos[(int) $pago->paymentMethodId] ?? null) === PaymentMethod::TYPE_CREDIT) {
+                return 'Un pago a credito necesita un cliente: una deuda sin destino no se registra.';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Los TIPOS de los medios de pago de una venta, de UNA consulta.
+     *
+     * El TIPO decide si un pago es un COBRO o es DEUDA: uno de tipo `credit`
+     * no genera movimiento de pago en el libro del cliente. Es DATO de la
+     * fila (`payment_methods.type`), no un literal del codigo.
+     *
+     * @param  list<int|null>  $ids
+     * @return array<int, string> Medio de pago => su tipo.
+     */
+    private function tiposDeMedioDePago(array $ids): array
+    {
+        $unicos = [];
+
+        foreach ($ids as $id) {
+            if ($id !== null) {
+                $unicos[(int) $id] = (int) $id;
+            }
+        }
+
+        if ($unicos === []) {
+            return [];
+        }
+
+        $filas = $this->connection->table('payment_methods')
+            ->whereIn('id', array_values($unicos))
+            ->pluck('type', 'id');
+
+        $tipos = [];
+
+        foreach ($filas as $id => $tipo) {
+            $tipos[(int) $id] = (string) $tipo;
+        }
+
+        return $tipos;
+    }
+
+    /**
+     * El SELECTOR DE CLIENTES de la caja.
+     *
+     * Devuelve los clientes que tienen FICHA en la TIENDA ACTIVA: el credito
+     * de un cliente es por tienda, y un cliente que no esta en la tienda no
+     * se le vende. Los clientes INACTIVOS tampoco se ofrecen.
+     *
+     * La busqueda es la del catalogo: por NOMBRE como prefijo y por
+     * `tax_id` (el documento) exacto. Un termino de busqueda es DATO, no
+     * patron: escribir `50%` no devuelve medio catalogo, porque el comodin
+     * va escapado en el VALOR del parametro y la sentencia NO lleva `ESCAPE`
+     * explicito (el analizador de PDO cuenta los parametros de mas).
+     *
+     * Responde `{ customers }`: cada cliente con su nombre, su documento, su
+     * saldo DERIVADO y su deuda, como texto decimal.
+     */
+    public function clientes(Request $request): JsonResponse
+    {
+        try {
+            $store = $this->context($request)->store();
+        } catch (RuntimeException $fallo) {
+            return response()->json(['errorMsg' => $fallo->getMessage()], 422);
+        }
+
+        $storeId = (int) $store->id;
+
+        $query = $request->query('q');
+        $termino = is_string($query) ? trim($query) : '';
+
+        $consulta = $this->connection->table('customers')
+            ->join('customer_stores', function (JoinClause $join) use ($storeId): void {
+                $join->on('customer_stores.customer_id', '=', 'customers.id')
+                    ->where('customer_stores.store_id', '=', $storeId);
+            })
+            ->where('customers.is_active', true)
+            ->where('customer_stores.status', 'active');
+
+        if ($termino !== '') {
+            $consulta->where(function ($filtro) use ($termino): void {
+                $filtro->whereRaw('UPPER(customers.name) LIKE ?', [$this->patronPrefijo($termino)])
+                    ->orWhereRaw('UPPER(customers.tax_id) = ?', [mb_strtoupper($termino)]);
+            });
+        }
+
+        $filas = $consulta
+            ->orderBy('customers.name')
+            ->orderBy('customers.id')
+            ->limit(max(1, (int) config('pos.customer_page_size', 25)))
+            ->get(['customers.id as id', 'customers.name as name', 'customers.tax_id as tax_id']);
+
+        $ids = [];
+
+        foreach ($filas as $fila) {
+            $ids[] = (int) $fila->id;
+        }
+
+        $saldos = $this->balances->balances($storeId, $ids);
+
+        $clientes = [];
+
+        foreach ($filas as $fila) {
+            $saldo = $saldos[(int) $fila->id] ?? ['balance' => '0.0000', 'due' => '0.0000'];
+
+            $clientes[] = [
+                'id' => (int) $fila->id,
+                'name' => (string) $fila->name,
+                'tax_id' => $fila->tax_id === null ? null : (string) $fila->tax_id,
+                'balance' => $saldo['balance'],
+                'due' => $saldo['due'],
+            ];
+        }
+
+        return response()->json(['customers' => $clientes]);
+    }
+
+    /**
+     * El PATRON del `LIKE`: el termino en mayusculas y con los comodines
+     * escapados.
+     *
+     * REGLA que fija este metodo: *el escape es el de POR DEFECTO de
+     * PostgreSQL, la barra invertida, y no un `ESCAPE` explicito*.
+     *
+     * El motivo es TECNICO y verificado: el analizador de PDO cuenta los
+     * parametros de la sentencia, y `ESCAPE '\'` le engaña (la barra
+     * invertida parece escapar el cierre de la cadena). Una sentencia con
+     * DOS `LIKE ... ESCAPE '\'` se prepara con menos parametros de los que
+     * lleva y el error es "Invalid parameter number". Con el escape por
+     * defecto, la barra invertida viaja en el VALOR del parametro y no en el
+     * texto de la sentencia, y el patron se comporta igual.
+     *
+     * Un termino de busqueda es DATO del usuario, no un patron: sin escapar,
+     * escribir `50%` devolveria medio catalogo.
+     */
+    private function patronPrefijo(string $termino): string
+    {
+        $escaped = str_replace(
+            ['\\', '%', '_'],
+            ['\\\\', '\\%', '\\_'],
+            mb_strtoupper($termino)
+        );
+
+        return $escaped.'%';
+    }
+
+    /**
      * Los MEDIOS DE PAGO de la tienda: los que su ficha declara activos.
      *
-     * @return list<array{id: int, code: string, name: string}>
+     * Cada uno lleva su TIPO (`cash`, `card`, `transfer`, `credit`), porque
+     * el TIPO es lo que decide si un pago es un COBRO o es DEUDA: la caja
+     * necesita saber cual es el de credito para poder cobrar a credito.
+     *
+     * @return list<array{id: int, code: string, name: string, type: string}>
      */
     private function paymentMethods(int $storeId): array
     {
@@ -422,6 +658,7 @@ class PosController extends Controller
                 'payment_methods.id as id',
                 'payment_methods.code as code',
                 'payment_methods.name as name',
+                'payment_methods.type as type',
             ]);
 
         $methods = [];
@@ -431,6 +668,9 @@ class PosController extends Controller
                 'id' => (int) $row->id,
                 'code' => (string) $row->code,
                 'name' => (string) $row->name,
+                // El tipo es DATO de la fila, y su DEFECTO es el efectivo: un
+                // medio de pago sin tipo declarado cobra en efectivo.
+                'type' => $row->type === null ? 'cash' : (string) $row->type,
             ];
         }
 

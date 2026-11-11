@@ -19,8 +19,10 @@ use Tests\Fixtures\PosFixture;
  *    venta;
  *  - la venta queda `paid` cuando el pago cubre el total EXACTAMENTE, y
  *    `confirmed` cuando no (un pago parcial o un sobrepago);
- *  - con un cliente, el cobro IMPUTA la deuda: un movimiento NEGATIVO en
- *    `customer_ledger_entries` y el saldo derivado baja;
+ *  - con un cliente, el cobro IMPUTA la VENTA y el COBRO en el libro del
+ *    cliente: un movimiento POSITIVO de tipo `sale` por el total y uno
+ *    NEGATIVO de tipo `payment` por lo cobrado, y el saldo derivado queda en
+ *    cero cuando el cliente paga todo;
  *  - un importe invalido NO se cobra: responde 422 y no queda ninguna venta.
  *
  * El escenario es el de DEMOSTRACION del repo (`PosFixture`): la tienda
@@ -301,10 +303,17 @@ test('test_el_sobrepago_deja_la_venta_confirmada_y_registra_el_cambio_en_el_pago
 });
 
 /**
- * Con un cliente, el cobro IMPUTA la deuda: un movimiento NEGATIVO y el
- * saldo derivado baja.
+ * Con un cliente, el cobro IMPUTA la VENTA y el COBRO en el libro del
+ * cliente: la venta SUMA (positivo) y el cobro RESTA (negativo), y el saldo
+ * derivado de un cliente que paga todo queda en CERO.
+ *
+ * ESTE TEST CAMBIO CON LA UNIDAD 1.4: antes afirmaba que el cobro dejaba UN
+ * solo movimiento NEGATIVO y un saldo de -58,0000. Eso era el DEFECTO: un
+ * cliente que compra por 58 y paga 58 quedaba con credito a favor. El libro
+ * del cliente es un mini-libro, y la venta es un hecho entero: se registra
+ * por el TOTAL.
  */
-test('test_el_cobro_con_cliente_imputa_la_deuda_y_el_saldo_derivado_baja', function () {
+test('test_el_cobro_con_cliente_registra_la_venta_y_el_cobro_y_el_saldo_derivado_queda_en_cero', function () {
     $escenario = PosFixture::escenario();
     $usuario = PosFixture::usuario($escenario['store_id']);
     $clienteId = CreditFixture::customer($escenario['store_id']);
@@ -314,26 +323,32 @@ test('test_el_cobro_con_cliente_imputa_la_deuda_y_el_saldo_derivado_baja', funct
 
     $respuesta->assertCreated();
 
-    // 1. El movimiento del credito: NEGATIVO, porque un cobro reduce la
-    //    deuda.
+    // 1. LOS DOS MOVIMIENTOS: la VENTA, POSITIVA por el total, y el COBRO,
+    //    NEGATIVO por lo cobrado. Los dos apuntan a la venta.
     $movimientos = DB::table('customer_ledger_entries')
         ->where('customer_id', $clienteId)
         ->where('store_id', $escenario['store_id'])
+        ->orderBy('id')
         ->get();
 
-    expect($movimientos)->toHaveCount(1)
-        ->and($movimientos->first()->type)->toBe('payment')
-        ->and((string) $movimientos->first()->amount)->toBe('-58.0000')
-        ->and((int) $movimientos->first()->ref_invoice_id)->toBe((int) $respuesta->json('sale_id'));
+    expect($movimientos)->toHaveCount(2)
+        ->and($movimientos[0]->type)->toBe('sale')
+        ->and((string) $movimientos[0]->amount)->toBe('58.0000')
+        ->and((int) $movimientos[0]->ref_invoice_id)->toBe((int) $respuesta->json('sale_id'))
+        ->and($movimientos[1]->type)->toBe('payment')
+        ->and((string) $movimientos[1]->amount)->toBe('-58.0000')
+        ->and((int) $movimientos[1]->ref_invoice_id)->toBe((int) $respuesta->json('sale_id'));
 
-    // 2. Y el saldo derivado BAJA: el cache de la ficha va detras.
+    // 2. Y el saldo derivado es CERO: el cliente pago justo lo que debia, y
+    //    el cache de la ficha va detras.
     expect((string) DB::table('customer_stores')
         ->where('customer_id', $clienteId)
         ->where('store_id', $escenario['store_id'])
-        ->value('balance'))->toBe('-58.0000')
+        ->value('balance'))->toBe('0.0000')
         ->and((string) DB::table('customer_ledger_entries')
             ->where('customer_id', $clienteId)
-            ->value('balance_after'))->toBe('-58.0000');
+            ->orderByDesc('id')
+            ->value('balance_after'))->toBe('0.0000');
 });
 
 /**
@@ -382,6 +397,49 @@ test('test_un_importe_invalido_responde_422_y_no_cobra', function () {
 
     // 4. Y nada de eso se cobro: no hay venta, ni linea, ni pago, ni cambio
     //    de stock, ni numero quemado.
+    expect(DB::table('sales')->count())->toBe(0)
+        ->and(DB::table('sale_items')->count())->toBe(0)
+        ->and(DB::table('sale_totals')->count())->toBe(0)
+        ->and(DB::table('sale_payments')->count())->toBe(0)
+        ->and(DB::table('fiscal_document_reservations')->count())->toBe(0)
+        ->and((string) DB::table('inventory_lots')->value('available'))->toBe('10.0000');
+});
+
+/**
+ * Un pago de tipo CREDITO sin CLIENTE no se cobra: responde 422 y no queda
+ * ninguna venta.
+ *
+ * REGLA que fija: *cobrar a credito SIN cliente es un error*. Un pago a
+ * credito es DEUDA, y una deuda sin destino no se registra: el movimiento
+ * necesita un cliente al que imputarse. Y la pantalla no lo bloquea en el
+ * navegador: lo manda al servidor y el servidor lo dice.
+ */
+test('test_un_pago_a_credito_sin_cliente_responde_422_y_no_cobra', function () {
+    $escenario = PosFixture::escenario();
+    $credito = PosFixture::medioDePagoDeCredito($escenario['store_id']);
+    $usuario = PosFixture::usuario($escenario['store_id']);
+
+    $this->actingAs($usuario)
+        ->postJson('/caja/cobrar', [
+            'lines' => [
+                [
+                    'product_id' => $escenario['product_id'],
+                    'quantity' => '2',
+                    'unit_price' => '25.0000',
+                ],
+            ],
+            'payments' => [
+                [
+                    'payment_method_id' => $credito,
+                    'amount' => '58.0000',
+                ],
+            ],
+        ])
+        ->assertStatus(422)
+        ->assertJsonStructure(['errorMsg']);
+
+    // Y nada de eso se cobro: no hay venta, ni linea, ni pago, ni cambio de
+    // stock, ni numero quemado.
     expect(DB::table('sales')->count())->toBe(0)
         ->and(DB::table('sale_items')->count())->toBe(0)
         ->and(DB::table('sale_totals')->count())->toBe(0)

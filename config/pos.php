@@ -57,4 +57,18 @@ return [
 
     'search_page_size' => 24,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Tamano de pagina de los clientes
+    |--------------------------------------------------------------------------
+    |
+    | Cuantos clientes trae cada pagina de la API de clientes, y cuantos
+    | ofrece el selector de la caja. Es un tope de lectura, no una paginacion
+    | de negocio: la ficha de un cliente es lo que se lee, y una lista que
+    | trae veinticinco clientes es la que entra en una pantalla.
+    |
+    */
+
+    'customer_page_size' => 25,
+
 ];
