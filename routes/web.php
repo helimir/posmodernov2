@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CashDayController;
 use App\Http\Controllers\CatalogController;
+use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\FiscalIssuanceController;
 use App\Http\Controllers\PosController;
@@ -126,6 +127,26 @@ Route::middleware(['auth'])->group(function () {
         // El SELECTOR DE CLIENTES de la caja: los clientes con ficha en la
         // tienda activa, con su saldo derivado.
         Route::get('caja/clientes', [PosController::class, 'clientes'])->name('api.caja.clientes');
+    });
+
+    // El PLAN DE CUENTAS de la tienda: el catalogo de cuentas con el rol que
+    // cada una cumple, y la edicion de ese rol.
+    //
+    // LA REGLA que separa las dos cosas: *las PAGINAS son Inertia y las
+    // ESCRITURAS son JSON*. La pantalla se pide con un GET y se dibuja en el
+    // navegador; la edicion del rol viaja por la API, con el mismo contrato
+    // de siempre (422 con `{"errorMsg": "..."}`).
+    //
+    // Y EL PLAN ES POR TIENDA: la pantalla enseña el plan de la tienda
+    // activa, y editarlo no toca el de las demas.
+    Route::get('contabilidad/cuentas', [ChartOfAccountsController::class, 'index'])->name('contabilidad.cuentas.index');
+
+    Route::prefix('api')->group(function () {
+        // El ROL de una cuenta en la tienda activa: se asigna o se quita. Un
+        // rol `null` quita el rol de la cuenta.
+        Route::put('contabilidad/cuentas/{account}/rol', [ChartOfAccountsController::class, 'updateRole'])
+            ->whereNumber('account')
+            ->name('api.contabilidad.cuentas.rol.update');
     });
 
     // El CATALOGO: el maestro de productos y su precio por tienda. El
