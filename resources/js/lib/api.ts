@@ -87,3 +87,13 @@ export function postJson<T>(url: string, payload: unknown): Promise<T> {
 export function putJson<T>(url: string, payload: unknown): Promise<T> {
     return request<T>(url, 'PUT', payload);
 }
+
+/**
+ * Una ESCRITURA: un DELETE que responde JSON.
+ *
+ * El cuerpo va vacio: un borrado no lleva datos, solo la cuenta que se
+ * borra en la propia URL.
+ */
+export function deleteJson<T>(url: string): Promise<T> {
+    return request<T>(url, 'DELETE');
+}

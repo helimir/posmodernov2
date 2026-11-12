@@ -147,6 +147,24 @@ Route::middleware(['auth'])->group(function () {
         Route::put('contabilidad/cuentas/{account}/rol', [ChartOfAccountsController::class, 'updateRole'])
             ->whereNumber('account')
             ->name('api.contabilidad.cuentas.rol.update');
+
+        // El CATALOGO de cuentas se mantiene desde la aplicacion: la cuenta
+        // entra (POST), se apaga (POST /desactivar), se enciende (POST
+        // /encender) y sale (DELETE) si nunca se ha usado.
+        //
+        // UNA CUENTA CON HISTORIA NO SE BORRA: se apaga. Y el rechazo dice
+        // QUE hacer, con el 422 de siempre (`{"errorMsg": "..."}`).
+        Route::post('contabilidad/cuentas', [ChartOfAccountsController::class, 'store'])
+            ->name('api.contabilidad.cuentas.store');
+        Route::post('contabilidad/cuentas/{account}/desactivar', [ChartOfAccountsController::class, 'deactivate'])
+            ->whereNumber('account')
+            ->name('api.contabilidad.cuentas.desactivar');
+        Route::post('contabilidad/cuentas/{account}/encender', [ChartOfAccountsController::class, 'activate'])
+            ->whereNumber('account')
+            ->name('api.contabilidad.cuentas.encender');
+        Route::delete('contabilidad/cuentas/{account}', [ChartOfAccountsController::class, 'destroy'])
+            ->whereNumber('account')
+            ->name('api.contabilidad.cuentas.destroy');
     });
 
     // El CATALOGO: el maestro de productos y su precio por tienda. El
