@@ -1464,16 +1464,30 @@ Ahora la instalacion trae **6 categorias de producto** (3 anidadas), **3 marcas*
 
 La **migracion M18** siembra los siete tipos de asiento y **tambien** hay un `LedgerEntryTypeSeeder` que los siembra con `upsert`. **No es una duplicacion accidental**: el `docblock` del seeder lo explica ("hay pruebas que se apoyan en el catalogo SIN sembrar: `RefreshDatabase` migra pero no siembra; el 0.7.1-T comprueba que el catalogo esta sembrado despues de migrar. El seeder es la lista AUTORITATIVA"). **No lo "arregles"**: quitar el insert de la migracion dejaria sin catálogo a las bases migradas sin sembrar.
 
+### El plan de cuentas por tienda (1.10)
+
+**Un plan de cuentas es un DATO del negocio, no configuracion del despliegue.** El negocio decide que cuenta es su caja y cual su cartera, esa decision cambia con el tiempo, y es **distinta en cada tienda**: en un fichero de configuracion no se puede cambiar sin desplegar, y no puede haber un plan por tienda. El propio `config/pos.php` lo admitia (*"no hay tabla de cuentas"*).
+
+Dos tablas: **`accounts`** es el **catalogo** (`code` UNIQUE, `name`, `type`) y **`store_accounts`** es el **plan de cada tienda**, con el **rol** en el **vinculo** (por eso dos tiendas pueden tener planes distintos sobre el mismo catalogo). UNIQUE `(store_id, role)` y UNIQUE `(store_id, account_id)`.
+
+**La invariante que se gana la tabla**: el **tipo** de la cuenta debe ser el que el rol exige (cash/receivable -> activo, tax_payable -> pasivo, revenue -> ingreso). Si a la cuenta de ingresos se le asigna el rol `cash`, el balance deja de cuadrar y **nadie se entera hasta que el reporte lo dice**. Se comprueba **al asignar**, y el mensaje nombra el rol, la cuenta y el tipo esperado.
+
+**Y sin fallback**: si a la tienda le falta un rol, el cobro falla con un mensaje que la nombra y dice los roles que si tiene. Un default taparia un plan incompleto **en silencio**, que es el mismo defecto que el saldo del cliente. `config/pos.php` pierde los codigos (-39 lineas) y un **meta-test** que lee el fichero blinda que no vuelvan.
+
+La **caja del dia** tambien hubo que tocarla: leia la cuenta de efectivo de la configuracion, y al leerla del plan ahora puede fallar, asi que responde **409** en vez de un 500.
+
+**Verificado sobre la base real**: el plan sembrado (12 cuentas, los 4 roles de la tienda) y el asiento de una venta usa `1100000 Efectivo y caja`, `4010000 Ventas` y `2110000 Impuesto por pagar`, las tres **en el catalogo**.
+
 ### Deuda que queda
 
-- El **plan de cuentas** en `config/pos.php` (deberia ser tabla por tienda).
+- El **catalogo de cuentas no se puede dar de alta desde la pantalla**: la pantalla edita el **rol** de cada cuenta del catalogo, pero no el catalogo mismo (alta y baja de cuentas). Es el siguiente trabajo natural.
 - `PosContext::resolveSeries()` lee `stores.country_id` como si fuera `fiscal_profile_id` (funciona por casualidad; degrada en multi-pais).
 - El **detalle de venta** sigue enseñando el `amount` bruto del pago (100) y no el `applied` (58).
 - El **QR no se dibuja como imagen** (no hay generador y no se admiten dependencias).
 - El **POS no distingue un RIF de una cedula** (el cliente tiene un unico `tax_id`).
-- `AGENTS.md` y `openspec/config.yaml` describen el ledger `sdd-attempt`, que **ya no existe** (CLI 4.0.0).
+- `AGENTS.md` y `openspec/config.yaml` describen el ledger `sdd-attempt`, que **ya no existe** (CLI 4.0.0). Y la seccion "Layout" del `AGENTS.md` esta **desfasada** (dice M01-M27 y no menciona tres sembradores que ya existian).
 - `income_sources`/`expense_categories` vacias; tokens del escaner duplicados; `releaseExpiredLeases()` sin consumidor; `DispatchPrintJob` con nombre engañoso; `print_agents` sin `instance_id`; `char_per_line` legacy no migrado.
 
 ### Siguiente
 
-Lo mas natural ahora: el **plan de cuentas por tienda** (hoy es configuracion, y es un dato del negocio), la unidad suelta de `resolveSeries()`, y el **detalle de venta** con el `applied`.
+El **alta y baja de cuentas** en el plan (para que el catalogo se pueda mantener desde la aplicacion), el **detalle de venta** con el `applied`, y la unidad suelta de `resolveSeries()`.
