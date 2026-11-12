@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Fiscal\SaleFiscalStatus;
 use App\Models\LedgerEntry;
+use App\Models\PrintTarget;
 use App\Models\Sale;
+use Illuminate\Database\Connection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,6 +21,8 @@ use Inertia\Response;
  *
  * Son de SOLO LECTURA: no escriben nada, no cambian el estado de una venta y
  * no tocan la numeracion. Ver una venta no puede cambiar lo que la venta es.
+ * El REINTENTO de la emision fiscal NO vive aqui: es una escritura, y tiene
+ * su propia ruta (`FiscalIssuanceController`).
  *
  * Los importes viajan como TEXTO decimal: las columnas son `numeric(25,4)` y
  * un `float` no es un dinero. La pagina los enseña tal y como estan, sin
@@ -32,6 +37,11 @@ class SalesController extends Controller
      * una pagina que trae cincuenta ventascabecera es la que se lee.
      */
     private const LIMITE = 50;
+
+    public function __construct(
+        private readonly SaleFiscalStatus $fiscal,
+        private readonly Connection $connection,
+    ) {}
 
     /**
      * La LISTA de ventas, la mas reciente primero.
@@ -49,8 +59,17 @@ class SalesController extends Controller
             ->orderByDesc('sale_date')
             ->orderByDesc('id')
             ->limit(self::LIMITE)
-            ->get()
-            ->map(fn (Sale $venta): array => [
+            ->get();
+
+        // El estado fiscal de TODAS las ventas, en las consultas que hacen
+        // falta: una pregunta por venta en una pagina de cincuenta ventas es
+        // cincuenta veces la pregunta que se podia hacer una vez.
+        $estados = $this->fiscal->forSales(
+            $ventas->map(fn (Sale $venta): int => (int) $venta->id)->all()
+        );
+
+        return Inertia::render('sales/index', [
+            'sales' => $ventas->map(fn (Sale $venta): array => [
                 'id' => (int) $venta->id,
                 'invoice_no' => $venta->invoice_no,
                 'sale_date' => $venta->sale_date?->format('Y-m-d'),
@@ -58,12 +77,8 @@ class SalesController extends Controller
                 'status' => (string) $venta->status,
                 'grand_total' => $venta->total?->grand_total,
                 'items_count' => (int) $venta->items_count,
-            ])
-            ->values()
-            ->all();
-
-        return Inertia::render('sales/index', [
-            'sales' => $ventas,
+                'fiscal' => $this->estadoFiscalPara($estados[(int) $venta->id] ?? null),
+            ])->values()->all(),
         ]);
     }
 
@@ -91,6 +106,8 @@ class SalesController extends Controller
             ->where('reference_id', $model->id)
             ->first();
 
+        $estados = $this->fiscal->forSales([(int) $model->id]);
+
         return Inertia::render('sales/show', [
             'sale' => [
                 'id' => (int) $model->id,
@@ -100,6 +117,8 @@ class SalesController extends Controller
                 'customer' => $model->customer?->name,
                 'store' => $model->store?->name,
                 'created_at' => $model->created_at?->format('Y-m-d H:i:s'),
+                'fiscal' => $this->estadoFiscalPara($estados[(int) $model->id] ?? null),
+                'print_targets' => $this->destinosDeImpresion((int) $model->store_id),
                 'lines' => $model->items->map(fn ($item): array => [
                     'id' => (int) $item->id,
                     'product_name' => (string) ($item->product?->name ?? ''),
@@ -140,5 +159,79 @@ class SalesController extends Controller
                 ],
             ],
         ]);
+    }
+
+    /**
+     * El ESTADO FISCAL de una venta, tal como lo ve la pantalla.
+     *
+     * El CONTRATO es el mismo que el de la respuesta del cobro (`fiscal`),
+     * mas lo que la pantalla necesita y el cobro no: el enlace al
+     * comprobante y si el reintento tiene sentido.
+     *
+     *  - `status`: `issued` (emitido), `failed` (fallido, con su motivo) o
+     *    `not_emitted` (no emitido).
+     *  - `document_id`: el comprobante, si lo hay.
+     *  - `control_number`: el numero de control, si se emitio.
+     *  - `message`: el motivo del fallo, si lo hubo.
+     *  - `receipt_url`: el enlace al comprobante, si se emitio.
+     *  - `can_retry`: si tiene sentido reintentar la emision.
+     *
+     * @param  array{status: string, document_id: int|null, control_number: string|null, message: string|null}|null  $estado
+     * @return array{status: string, document_id: int|null, control_number: string|null, message: string|null, receipt_url: string|null, can_retry: bool}
+     */
+    private function estadoFiscalPara(?array $estado): array
+    {
+        $estado ??= [
+            'status' => 'not_emitted',
+            'document_id' => null,
+            'control_number' => null,
+            'message' => null,
+        ];
+
+        $emitido = $estado['status'] === 'issued' && $estado['document_id'] !== null;
+
+        return [
+            'status' => (string) $estado['status'],
+            'document_id' => $estado['document_id'],
+            'control_number' => $estado['control_number'],
+            'message' => $estado['message'],
+            'receipt_url' => $emitido
+                ? route('comprobantes.show', ['documento' => $estado['document_id']], false)
+                : null,
+            // Solo un fallo se reintenta: una venta ya emitida no se vuelve a
+            // emitir, y una venta sin emitir todavia no tiene nada que
+            // reintentar.
+            'can_retry' => $estado['status'] === 'failed',
+        ];
+    }
+
+    /**
+     * Los DESTINOS de impresion de la tienda, los que escriben bytes.
+     *
+     * El transporte `browser` no se ofrece: no hay bytes que escribir, y el
+     * navegador es el destino.
+     *
+     * @return list<array{id: int, name: string, transport: string}>
+     */
+    private function destinosDeImpresion(int $storeId): array
+    {
+        $filas = $this->connection->table('print_targets')
+            ->where('store_id', $storeId)
+            ->where('is_active', true)
+            ->whereIn('transport', PrintTarget::TRANSPORTES_FISICOS)
+            ->orderBy('name')
+            ->get(['id', 'name', 'transport']);
+
+        $destinos = [];
+
+        foreach ($filas as $fila) {
+            $destinos[] = [
+                'id' => (int) $fila->id,
+                'name' => (string) $fila->name,
+                'transport' => (string) $fila->transport,
+            ];
+        }
+
+        return $destinos;
     }
 }

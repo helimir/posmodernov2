@@ -4,6 +4,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
+import { type FiscalStatus, fiscalLabel, fiscalVariant } from '@/lib/fiscal';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -20,6 +21,7 @@ interface SaleSummary {
     status: string;
     grand_total: string | null;
     items_count: number;
+    fiscal: FiscalStatus;
 }
 
 /**
@@ -68,6 +70,7 @@ export default function SalesIndex({ sales }: { sales: SaleSummary[] }) {
                                             <th className="px-2 py-2 text-left font-medium">Business date</th>
                                             <th className="px-2 py-2 text-left font-medium">Customer</th>
                                             <th className="px-2 py-2 text-left font-medium">Status</th>
+                                            <th className="px-2 py-2 text-left font-medium">Fiscal</th>
                                             <th className="px-2 py-2 text-right font-medium">Lines</th>
                                             <th className="px-2 py-2 text-right font-medium">Total</th>
                                         </tr>
@@ -88,6 +91,17 @@ export default function SalesIndex({ sales }: { sales: SaleSummary[] }) {
                                                 <td className="px-2 py-2">{sale.customer ?? 'Walk-in customer'}</td>
                                                 <td className="px-2 py-2">
                                                     <Badge variant={statusVariant(sale.status)}>{sale.status}</Badge>
+                                                </td>
+                                                <td className="px-2 py-2">
+                                                    <Badge variant={fiscalVariant(sale.fiscal.status)}>
+                                                        {fiscalLabel(sale.fiscal.status)}
+                                                    </Badge>
+
+                                                    {sale.fiscal.control_number && (
+                                                        <span className="text-muted-foreground block text-xs tabular-nums">
+                                                            {sale.fiscal.control_number}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-2 py-2 text-right tabular-nums">{sale.items_count}</td>
                                                 <td className="px-2 py-2 text-right tabular-nums">{sale.grand_total ?? '—'}</td>

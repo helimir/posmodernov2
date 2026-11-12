@@ -1,9 +1,22 @@
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
+import { postJson } from '@/lib/api';
+import { type FiscalStatus, fiscalLabel, fiscalVariant } from '@/lib/fiscal';
+import { useState } from 'react';
+
+/**
+ * A print target of the store: a printer that writes the bytes.
+ */
+interface PrintTarget {
+    id: number;
+    name: string;
+    transport: string;
+}
 
 interface SaleLine {
     id: number;
@@ -57,6 +70,8 @@ interface SaleDetail {
     customer: string | null;
     store: string | null;
     created_at: string | null;
+    fiscal: FiscalStatus;
+    print_targets: PrintTarget[];
     lines: SaleLine[];
     totals: SaleTotals | null;
     payments: SalePayment[];
@@ -93,6 +108,50 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 export default function SaleShow({ sale }: { sale: SaleDetail }) {
+    const [retrying, setRetrying] = useState(false);
+    const [printing, setPrinting] = useState(false);
+    const [fiscalError, setFiscalError] = useState<string | null>(null);
+
+    /**
+     * The RETRY of the fiscal issuance.
+     *
+     * It REUSES the reservation and does not burn numbers: a retry that
+     * fails leaves the sale alone, and the screen says why.
+     */
+    const retryIssuance = async () => {
+        setRetrying(true);
+        setFiscalError(null);
+
+        try {
+            await postJson(`/ventas/${sale.id}/emision`, {});
+
+            router.reload();
+        } catch (fallo) {
+            setFiscalError((fallo as Error).message);
+        } finally {
+            setRetrying(false);
+        }
+    };
+
+    /**
+     * The PRINT of the receipt: the ticket goes to the queue of the target,
+     * and the agent LAN writes the bytes.
+     */
+    const printReceipt = async (targetId: number) => {
+        setPrinting(true);
+        setFiscalError(null);
+
+        try {
+            await postJson(`/comprobantes/${sale.fiscal.document_id}/imprimir`, {
+                print_target_id: targetId,
+            });
+        } catch (fallo) {
+            setFiscalError((fallo as Error).message);
+        } finally {
+            setPrinting(false);
+        }
+    };
+
     const breadcrumbs: BreadcrumbItem[] = [
         {
             title: 'Sales',
@@ -124,6 +183,66 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                             <Field label="Store" value={sale.store ?? '—'} />
                             <Field label="Created at" value={sale.created_at ?? '—'} />
                         </dl>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Fiscal document</CardTitle>
+                    </CardHeader>
+
+                    <CardContent>
+                        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            <div>
+                                <dt className="text-muted-foreground text-xs">Fiscal status</dt>
+                                <dd className="text-sm">
+                                    <Badge variant={fiscalVariant(sale.fiscal.status)}>
+                                        {fiscalLabel(sale.fiscal.status)}
+                                    </Badge>
+                                </dd>
+                            </div>
+
+                            <Field label="Control number" value={sale.fiscal.control_number ?? '—'} />
+
+                            <Field
+                                label="Document"
+                                value={sale.fiscal.document_id !== null ? String(sale.fiscal.document_id) : '—'}
+                            />
+                        </dl>
+
+                        {sale.fiscal.message && (
+                            <p className="text-destructive mt-3 text-sm">{sale.fiscal.message}</p>
+                        )}
+
+                        {fiscalError && <p className="text-destructive mt-3 text-sm">{fiscalError}</p>}
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            {sale.fiscal.receipt_url && (
+                                <Button asChild variant="outline">
+                                    <a href={sale.fiscal.receipt_url} target="_blank" rel="noreferrer">
+                                        View receipt
+                                    </a>
+                                </Button>
+                            )}
+
+                            {sale.fiscal.can_retry && (
+                                <Button onClick={retryIssuance} disabled={retrying}>
+                                    {retrying ? 'Retrying…' : 'Retry issuance'}
+                                </Button>
+                            )}
+
+                            {sale.fiscal.receipt_url &&
+                                sale.print_targets.map((target) => (
+                                    <Button
+                                        key={target.id}
+                                        variant="outline"
+                                        onClick={() => printReceipt(target.id)}
+                                        disabled={printing}
+                                    >
+                                        {printing ? 'Queueing…' : `Print to ${target.name}`}
+                                    </Button>
+                                ))}
+                        </div>
                     </CardContent>
                 </Card>
 

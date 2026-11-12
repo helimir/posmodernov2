@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import PosLayout from '@/layouts/pos-layout';
 import { getJson, postJson } from '@/lib/api';
+import { type FiscalStatus, fiscalLabel, fiscalVariant } from '@/lib/fiscal';
 import {
     type PosCurrency,
     addAmount,
@@ -102,6 +103,10 @@ export interface PosBudget {
 
 /**
  * What the checkout answers once the sale is written.
+ *
+ * The `fiscal` field is the FISCAL STATUS of the sale: it says whether the
+ * fiscal document was issued, failed (with its reason) or was not issued at
+ * all. It is the contract of the 1.7 and it does not change.
  */
 export interface PosSale {
     sale_id: number;
@@ -110,6 +115,14 @@ export interface PosSale {
     grand_total: string;
     status: string;
     change: string;
+    fiscal: FiscalStatus;
+}
+
+/**
+ * The answer of the RETRY of the fiscal issuance.
+ */
+interface PosFiscalRetry {
+    fiscal: FiscalStatus;
 }
 
 /**
@@ -161,6 +174,8 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
     const [charging, setCharging] = useState(false);
     const [chargeError, setChargeError] = useState<string | null>(null);
     const [sale, setSale] = useState<PosSale | null>(null);
+    const [retryingFiscal, setRetryingFiscal] = useState(false);
+    const [fiscalError, setFiscalError] = useState<string | null>(null);
 
     // EL CLIENTE: el que compra a credito. Vive en la pantalla, no en el
     // servidor: el servidor solo recibe su id en el cobro.
@@ -511,11 +526,38 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
     }, [budget, cart.length, chargedAmount, customer, lines, paymentMethodId]);
 
     /**
+     * The RETRY of the fiscal issuance, right there in the till.
+     *
+     * The cashier sees the failure without leaving the till: the retry
+     * REUSES the reservation and does not burn numbers, and a retry that
+     * fails leaves the sale alone.
+     */
+    const retryFiscalIssuance = useCallback(async () => {
+        if (sale === null) {
+            return;
+        }
+
+        setRetryingFiscal(true);
+        setFiscalError(null);
+
+        try {
+            const resultado = await postJson<PosFiscalRetry>(`/ventas/${sale.sale_id}/emision`, {});
+
+            setSale({ ...sale, fiscal: resultado.fiscal });
+        } catch (error) {
+            setFiscalError((error as Error).message);
+        } finally {
+            setRetryingFiscal(false);
+        }
+    }, [sale]);
+
+    /**
      * Closes the summary and empties the cart: the next customer starts from
      * an empty till.
      */
     const closeSummary = useCallback(() => {
         setSale(null);
+        setFiscalError(null);
         clearCart();
     }, [clearCart]);
 
@@ -930,10 +972,38 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                             <dd>
                                 <Badge variant={sale.status === 'paid' ? 'default' : 'secondary'}>{sale.status}</Badge>
                             </dd>
+
+                            <dt className="text-muted-foreground">Fiscal status</dt>
+                            <dd>
+                                <Badge variant={fiscalVariant(sale.fiscal.status)}>
+                                    {fiscalLabel(sale.fiscal.status)}
+                                </Badge>
+
+                                {sale.fiscal.control_number && (
+                                    <span className="text-muted-foreground ml-2 text-xs tabular-nums">
+                                        {sale.fiscal.control_number}
+                                    </span>
+                                )}
+                            </dd>
+
+                            {sale.fiscal.message && (
+                                <>
+                                    <dt className="text-muted-foreground">Fiscal message</dt>
+                                    <dd className="text-destructive">{sale.fiscal.message}</dd>
+                                </>
+                            )}
                         </dl>
                     )}
 
+                    {fiscalError && <p className="text-destructive mt-2 text-sm">{fiscalError}</p>}
+
                     <DialogFooter>
+                        {sale !== null && sale.fiscal.status === 'failed' && (
+                            <Button variant="outline" onClick={retryFiscalIssuance} disabled={retryingFiscal}>
+                                {retryingFiscal ? 'Retrying…' : 'Retry issuance'}
+                            </Button>
+                        )}
+
                         <Button onClick={closeSummary}>Close and continue</Button>
                     </DialogFooter>
                 </DialogContent>

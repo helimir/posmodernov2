@@ -3,7 +3,9 @@
 use App\Http\Controllers\CashDayController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\FiscalIssuanceController;
 use App\Http\Controllers\PosController;
+use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StockReportController;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +25,32 @@ Route::middleware(['auth'])->group(function () {
     Route::get('ventas/{sale}', [SalesController::class, 'show'])
         ->whereNumber('sale')
         ->name('ventas.show');
+
+    // El REINTENTO de la emision fiscal de una venta.
+    //
+    // ES UNA ESCRITURA, y por eso no vive en el controlador de las ventas
+    // (que es de SOLO LECTURA). Responde 200 con `{ fiscal }`: el estado
+    // fiscal de la venta DESPUES del reintento.
+    //
+    // Y UN FALLO NO PIERDE LA VENTA: si el canal vuelve a fallar, la venta
+    // sigue existiendo y la respuesta dice por que.
+    Route::post('ventas/{sale}/emision', [FiscalIssuanceController::class, 'reintentar'])
+        ->whereNumber('sale')
+        ->name('ventas.emision.reintentar');
+
+    // El COMPROBANTE FISCAL: el HTML que se ve y se imprime.
+    //
+    // Es el TRANSPORTE `browser`: no hay bytes ESC/POS, hay HTML con el CSS
+    // de la impresora termica. El contenido es el MISMO que el del ticket.
+    //
+    // Y EL BORRADOR NO SE SIRVE: un documento en `draft` no es un
+    // comprobante.
+    Route::get('comprobantes/{documento}', [ReceiptController::class, 'show'])
+        ->whereNumber('documento')
+        ->name('comprobantes.show');
+    Route::post('comprobantes/{documento}/imprimir', [ReceiptController::class, 'imprimir'])
+        ->whereNumber('documento')
+        ->name('comprobantes.imprimir');
 
     // La CAJA: el punto de venta. La pantalla, la busqueda de productos, el
     // presupuesto y el cobro. El cobro POSTea: el numero de documento y el de
