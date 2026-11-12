@@ -35,6 +35,12 @@ use RuntimeException;
  * revierte T1 entera y el numero del documento TAMBIEN vuelve: el documento
  * y su control son un solo hecho, no dos.
  *
+ * Y EL CONTROL ES UNO POR VENTA: la reserva del control se ENLAZA a la
+ * venta, y el documento fiscal (T2) la REUTILIZA. El comprobante impreso y
+ * el comprobante fiscal llevan el MISMO numero de control, y la serie de
+ * control avanza UNA vez por venta: dos reservas serian dos numeros para una
+ * venta, y el rango autorizado se gastaria el doble de rapido.
+ *
  * El motor de impuestos se construye DENTRO, con el contexto que sale del
  * perfil de la serie del documento: su contexto depende de la tienda, asi
  * que no puede ser una dependencia fija del servicio.
@@ -120,18 +126,7 @@ final readonly class CheckoutService
             // El prefijo lo DECLARA la serie, no este codigo.
             $invoiceNo = $this->documentNumber($series->prefix, $documentNumber);
 
-            // 3. EL NUMERO DE CONTROL, DENTRO de la misma transaccion. Si su
-            //    rango esta agotado, la excepcion revierte T1 entera y el
-            //    numero del documento tambien vuelve.
-            $controlNumber = null;
-
-            if ($input->controlSeriesId !== null) {
-                $controlNumber = $this->controlNumberGenerator
-                    ->assign($input->controlSeriesId, $input->issuedAt)
-                    ->controlNumber;
-            }
-
-            // 4 y 5. LA CATEGORIA FISCAL Y LA TASA VIGENTE de cada linea. Una
+            // 3. LA CATEGORIA FISCAL Y LA TASA VIGENTE de cada linea. Una
             //    linea sin tratamiento fiscal NO se cobra en silencio: es un
             //    hueco de configuracion y falla.
             $taxLines = [];
@@ -163,7 +158,7 @@ final readonly class CheckoutService
                 );
             }
 
-            // 6. EL CALCULO. El motor es PURO: aqui no se escribe nada.
+            // 4. EL CALCULO. El motor es PURO: aqui no se escribe nada.
             $calculator = new TaxCalculator($context);
             $result = $calculator->calculate(new TaxDocumentInput(
                 $taxLines,
@@ -171,7 +166,7 @@ final readonly class CheckoutService
                 $input->issuedAt,
             ));
 
-            // 7. EL REPARTO DE LOS PAGOS: lo aplicado a la venta y el
+            // 5. EL REPARTO DE LOS PAGOS: lo aplicado a la venta y el
             //    cambio de cada pago.
             //
             //    Lo calcula el DOMINIO, UNA VEZ, y ANTES del asiento: el
@@ -185,7 +180,7 @@ final readonly class CheckoutService
             //    cambia quien la calcula y quien la consume.
             $reparto = $this->reparto($input->payments, $result->grandTotal);
 
-            // 7 bis. LAS REGLAS DEL COBRO. Se comprueban ANTES de escribir
+            // 5 bis. LAS REGLAS DEL COBRO. Se comprueban ANTES de escribir
             //        nada, y con el REPARTO en la mano: lo que se compara es
             //        lo que el pago APLICO, no lo que se recibio.
             $total = BigDecimal::of($result->grandTotal)->toScale(4, RoundingMode::HALF_UP);
@@ -223,7 +218,7 @@ final readonly class CheckoutService
                 );
             }
 
-            // 8. LA CABECERA. `fiscal_document_id` queda en `null`: lo cierra
+            // 6. LA CABECERA. `fiscal_document_id` queda en `null`: lo cierra
             //    T2, la emision fiscal.
             $saleId = (int) $this->connection->table('sales')->insertGetId([
                 'store_id' => $input->storeId,
@@ -236,21 +231,41 @@ final readonly class CheckoutService
                 'updated_at' => now(),
             ]);
 
-            // 8 bis. EL ENLACE de la reserva con la venta, DENTRO de la misma
-            //        transaccion: si el enlace falla, revierte T1 entera.
+            // 6 bis. EL NUMERO DE CONTROL, con la VENTA a la que pertenece.
+            //
+            // REGLA que fija este paso: *una venta tiene UN numero de
+            // control*. La reserva se hace AQUI, con la cabecera ya escrita,
+            // para poder ENLAZARLA a la venta: esa misma reserva es la que
+            // reutiliza el documento fiscal (T2), y asi el comprobante
+            // impreso y el documento fiscal llevan el MISMO numero. Antes,
+            // el control se reservaba sin enlace y el documento reservaba
+            // OTRO: la serie avanzaba dos veces por venta.
+            //
+            // La reserva sigue DENTRO de la misma transaccion que la del
+            // documento: si su rango esta agotado, la excepcion revierte T1
+            // entera y los dos numeros vuelven.
+            //
+            // Y SOLO se reserva si el PERFIL lo exige: un control que nadie
+            // pidio no se asigna, ni al comprobante ni al documento, y el
+            // rango autorizado no se gasta en numeros que nadie lleva.
+            $controlNumber = null;
+
+            if ($input->controlSeriesId !== null && $profile->requires_control_number) {
+                $controlNumber = $this->controlNumberGenerator
+                    ->assignForSale($input->controlSeriesId, $saleId, $input->issuedAt)
+                    ->controlNumber;
+            }
+
+            // 6 ter. EL ENLACE de la reserva del DOCUMENTO con la venta,
+            //        DENTRO de la misma transaccion: si el enlace falla,
+            //        revierte T1 entera.
             //
             //    Es lo que permite que el reintento de la emision (T2)
             //    ENCUENTRE la reserva que ya tiene, en vez de reservar un
             //    numero nuevo y quemarlo.
-            //
-            //    La reserva del numero de CONTROL NO se enlaza: T2 no la
-            //    necesita (la asignacion de control la crea el propio
-            //    proveedor) y el `ControlAssignment` solo expone el control
-            //    COMPUESTO (`00-00000001`), no el numero suelto: deducirlo
-            //    del texto seria frágil.
             $this->numberSeries->link($input->documentSeriesId, $documentNumber, 'sale', $saleId);
 
-            // 9. LOS ITEMS. El total y la base de la linea salen del motor,
+            // 7. LOS ITEMS. El total y la base de la linea salen del motor,
             //    linea a linea y en el MISMO orden.
             $items = [];
 
@@ -278,14 +293,14 @@ final readonly class CheckoutService
                 $items[] = [$line, $itemId];
             }
 
-            // 10. EL CONSUMO FIFO. El item ya existe, asi que la traza de
+            // 8. EL CONSUMO FIFO. El item ya existe, asi que la traza de
             //    lotes puede apuntar a el. Si no hay stock, la excepcion
             //    revierte T1 entera.
             foreach ($items as [$line, $itemId]) {
                 $this->lotConsumer->consume($line->productId, $input->storeId, $itemId, $line->quantity);
             }
 
-            // 11. LOS TOTALES.
+            // 9. LOS TOTALES.
             $this->connection->table('sale_totals')->insert([
                 'sale_id' => $saleId,
                 'sub_total' => $result->subtotal,
@@ -298,7 +313,7 @@ final readonly class CheckoutService
                 'updated_at' => now(),
             ]);
 
-            // 12. EL ASIENTO CONTABLE. El tipo sale del catalogo
+            // 10. EL ASIENTO CONTABLE. El tipo sale del catalogo
             //     (`ledger_entry_types`), no de un literal.
             $this->ledgerWriter->write(
                 entryType: 'sale',
@@ -312,7 +327,7 @@ final readonly class CheckoutService
                 description: 'Venta #'.$invoiceNo,
             );
 
-            // 13. LOS PAGOS. Cada uno guarda las DOS cifras: lo RECIBIDO (el
+            // 11. LOS PAGOS. Cada uno guarda las DOS cifras: lo RECIBIDO (el
             //     bruto, lo que entrego el cliente) y lo APLICADO (lo que
             //     cubre de la venta). Son el mismo numero cuando el cliente
             //     paga justo, y DIFIEREN cuando hay cambio.
@@ -328,7 +343,7 @@ final readonly class CheckoutService
                 ]);
             }
 
-            // 14. EL RETORNO.
+            // 12. EL RETORNO.
             return new CheckoutResult(
                 saleId: $saleId,
                 documentNumber: $invoiceNo,

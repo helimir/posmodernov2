@@ -39,5 +39,17 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <!-- The fiscal emission switch is OFF for the suite, whatever the
+             local `.env` says: a module stays off until its channel is
+             validated, and a developer's machine must not decide whether the
+             suite is green. The tests that need the switch ON declare it
+             explicitly (`config(['fiscal.emission_enabled' => true])`), and
+             the ones that need the HTTP path with it ON declare it in the
+             environment of the server they start.
+
+             The value is `(false)` and not `false` because PHPUnit turns the
+             literal `false` into an EMPTY string, and `env()` reads an
+             empty variable as an empty value, not as a boolean. -->
+        <env name="FISCAL_EMISSION_ENABLED" value="(false)"/>
     </php>
 </phpunit>

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Pos\PosContext;
 use Database\Seeders\DemoStoreSeeder;
 use Database\Seeders\FiscalProfileSeeder;
+use Database\Seeders\FiscalProviderSeeder;
 use Database\Seeders\PaymentMethodSeeder;
 use Database\Seeders\TaxonomySeeder;
 use Illuminate\Support\Facades\DB;
@@ -92,6 +93,10 @@ final class PosFixture
         (new TaxonomySeeder)->run();
         (new DemoStoreSeeder)->run();
         (new FiscalProfileSeeder)->run();
+        // El CANAL FISCAL: el proveedor local y su entorno. Sin ellos, el
+        // perfil no tiene por donde emitir, y la emision fiscal no se puede
+        // probar.
+        (new FiscalProviderSeeder)->run();
 
         $storeId = (int) DB::table('stores')->where('code_name', 'DEMO')->value('id');
 
