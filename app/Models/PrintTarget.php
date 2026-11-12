@@ -21,6 +21,15 @@ class PrintTarget extends Model
 {
     use HasFactory;
 
+    /**
+     * Los TRANSPORTES que escriben bytes en un destino FISICO.
+     *
+     * El transporte `browser` no esta: no tiene endpoint, porque el
+     * navegador ES el destino, y el servidor lo que hace es renderizar el
+     * HTML del mismo modelo de plantilla.
+     */
+    public const TRANSPORTES_FISICOS = ['lan_agent', 'server_socket'];
+
     protected $fillable = [
         'printer_id',
         'store_id',

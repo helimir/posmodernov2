@@ -29,6 +29,16 @@ use Throwable;
  */
 final class FiscalIssuanceRunner
 {
+    /**
+     * La accion de auditoria que deja el motivo de un fallo de emision.
+     */
+    private const ACCION_FALLO = 'fiscal_issuance_failed';
+
+    /**
+     * El tipo de la entidad a la que se atribuye el fallo.
+     */
+    private const ENTIDAD_VENTA = 'sale';
+
     public function __construct(
         private readonly Connection $connection,
         private readonly Container $container,
@@ -59,6 +69,13 @@ final class FiscalIssuanceRunner
             // 3. El fallo NO borra la venta: la deja en `fiscal_failed` para
             //    que el reintento la encuentre, y devuelve el motivo.
             $this->marcaFallida($saleId);
+
+            // 3.b El MOTIVO se AUDITA. La emision que falla pasa en una
+            //     peticion que se responde y se olvida: si el motivo no
+            //     queda escrito, la pantalla no puede explicar por que el
+            //     comprobante no salio, y un fallo que no se explica no se
+            //     puede reintentar a ciegas.
+            $this->auditaElFallo($saleId, $fallo->getMessage(), $actorId);
 
             return FiscalIssuanceOutcome::fallido($fallo->getMessage(), $this->documentoDe($saleId));
         } finally {
@@ -115,7 +132,40 @@ final class FiscalIssuanceRunner
     }
 
     /**
-     * El documento fiscal de la venta, si lo tiene.
+     * La AUDITORIA del fallo: quien fallo, sobre que venta y por que.
+     *
+     * `audit_logs` es la auditoria de NEGOCIO (M26): accion, entidad y
+     * contexto. Es la sede natural del motivo de un fallo de emision, y es
+     * consultable: la pantalla de la venta lo lee para explicar el fallo.
+     *
+     * Y LA AUDITORIA NO TAPA EL FALLO: si no se puede escribir, el motivo se
+     * pierde, pero la venta sigue existiendo y el error original sigue siendo
+     * el que se devuelve.
+     */
+    private function auditaElFallo(int $saleId, string $message, ?int $actorId): void
+    {
+        try {
+            $storeId = $this->connection->table('sales')->where('id', $saleId)->value('store_id');
+
+            $this->connection->table('audit_logs')->insert([
+                'user_id' => $actorId,
+                'store_id' => $storeId === null ? null : (int) $storeId,
+                'action' => self::ACCION_FALLO,
+                'entity_type' => self::ENTIDAD_VENTA,
+                'entity_id' => $saleId,
+                'context' => json_encode(['message' => $message], JSON_UNESCAPED_UNICODE),
+                'ip_address' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (Throwable) {
+            // La auditoria del fallo NO puede convertir un fallo de emision
+            // en un fallo de auditoria: el motivo se pierde, la venta no.
+        }
+    }
+
+    /**
+     * El DOCUMENTO fiscal de la venta, si lo tiene.
      */
     private function documentoDe(int $saleId): ?int
     {
