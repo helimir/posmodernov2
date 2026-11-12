@@ -2,6 +2,7 @@
 
 namespace App\Support\Pos;
 
+use App\Domain\Accounting\ChartOfAccounts;
 use App\Models\Store;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -32,7 +33,8 @@ use RuntimeException;
  *  - LAS DOS FECHAS: la de emision (el instante) y la de NEGOCIO (la que
  *    manda la caja). Las dos en la zona horaria de la TIENDA, no la del
  *    servidor. Ver `issuedAt()` y `businessDate()`.
- *  - EL PLAN DE CUENTAS: el de la tienda si declara uno, y el `default` si no.
+ *  - EL PLAN DE CUENTAS: el de la tienda, leido de sus vinculos. Si le falta
+ *    un rol, la resolucion falla con un mensaje util: no hay plan por defecto.
  *    Ver `accounts()`.
  *
  * NO ES UN SERVICIO DE DOMINIO: no cobra, no escribe y no decide nada de
@@ -218,11 +220,14 @@ final class PosContext
     /**
      * El PLAN DE CUENTAS de la tienda: rol => codigo de cuenta.
      *
-     * REGLA que fija este metodo: *el plan de la tienda gana al plan por
-     * defecto*. Si la tienda declara uno en `config('pos.accounts')`, ese es
-     * el suyo; si no, se usa el `default`.
+     * REGLA que fija este metodo: *el plan de la tienda se LEE DE SUS
+     * VINCULOS, y si le falta un rol, la resolucion FALLA*. NO hay un plan por
+     * defecto: el plan de una tienda es un dato del negocio, y un plan
+     * incompleto es un plan que hay que ver.
      *
      * @return array<string, string>
+     *
+     * @throws RuntimeException Cuando al plan de la tienda le falta un rol.
      */
     public function accounts(): array
     {
@@ -230,17 +235,8 @@ final class PosContext
             return $this->accounts;
         }
 
-        $configurados = (array) config('pos.accounts', []);
-
-        $deLaTienda = $configurados[(string) $this->store()->id] ?? null;
-
-        if (is_array($deLaTienda) && $deLaTienda !== []) {
-            return $this->accounts = $deLaTienda;
-        }
-
-        $porDefecto = $configurados['default'] ?? [];
-
-        return $this->accounts = is_array($porDefecto) ? $porDefecto : [];
+        return $this->accounts = (new ChartOfAccounts($this->connection))
+            ->plan((int) $this->store()->id);
     }
 
     /**

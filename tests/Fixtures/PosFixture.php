@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductStore;
 use App\Models\User;
 use App\Support\Pos\PosContext;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\DemoStoreSeeder;
 use Database\Seeders\FiscalProfileSeeder;
 use Database\Seeders\FiscalProviderSeeder;
@@ -29,7 +30,10 @@ use Illuminate\Support\Facades\DB;
  *
  * La tienda de demostracion es la que siembran los sembradores, y su ficha
  * (`store_settings`) trae la zona horaria y su perfil fiscal trae las dos
- * series (la del documento y la del control).
+ * series (la del documento y la del control). Y su PLAN DE CUENTAS (el
+ * catalogo de cuentas y el rol de cada una en la tienda) lo siembra
+ * `ChartOfAccountsSeeder`: sin plan, el checkout no resuelve las cuentas que
+ * necesita y la caja no cobra.
  */
 final class PosFixture
 {
@@ -92,6 +96,10 @@ final class PosFixture
     {
         (new TaxonomySeeder)->run();
         (new DemoStoreSeeder)->run();
+        // El PLAN DE CUENTAS: sin el, el checkout no resuelve el plan de la
+        // tienda y la caja no cobra. Es parte del escenario, como la tienda y
+        // su perfil fiscal.
+        (new ChartOfAccountsSeeder)->run();
         (new FiscalProfileSeeder)->run();
         // El CANAL FISCAL: el proveedor local y su entorno. Sin ellos, el
         // perfil no tiene por donde emitir, y la emision fiscal no se puede

@@ -192,12 +192,18 @@ class CashDayController extends Controller
 
         $cerrada = CashRegister::query()->findOrFail((int) $caja->id);
 
-        $cifras = $this->cifras(
-            (int) $store->id,
-            $fecha,
-            $this->cuentaDeEfectivo($contexto),
-            $cerrada
-        );
+        try {
+            $cifras = $this->cifras(
+                (int) $store->id,
+                $fecha,
+                $this->cuentaDeEfectivo($contexto),
+                $cerrada
+            );
+        } catch (RuntimeException $fallo) {
+            // El plan de cuentas de la tienda esta incompleto: el cierre no
+            // puede contrastar un saldo que no existe.
+            return response()->json(['errorMsg' => $fallo->getMessage()], 422);
+        }
 
         return response()->json([
             'id' => (int) $cerrada->id,
@@ -236,7 +242,14 @@ class CashDayController extends Controller
             ->where('business_date', $fecha->format('Y-m-d'))
             ->first();
 
-        $cifras = $this->cifras($storeId, $fecha, $this->cuentaDeEfectivo($contexto), $caja);
+        try {
+            $cifras = $this->cifras($storeId, $fecha, $this->cuentaDeEfectivo($contexto), $caja);
+        } catch (RuntimeException $fallo) {
+            // El plan de cuentas de la tienda esta incompleto: sin la cuenta de
+            // efectivo no hay saldo en curso, y una pagina sin saldo en curso
+            // es una pagina que miente.
+            abort(409, $fallo->getMessage());
+        }
 
         $pagos = $this->day->receivedByPaymentMethod($storeId, $fecha);
 

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domain\Accounting\CashRegisterService;
+use App\Domain\Accounting\ChartOfAccounts;
 use App\Domain\Accounting\LedgerWriter;
 use App\Domain\Checkout\CheckoutInput;
 use App\Domain\Checkout\CheckoutLineInput;
@@ -23,6 +24,7 @@ use App\Models\FiscalProfile;
 use App\Models\PaymentMethod;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\DemoStoreSeeder;
 use Database\Seeders\FiscalProfileSeeder;
 use Database\Seeders\TaxonomySeeder;
@@ -58,10 +60,10 @@ use Throwable;
  *    datos). El dominio no inventa un plan de cuentas, y este comando tampoco
  *    inventa un perfil fiscal.
  *
- * El plan de cuentas SI es una dato de demostracion del comando: el dominio
- * lo recibe como entrada (`CheckoutInput::$accounts`) porque el dominio no
- * inventa un plan de cuentas. Aqui se declara uno de DEMOSTRACION, y se
- * IMPRIME, para que quien lo lea sepa que cuentas se usaron.
+ * El plan de cuentas NO lo inventa el comando: es un DATO del negocio, y el
+ * dominio lo recibe como entrada (`CheckoutInput::$accounts`). El plan de la
+ * tienda se LEE de sus vinculos (`store_accounts`), y se IMPRIME para que
+ * quien lo lea sepa que cuentas se usaron.
  */
 class SmokeSaleCommand extends Command
 {
@@ -118,23 +120,6 @@ class SmokeSaleCommand extends Command
         HELP;
 
     /**
-     * El PLAN DE CUENTAS de DEMOSTRACION.
-     *
-     * El dominio NO inventa un plan de cuentas: `CheckoutInput::$accounts` es DATO de la entrada.
-     * El repo todavia no tiene donde configurarlo (no hay tabla de plan de cuentas ni
-     * configuracion por tienda), asi que aqui se declara uno de demostracion, y se imprime en la
-     * salida para que quien lo lea sepa que cuentas se usaron.
-     *
-     * @var array<string, string>
-     */
-    private const CUENTAS = [
-        'revenue' => '4010000',
-        'tax_payable' => '2110000',
-        'cash' => '1100000',
-        'receivable' => '1200000',
-    ];
-
-    /**
      * El precio de venta de demostracion, como texto decimal.
      */
     private const PRECIO_VENTA = '25.0000';
@@ -170,7 +155,7 @@ class SmokeSaleCommand extends Command
         'inventory_lots', 'payment_methods', 'payment_method_stores', 'customers', 'sales',
         'sale_items', 'sale_totals', 'sale_payments', 'sale_item_lot_consumptions', 'ledger_entries',
         'ledger_lines', 'ledger_entry_types', 'fiscal_series', 'fiscal_document_reservations',
-        'tax_categories', 'tax_rates', 'cash_registers',
+        'tax_categories', 'tax_rates', 'cash_registers', 'accounts', 'store_accounts',
     ];
 
     public function __construct(private readonly Connection $connection)
@@ -200,6 +185,10 @@ class SmokeSaleCommand extends Command
 
             $cantidad = $this->cantidad();
             $escenario = $this->escenario();
+            // El PLAN DE CUENTAS de la tienda: se LEE de sus vinculos, porque
+            // el plan de una tienda es un dato del negocio y no una
+            // configuracion del despliegue.
+            $cuentas = $this->planDeCuentas((int) $escenario['store']->id);
             [$productoId, $precio] = $this->producto($escenario);
             $loteAntes = $this->asegurarStock($escenario, $productoId, $cantidad);
             $clienteId = $this->cliente();
@@ -236,13 +225,13 @@ class SmokeSaleCommand extends Command
                         paymentMethodType: $tipoMedioPago,
                     ),
                 ],
-                accounts: self::CUENTAS,
+                accounts: $cuentas,
                 issuedAt: $escenario['issued_at'],
                 businessDate: $escenario['business_date'],
                 actorId: $this->actor(),
             ));
 
-            $fallos = $this->pintar($escenario, $resultado, $loteAntes, $cantidad, $clienteId, $medioPagoId);
+            $fallos = $this->pintar($escenario, $resultado, $loteAntes, $cantidad, $clienteId, $medioPagoId, $cuentas);
 
             return $fallos === [] ? self::SUCCESS : self::FAILURE;
         } catch (Throwable $error) {
@@ -250,6 +239,23 @@ class SmokeSaleCommand extends Command
 
             return self::FAILURE;
         }
+    }
+
+    /**
+     * El PLAN DE CUENTAS de la tienda de la venta: rol => codigo.
+     *
+     * REGLA que fija este metodo: *el plan se LEE de los vinculos de la
+     * tienda, y no hay plan por defecto*. Si a la tienda le falta un rol, el
+     * comando lo dice y sale con codigo distinto de cero: un plan incompleto
+     * es un plan que hay que ver, no un plan que se rellena con lo que haya.
+     *
+     * @return array<string, string>
+     *
+     * @throws RuntimeException Cuando al plan de la tienda le falta un rol.
+     */
+    private function planDeCuentas(int $storeId): array
+    {
+        return (new ChartOfAccounts($this->connection))->plan($storeId);
     }
 
     /**
@@ -439,11 +445,12 @@ class SmokeSaleCommand extends Command
 
     /**
      * Asegura el CATALOGO sembrado que la venta necesita: los paises y las
-     * monedas, la tienda de demostracion y el perfil fiscal con sus series.
+     * monedas, la tienda de demostracion, su PLAN DE CUENTAS y el perfil
+     * fiscal con sus series.
      *
      * Los sembradores son idempotentes, asi que esto no duplica nada. Y son
      * los duenos de esos datos: el comando no declara ni un perfil fiscal, ni
-     * una tasa, ni una serie.
+     * una tasa, ni una serie, ni un plan de cuentas.
      */
     private function asegurarCatalogoSembrado(): void
     {
@@ -456,6 +463,11 @@ class SmokeSaleCommand extends Command
         }
 
         $storeId = (int) $this->connection->table('stores')->where('code_name', 'DEMO')->value('id');
+
+        // El PLAN DE CUENTAS: sin el, la tienda no tiene con que cobrar.
+        if (! $this->connection->table('store_accounts')->where('store_id', $storeId)->exists()) {
+            (new ChartOfAccountsSeeder)->run();
+        }
 
         $tieneSeries = $this->connection->table('fiscal_series')
             ->where('store_id', $storeId)
@@ -893,10 +905,18 @@ class SmokeSaleCommand extends Command
      *
      * @param  array<string, mixed>  $escenario
      * @param  array<string, string>  $stock
+     * @param  array<string, string>  $cuentas  El plan de cuentas de la tienda.
      * @return list<string> Las comprobaciones que NO cuadran, si las hay.
      */
-    private function pintar(array $escenario, CheckoutResult $resultado, array $stock, string $cantidad, ?int $clienteId, int $medioPagoId): array
-    {
+    private function pintar(
+        array $escenario,
+        CheckoutResult $resultado,
+        array $stock,
+        string $cantidad,
+        ?int $clienteId,
+        int $medioPagoId,
+        array $cuentas
+    ): array {
         $saleId = (int) $resultado->saleId;
 
         $sale = $this->connection->table('sales')->where('id', $saleId)->first();
@@ -909,7 +929,7 @@ class SmokeSaleCommand extends Command
         $this->line('================================================');
         $this->line('');
 
-        $this->pintarEscenario($escenario, $cantidad, $clienteId, $medioPagoId);
+        $this->pintarEscenario($escenario, $cantidad, $clienteId, $medioPagoId, $cuentas);
         $this->pintarCabecera($sale, $escenario, $resultado);
         $this->pintarLineas($items);
         $this->pintarTotales($totals);
@@ -925,9 +945,15 @@ class SmokeSaleCommand extends Command
      * El ESCENARIO de la prueba.
      *
      * @param  array<string, mixed>  $escenario
+     * @param  array<string, string>  $cuentas  El plan de cuentas de la tienda.
      */
-    private function pintarEscenario(array $escenario, string $cantidad, ?int $clienteId, int $medioPagoId): void
-    {
+    private function pintarEscenario(
+        array $escenario,
+        string $cantidad,
+        ?int $clienteId,
+        int $medioPagoId,
+        array $cuentas
+    ): void {
         $cliente = $clienteId === null
             ? 'mostrador (sin cliente)'
             : (string) $this->connection->table('customers')->where('id', $clienteId)->value('name');
@@ -952,8 +978,8 @@ class SmokeSaleCommand extends Command
         $this->detalle('Medio de pago', $medio);
         $this->detalle('Plan de cuentas', implode(', ', array_map(
             static fn (string $rol, string $cuenta): string => $rol.'='.$cuenta,
-            array_keys(self::CUENTAS),
-            self::CUENTAS
+            array_keys($cuentas),
+            $cuentas
         )));
         $this->line('');
     }
