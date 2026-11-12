@@ -106,7 +106,9 @@ final readonly class SalePaymentStatus
                 // `applied`): lo aplicado de una fila sin `applied` es su
                 // BRUTO, porque una fila sin `applied` no tiene cambio
                 // registrado (la razon esta en la migracion de la columna).
-                'COALESCE(sale_payments.applied, sale_payments.amount) as applied, '
+                // El CRITERIO es uno solo (`AppliedAmount`): el mismo que
+                // usan la caja y la pantalla de ventas.
+                AppliedAmount::sql('sale_payments').' as applied, '
                 .'payment_methods.type as type'
             )
             ->get();
