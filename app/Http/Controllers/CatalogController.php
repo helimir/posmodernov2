@@ -309,10 +309,14 @@ class CatalogController extends Controller
     }
 
     /**
-     * El ESCENARIO de la peticion: la tienda activa y su moneda.
+     * El ESCENARIO de la peticion: la tienda activa, su moneda y su perfil
+     * fiscal.
      *
-     * Sin tienda activa o sin moneda el catalogo NO abre: no se sirve una
-     * pantalla de una tienda que no existe.
+     * Sin tienda activa, sin moneda o sin perfil fiscal el catalogo NO abre:
+     * no se sirve una pantalla de una tienda que no existe. Y el perfil se
+     * RESUELVE aqui, no mas tarde: la resolucion puede fallar (una tienda
+     * cuyo pais no tiene perfil vigente), y un fallo de la tienda se dice
+     * con su mensaje, no con un error de servidor.
      *
      * @return array{context: PosContext, store: Store, currency: array<string, mixed>}
      */
@@ -323,6 +327,9 @@ class CatalogController extends Controller
         try {
             $store = $context->store();
             $currency = $context->currency();
+            // El perfil fiscal de la tienda, por su serie de documento: los
+            // selectores ofrecen sus categorias fiscales y lo necesitan.
+            $context->documentSeriesId();
         } catch (RuntimeException $fallo) {
             abort(409, $fallo->getMessage());
         }

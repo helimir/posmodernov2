@@ -3,6 +3,7 @@
 namespace App\Support\Pos;
 
 use App\Domain\Accounting\ChartOfAccounts;
+use App\Domain\Fiscal\StoreFiscalProfileResolver;
 use App\Models\Store;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -28,8 +29,10 @@ use RuntimeException;
  *  - LA TIENDA ACTIVA: la primera tienda del usuario (`user_stores`), y si el
  *    usuario no tiene ninguna, la primera tienda activa del sistema. Ver
  *    `store()`.
- *  - LAS SERIES: la del documento y la del CONTROL de esa tienda. Ver
- *    `documentSeriesId()` y `controlSeriesId()`.
+ *  - LAS SERIES: la del documento y la del CONTROL de esa tienda. Las dos
+ *    salen del PERFIL FISCAL de la tienda, y el perfil se RESUELVE: el que la
+ *    tienda declara, o el vigente de su pais. Ver `documentSeriesId()` y
+ *    `controlSeriesId()`.
  *  - LAS DOS FECHAS: la de emision (el instante) y la de NEGOCIO (la que
  *    manda la caja). Las dos en la zona horaria de la TIENDA, no la del
  *    servidor. Ver `issuedAt()` y `businessDate()`.
@@ -348,11 +351,18 @@ final class PosContext
     /**
      * LAS DOS SERIES de la tienda: la del documento y la del control.
      *
-     * REGLA que fija este metodo: *la serie de la tienda es la de su perfil
-     * fiscal*. Una tienda puede tener series de VARIOS perfiles (el
-     * sembrador de demostracion deja las de los cinco paises en la tienda de
-     * demostracion), y la que vale es la del pais de la tienda. Si la tienda
-     * no declara pais, se toma la primera serie por id.
+     * REGLA que fija este metodo: *la serie de la tienda es la de su PERFIL
+     * FISCAL, y el perfil se RESUELVE*. Una tienda puede tener series de
+     * VARIOS perfiles (el sembrador de demostracion deja las de los cinco
+     * paises en la tienda de demostracion), y la que vale es la del perfil
+     * que le corresponde: el que la tienda DECLARA, o el VIGENTE de su pais.
+     *
+     * Y CUANDO LA TIENDA DECLARA PAIS Y NO HAY PERFIL VIGENTE, el fallo es
+     * UTIL: la tienda no tiene series, y el mensaje dice que tienda es, que
+     * pais tiene y que no hay perfil vigente. NO se cae a "la primera serie
+     * por rol": esa serie puede ser de otro pais, y una serie ajena no se
+     * ve. La PRIMERA SERIE POR ROL queda solo para la tienda que no declara
+     * pais, que es el caso en el que no hay nada mas que saber.
      */
     private function resolveSeries(): void
     {
@@ -360,27 +370,30 @@ final class PosContext
             return;
         }
 
-        $this->seriesResolved = true;
+        $storeId = (int) $this->store()->id;
 
-        $storeId = $this->store()->id;
+        // EL PERFIL FISCAL DE LA TIENDA: el que declara, o el vigente de su
+        // pais. La VIGENCIA se mide con la FECHA DE LA TIENDA: el reloj de la
+        // caja es el de la tienda, y el regimen tambien.
+        //
+        // Y EL FALLO NO SE MEMORIZA: si la resolucion falla, la marca de
+        // "resuelto" NO se pone, y la siguiente llamada falla IGUAL. Un fallo
+        // guardado como "no hay series" devolveria una caja sin serie en
+        // lugar del motivo, y el motivo es lo que hay que ver.
+        $profileId = (new StoreFiscalProfileResolver($this->connection))
+            ->resolve($storeId, $this->businessDate()->format('Y-m-d'));
 
-        $profileId = $this->connection->table('stores')
-            ->where('id', $storeId)
-            ->value('country_id');
-
-        if ($profileId !== null) {
-            $profileId = (int) $profileId;
-
+        if ($profileId === null) {
+            // La tienda NO declara pais: no hay forma de saber mas, y se toma
+            // la primera serie por rol.
+            $this->documentSeriesId = $this->firstSeriesIdOfRole($storeId, 'document');
+            $this->controlSeriesId = $this->firstSeriesIdOfRole($storeId, 'control');
+        } else {
             $this->documentSeriesId = $this->seriesIdOfRole($storeId, $profileId, 'document');
             $this->controlSeriesId = $this->seriesIdOfRole($storeId, $profileId, 'control');
-
-            if ($this->documentSeriesId !== null) {
-                return;
-            }
         }
 
-        $this->documentSeriesId = $this->firstSeriesIdOfRole($storeId, 'document');
-        $this->controlSeriesId = $this->firstSeriesIdOfRole($storeId, 'control');
+        $this->seriesResolved = true;
     }
 
     /**
