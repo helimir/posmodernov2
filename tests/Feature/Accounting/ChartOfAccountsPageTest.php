@@ -20,6 +20,8 @@ use Tests\Fixtures\PosFixture;
  *  - la pagina AVISA cuando al plan de la tienda le falta un rol: el sistema
  *    no podra cobrar, y el hueco se ve ANTES de cobrar, no en el momento de
  *    cobrar;
+ *  - la pagina entrega el CONTRATO del ALTA y de la BAJA: los tipos de
+ *    cuenta que el alta puede elegir, y el estado de cada cuenta;
  *  - sin sesion, la pantalla REDIRIGE al login.
  */
 
@@ -50,6 +52,16 @@ test('test_el_listado_del_plan_de_cuentas_responde_con_su_contrato_de_props', fu
             ->where('roles', fn ($roles): bool => collect($roles)->firstWhere('value', 'cash')['required_type'] === 'asset'
                 && collect($roles)->firstWhere('value', 'tax_payable')['required_type'] === 'liability'
                 && collect($roles)->firstWhere('value', 'revenue')['required_type'] === 'income')
+            // Los CINCO tipos de cuenta: el ALTA ofrece el conjunto cerrado del
+            // dominio, y no una lista escrita a mano en la pantalla.
+            ->has('types', 5)
+            ->where('types', fn ($tipos): bool => collect($tipos)->pluck('value')->all() === [
+                'asset',
+                'liability',
+                'equity',
+                'income',
+                'expense',
+            ])
             // El plan esta COMPLETO: no falta ningun rol.
             ->where('missing_roles', [])
             // Y la tienda del contexto.
