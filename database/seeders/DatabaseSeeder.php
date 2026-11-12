@@ -34,10 +34,16 @@ class DatabaseSeeder extends Seeder
      *  6. `FiscalProfileSeeder`: el perfil fiscal de cada pais, con sus tipos
      *     de documento, su vocabulario de estados, su catalogo de claves, sus
      *     categorias de IVA con sus tasas y sus dos series.
-     *  7. `FiscalProviderSeeder`: el canal fiscal por defecto (el proveedor
+     *  7. `DemoCatalogSeeder`: el CATALOGO de demostracion: las categorias,
+     *     las marcas, las unidades y las cajas, los productos con su ficha de
+     *     tienda, el stock que sale de una COMPRA real y el cliente de
+     *     demostracion. Depende de la TIENDA y del PERFIL FISCAL (necesita la
+     *     tienda donde vender y las categorias fiscales de sus productos): sin
+     *     catalogo, una instalacion nueva no puede cobrar nada.
+     *  8. `FiscalProviderSeeder`: el canal fiscal por defecto (el proveedor
      *     local de rol dual y su entorno de pruebas). Depende del perfil: el
      *     entorno pertenece al perfil.
-     *  8. `OpeningBalancesSeeder`: el saldo de apertura de caja de la tienda,
+     *  9. `OpeningBalancesSeeder`: el saldo de apertura de caja de la tienda,
      *     SIN CERTIFICAR (la certificacion es un acto humano).
      *
      * Las CATEGORIAS DE IVA y las TASAS los siembra `FiscalProfileSeeder` y no
@@ -69,6 +75,7 @@ class DatabaseSeeder extends Seeder
             DemoStoreSeeder::class,
             PaymentMethodSeeder::class,
             FiscalProfileSeeder::class,
+            DemoCatalogSeeder::class,
             FiscalProviderSeeder::class,
             OpeningBalancesSeeder::class,
         ]);
