@@ -1446,16 +1446,34 @@ Las partes se escriben **de forma idempotente** (la tabla es UNIQUE sobre `(docu
 
 **Verificado por HTTP real**: el cobro devuelve `fiscal.status = issued` con su numero de control, y el comprobante sale con la denominacion, la fecha y la hora, el emisor, el total y la base con el impuesto por alicuota.
 
+### El catalogo de demostracion (1.9)
+
+**Un POS sin catalogo no es un POS.** Una instalacion nueva **no tenia catalogo**: el sembrador hacia la tienda, sus ajustes, la cuenta bancaria, los perfiles fiscales y las series, y nada mas. Una tienda recien sembrada **no podia vender nada** (*"El producto 1 no tiene categoria fiscal en la tienda 1"*). Y lo unico que creaba el producto de demostracion era `ops:smoke-sale`: un **comando de humo es una prueba, no un sembrador**.
+
+Ahora la instalacion trae **6 categorias de producto** (3 anidadas), **3 marcas**, **4 unidades**, **3 cajas**, **11 productos** con su precio y su ficha de tienda, un **cliente** con su limite de credito, y una **compra de demostracion** cuyos **lotes son el stock**.
+
+**El stock NO se escribe**: `inventory_lots.purchase_item_id` es NOT NULL y UNIQUE (el lote y su linea de compra son 1:1), asi que el stock tiene que venir de una **compra real**, con cabecera, linea y totales, como en el legacy. El **cache** se refresca desde los lotes con el `StockInvariant`: el cache es un derivado, y escribirlo a mano es escribir una mentira.
+
+**Sembrar dos veces no duplica nada**: la compra se identifica por su **`invoice_no`** y, en cascada, la linea por (compra, producto) y el lote por su linea de compra. Las **fechas son fijas**: una semilla fechada con el reloj siembra una partida distinta cada dia y el FIFO no seria el mismo. El test que mas importa siembra el `DatabaseSeeder` entero **dos veces** y comprueba doce tablas **y que los ids de los lotes y de las compras sean los mismos**.
+
+**Y el override que prueba la precedencia**: un producto lleva el override de categoria fiscal **de la tienda**, y el test **no mira la fila**: mira el **total que calcula el motor** (override exento -> `tax_total` 0.0000; producto gravable sin override -> 1.6000). Un override que no cambia el total no es un override que manda.
+
+**Verificado sobre la base real**: la caja lista **12 productos** con su stock real, y la venta de una linea gravada y otra exenta da **7.1400** (2 x 2.0000 con 16 % = 4.6400, mas 2.5000 exento) con el comprobante llevando el marcador **(E)**.
+
+### Una aclaracion sobre `ledger_entry_types`
+
+La **migracion M18** siembra los siete tipos de asiento y **tambien** hay un `LedgerEntryTypeSeeder` que los siembra con `upsert`. **No es una duplicacion accidental**: el `docblock` del seeder lo explica ("hay pruebas que se apoyan en el catalogo SIN sembrar: `RefreshDatabase` migra pero no siembra; el 0.7.1-T comprueba que el catalogo esta sembrado despues de migrar. El seeder es la lista AUTORITATIVA"). **No lo "arregles"**: quitar el insert de la migracion dejaria sin catálogo a las bases migradas sin sembrar.
+
 ### Deuda que queda
 
-- **Una instalacion nueva NO TIENE CATALOGO**: `db:seed` no siembra productos, ni fichas de tienda, ni lotes, ni clientes. Una tienda recien sembrada **no puede cobrar nada** (el error es claro: *"El producto 1 no tiene categoria fiscal en la tienda 1"*). Es la deuda mas urgente que queda: un POS sin catalogo no es un POS. Lo unico que crea el producto de demostracion es el **comando de humo** (`ops:smoke-sale`), que es una prueba, no un sembrador.
-- El **QR no se dibuja como imagen** en el HTML (no hay generador de QR en las dependencias y no se admiten nuevas): el HTML lleva el **contenido** en `data-qr-content` y la impresora termica imprime un QR real. Con el proveedor local el contenido es `null` (el QR no es requisito legal).
-- El **POS no distingue un RIF de una cedula**: el cliente tiene un unico `tax_id`, y el tipo del identificador del receptor sale del `id_scheme_code` del perfil. Distinguirlo necesita **un campo mas en `customers`**, y eso es una decision, no una adivinanza.
+- El **plan de cuentas** en `config/pos.php` (deberia ser tabla por tienda).
 - `PosContext::resolveSeries()` lee `stores.country_id` como si fuera `fiscal_profile_id` (funciona por casualidad; degrada en multi-pais).
 - El **detalle de venta** sigue enseñando el `amount` bruto del pago (100) y no el `applied` (58).
-- El **plan de cuentas** en `config/pos.php` (deberia ser tabla por tienda).
+- El **QR no se dibuja como imagen** (no hay generador y no se admiten dependencias).
+- El **POS no distingue un RIF de una cedula** (el cliente tiene un unico `tax_id`).
 - `AGENTS.md` y `openspec/config.yaml` describen el ledger `sdd-attempt`, que **ya no existe** (CLI 4.0.0).
+- `income_sources`/`expense_categories` vacias; tokens del escaner duplicados; `releaseExpiredLeases()` sin consumidor; `DispatchPrintJob` con nombre engañoso; `print_agents` sin `instance_id`; `char_per_line` legacy no migrado.
 
 ### Siguiente
 
-Lo mas urgente: **un catalogo de demostracion sembrado**, para que una instalacion nueva sea operable. Despues, el **plan de cuentas por tienda**, la unidad suelta de `resolveSeries()`, y el **detalle de venta** con el `applied`.
+Lo mas natural ahora: el **plan de cuentas por tienda** (hoy es configuracion, y es un dato del negocio), la unidad suelta de `resolveSeries()`, y el **detalle de venta** con el `applied`.
