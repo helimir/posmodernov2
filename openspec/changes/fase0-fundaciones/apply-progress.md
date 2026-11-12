@@ -1478,16 +1478,33 @@ La **caja del dia** tambien hubo que tocarla: leia la cuenta de efectivo de la c
 
 **Verificado sobre la base real**: el plan sembrado (12 cuentas, los 4 roles de la tienda) y el asiento de una venta usa `1100000 Efectivo y caja`, `4010000 Ventas` y `2110000 Impuesto por pagar`, las tres **en el catalogo**.
 
+### El catalogo de cuentas mantenible y la coherencia del plan (1.11)
+
+Hasta ahora la pantalla solo editaba el **rol** de una cuenta que ya existia: quien migraba su plan tenia que meter las cuentas en la base a mano. Y el legacy **no tenia** plan que migrar. Ahora se puede dar de alta una cuenta desde la aplicacion, con su codigo **normalizado** (mayusculas, sin espacios) y el codigo repetido rechazado por el **dominio**, no por PostgreSQL.
+
+**La regla de la baja**: una cuenta **con movimientos no se borra, se apaga** (el historico contable la necesita). Borrar solo es posible si **nunca se ha usado**, y el mensaje dice cual de los tres motivos se aplica y que hacer.
+
+**Y la coherencia que faltaba**: `roles()` ignoraba las cuentas apagadas y `assign()` no. El plan decia que faltaba el rol `cash` y a la vez que ya lo cumplia, y **el plan quedaba bloqueado**: no se podia cambiar la caja de cuenta, que es justo lo que hace un negocio. **Reproducido por HTTP** antes del arreglo. La regla que lo cierra: **una cuenta apagada sale del plan** (se lleva sus vinculos) y **encenderla no le devuelve el rol** (hay que volver a asignarselo, y el aviso lo dice). `assign()` ahora pregunta **como `roles()`** y, si encuentra un vinculo residual de una cuenta apagada, **lo libera** en vez de quedarse atascado: el dominio se repara solo.
+
+### El detalle de venta con lo aplicado (1.12)
+
+Un pago tiene **tres** cifras y la ficha solo ensebaba una: lo **recibido** (100), lo **APLICADO** (58) y el **cambio** (42). En un sobrepago la ficha decia **100 en una venta de 58** mientras el comprobante fiscal decia 58: **dos verdades en dos pantallas de la misma venta**. Ahora la ficha muestra las tres, y cuando lo aplicado **no cuadra** con el total avisa **con la cifra** (en una venta a credito la diferencia es deuda, no un error). La aritmetica vive en el **dominio** (`SalePayments`/`SalePaymentSummary`) y el **fallback** de las filas antiguas esta en **un solo sitio** (`AppliedAmount`), que `CashDay` y `SalePaymentStatus` ahora comparten.
+
+### La tienda resuelve su perfil fiscal (1.13)
+
+`resolveSeries()` leia el **`country_id` de la tienda como si fuera el `fiscal_profile_id`**, y funcionaba **por casualidad** (en la demostracion ambos son 1). En un local de otro pais usaria las series de **otro perfil**, o caeria al *"la primera serie de la tienda"*, que es una caja que no es de su pais. Ademas no miraba la **vigencia** del perfil.
+
+Ahora: el perfil **declarado** por la tienda (nueva columna `stores.fiscal_profile_id`, para el regimen especial) **manda**; si no declara ninguno, el **vigente de su pais**, medido con la **fecha de negocio** y no con el reloj del servidor; y si declara pais **sin perfil vigente, falla** con un mensaje util. **Una serie de otro pais no es una serie.** Y T1 y T2 usan **la misma serie**, con un test que monta una tienda de perfil propio.
+
 ### Deuda que queda
 
-- El **catalogo de cuentas no se puede dar de alta desde la pantalla**: la pantalla edita el **rol** de cada cuenta del catalogo, pero no el catalogo mismo (alta y baja de cuentas). Es el siguiente trabajo natural.
-- `PosContext::resolveSeries()` lee `stores.country_id` como si fuera `fiscal_profile_id` (funciona por casualidad; degrada en multi-pais).
-- El **detalle de venta** sigue enseñando el `amount` bruto del pago (100) y no el `applied` (58).
+- **Borrar una cuenta apagada y nunca usada pierde la traza** de *"esta cuenta fue la caja hasta tal dia"*. Es el precio de la regla simple; el historico contable conserva la suya.
 - El **QR no se dibuja como imagen** (no hay generador y no se admiten dependencias).
 - El **POS no distingue un RIF de una cedula** (el cliente tiene un unico `tax_id`).
-- `AGENTS.md` y `openspec/config.yaml` describen el ledger `sdd-attempt`, que **ya no existe** (CLI 4.0.0). Y la seccion "Layout" del `AGENTS.md` esta **desfasada** (dice M01-M27 y no menciona tres sembradores que ya existian).
+- `AGENTS.md` y `openspec/config.yaml` describen el ledger `sdd-attempt`, que **ya no existe** (CLI 4.0.0). Y la seccion "Layout" del `AGENTS.md` esta **desfasada**.
+- `SmokeSaleCommand::perfilYSeries()` tiene su **propia** regla de resolucion de perfil: hoy coincide con la de la caja solo por el orden de siembra.
 - `income_sources`/`expense_categories` vacias; tokens del escaner duplicados; `releaseExpiredLeases()` sin consumidor; `DispatchPrintJob` con nombre engañoso; `print_agents` sin `instance_id`; `char_per_line` legacy no migrado.
 
 ### Siguiente
 
-El **alta y baja de cuentas** en el plan (para que el catalogo se pueda mantener desde la aplicacion), el **detalle de venta** con el `applied`, y la unidad suelta de `resolveSeries()`.
+La **Fase 2**, que no esta planificada: el T2 fiscal mas a fondo (el emisor contra una autoridad real), el **impresor** (la cola `print_jobs` y el agente LAN de punta a punta), los **reportes** de ventas, clientes y productos, y el **cierre de caja** con arqueo por medio de pago.
