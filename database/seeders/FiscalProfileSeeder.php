@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Domain\Fiscal\StoreFiscalProfileResolver;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +59,12 @@ use Illuminate\Support\Facades\DB;
  * autorizacion seria afirmar algo que nadie ha verificado. El `credential_ref`
  * es una REFERENCIA (nunca el secreto) y lo dice.
  *
+ * Y LA TIENDA DECLARA SU PERFIL (`stores.fiscal_profile_id`): el regimen de la
+ * tienda de demostracion es un DATO de la tienda, y no una consecuencia de su
+ * pais. Lo declara el PERFIL VIGENTE de su pais, con el mismo resolutor que
+ * usa la caja: una regla de vigencia reimplementada en el sembrador seria una
+ * segunda verdad.
+ *
  * Es IDEMPOTENTE: los `upsert` se apoyan en las restricciones unicas de cada
  * tabla. Las series NO tienen ninguna, asi que se buscan por su clave natural
  * (perfil, tienda, rol) antes de escribirse. Y al re-sembrar NO se toca
@@ -85,6 +92,49 @@ class FiscalProfileSeeder extends Seeder
             $this->categoriasYTasas($perfilId, $pais, $now);
             $this->series($perfilId, $tienda, $pais, $now);
         }
+
+        $this->perfilDeclaradoDeLaTienda($tienda, $now);
+    }
+
+    /**
+     * El PERFIL DECLARADO de la tienda de demostracion.
+     *
+     * REGLA que fija este metodo: *la tienda de demostracion DECLARA su
+     * perfil fiscal*. El perfil de la tienda es el vigente de su pais, y la
+     * tienda lo dice: sin la declaracion, la tienda dependeria de que su
+     * pais tenga un perfil vigente, y el regimen de una tienda es un DATO de
+     * la tienda.
+     *
+     * Y SE USA EL MISMO RESOLUTOR que usa la caja: la regla de la vigencia
+     * es una sola, y un sembrador que la reimplementa es una segunda verdad.
+     *
+     * @param  int  $tienda  La tienda de demostracion.
+     */
+    private function perfilDeclaradoDeLaTienda(int $tienda, Carbon $now): void
+    {
+        if ($tienda === 0) {
+            return;
+        }
+
+        $countryId = DB::table('stores')->where('id', $tienda)->value('country_id');
+
+        if ($countryId === null) {
+            return;
+        }
+
+        $profileId = (new StoreFiscalProfileResolver(DB::connection()))
+            ->vigenteDePais((int) $countryId, $now->format('Y-m-d'));
+
+        if ($profileId === null) {
+            // El pais de la tienda no tiene perfil vigente: la tienda no
+            // declara ninguno, y la caja lo dira cuando la use.
+            return;
+        }
+
+        DB::table('stores')->where('id', $tienda)->update([
+            'fiscal_profile_id' => $profileId,
+            'updated_at' => $now,
+        ]);
     }
 
     /**

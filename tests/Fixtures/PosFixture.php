@@ -14,6 +14,7 @@ use Database\Seeders\FiscalProviderSeeder;
 use Database\Seeders\PaymentMethodSeeder;
 use Database\Seeders\TaxonomySeeder;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * El ESCENARIO de la caja: la tienda, su perfil fiscal, sus series, un
@@ -30,7 +31,9 @@ use Illuminate\Support\Facades\DB;
  *
  * La tienda de demostracion es la que siembran los sembradores, y su ficha
  * (`store_settings`) trae la zona horaria y su perfil fiscal trae las dos
- * series (la del documento y la del control). Y su PLAN DE CUENTAS (el
+ * series (la del documento y la del control). Y DECLARA su perfil fiscal
+ * (`stores.fiscal_profile_id`), que es el que usa: el regimen de la tienda es
+ * un dato de la tienda. Y su PLAN DE CUENTAS (el
  * catalogo de cuentas y el rol de cada una en la tienda) lo siembra
  * `ChartOfAccountsSeeder`: sin plan, el checkout no resuelve las cuentas que
  * necesita y la caja no cobra.
@@ -111,6 +114,19 @@ final class PosFixture
         $profileId = (int) DB::table('fiscal_profiles')
             ->where('code', self::CODIGO_PERFIL)
             ->value('id');
+
+        // La tienda DECLARA su perfil fiscal, y el escenario usa ese: si la
+        // tienda no declarara el perfil del escenario, la caja y el escenario
+        // resolverian perfiles distintos, y el escenario probaria una venta
+        // que la caja no haria.
+        $declarado = DB::table('stores')->where('id', $storeId)->value('fiscal_profile_id');
+
+        if ($declarado === null || (int) $declarado !== $profileId) {
+            throw new RuntimeException(
+                'La tienda de demostracion no declara el perfil fiscal del escenario: '
+                .'la caja y el escenario resolverian perfiles distintos.'
+            );
+        }
 
         $categoryId = (int) DB::table('tax_categories')
             ->where('fiscal_profile_id', $profileId)
