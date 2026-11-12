@@ -505,6 +505,19 @@ class FiscalProfileSeeder extends Seeder
             ],
             'campos' => [
                 [
+                    'key' => 'document_denomination',
+                    'data_type' => 'string',
+                    'label' => 'Denominacion del documento',
+                    // La denominacion que exige la providencia (art. 8.1):
+                    // es un LITERAL de la norma, y por eso vive en el perfil
+                    // y no en el codigo.
+                    'value' => 'Factura',
+                    'required' => true,
+                    'applies_to' => 'document',
+                    'evidence_status' => 'verified',
+                    'source_ref' => 'SNAT/2026/00093 art. 8.1 (G.O. 43.484)',
+                ],
+                [
                     'key' => 'series_prefix_required_token',
                     'data_type' => 'string',
                     'label' => 'Token obligatorio del prefijo de serie',

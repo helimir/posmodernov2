@@ -40,11 +40,22 @@ use Throwable;
  */
 final readonly class FiscalIssuanceCoordinator
 {
+    /**
+     * Las PARTES del comprobante: el emisor y el receptor.
+     *
+     * Se construyen aqui, con la MISMA conexion del coordinador, y no se
+     * inyectan: el coordinador es el que sabe que documento y que venta
+     * son, y las partes se escriben en el MISMO paso que crea el documento.
+     */
+    private FiscalDocumentParties $parties;
+
     public function __construct(
         private Connection $connection,
         private FiscalIssuanceService $issuance,
         private SalePaymentStatus $paymentStatus,
-    ) {}
+    ) {
+        $this->parties = new FiscalDocumentParties($connection);
+    }
 
     /**
      * Emite el comprobante fiscal de la venta y devuelve su identificador.
@@ -75,6 +86,13 @@ final readonly class FiscalIssuanceCoordinator
         //    intento anterior ya lo pudo escribir, y un documento no lleva
         //    dos veces el mismo desglose.
         $this->taxes($documentId, $items, $totals);
+
+        // 3.b LAS PARTES del comprobante: el emisor (la tienda) y el
+        //      receptor (el cliente, o el consumidor final). Son
+        //      IDEMPOTENTES: la tabla tiene UNIQUE en (documento, rol), y el
+        //      reintento actualiza la fila que ya hay en vez de duplicarla.
+        //      Un comprobante sin emisor ni receptor no es un comprobante.
+        $this->parties->write($documentId, $saleId);
 
         // 4. SI EL DOCUMENTO YA ESTA EMITIDO, no se vuelve a llamar al
         //    proveedor. Una doble emision ante la autoridad NO se puede
