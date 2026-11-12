@@ -1,6 +1,7 @@
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,10 +42,34 @@ interface SaleTotals {
     evidence_status: string | null;
 }
 
+/**
+ * A payment of the sale, with its THREE figures.
+ *
+ * `received` is what the customer handed over, `applied` is what the payment
+ * COVERED of the sale (the truth) and `change` is what went back.
+ */
 interface SalePayment {
     id: number;
+    payment_method_id: number | null;
     payment_method: string | null;
-    amount: string;
+    type: string;
+    received: string;
+    applied: string;
+    change: string;
+}
+
+/**
+ * The SUMMARY of the payments of the sale: the sums and the GAP.
+ *
+ * `difference` is `applied_total` minus the total of the sale, WITH its sign.
+ */
+interface SalePaymentSummary {
+    received_total: string;
+    applied_total: string;
+    change_total: string;
+    total: string | null;
+    difference: string | null;
+    matches_total: boolean | null;
 }
 
 interface LedgerLine {
@@ -75,6 +100,7 @@ interface SaleDetail {
     lines: SaleLine[];
     totals: SaleTotals | null;
     payments: SalePayment[];
+    payment_summary: SalePaymentSummary;
     ledger: LedgerEntry | null;
 }
 
@@ -111,6 +137,16 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
     const [retrying, setRetrying] = useState(false);
     const [printing, setPrinting] = useState(false);
     const [fiscalError, setFiscalError] = useState<string | null>(null);
+
+    /**
+     * The GAP between what the payments APPLIED and the total of the sale.
+     *
+     * It carries its sign: a sale that adds up has no gap, and a number
+     * without a sign would hide which side the hole is on.
+     */
+    const descuadre = sale.payment_summary.difference;
+    const sobra = descuadre !== null && !descuadre.startsWith('-');
+    const absoluto = descuadre === null ? null : descuadre.replace('-', '');
 
     /**
      * The RETRY of the fiscal issuance.
@@ -183,6 +219,24 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                             <Field label="Store" value={sale.store ?? '—'} />
                             <Field label="Created at" value={sale.created_at ?? '—'} />
                         </dl>
+
+                        {/*
+                          The WARNING: the applied payments do not add up to the
+                          total of the sale. The hole is a fact, and the screen
+                          says it WITH the figures.
+                        */}
+                        {sale.payment_summary.matches_total === false && (
+                            <Alert variant="destructive" className="mt-4">
+                                <AlertTitle>Payments do not match the sale total</AlertTitle>
+                                <AlertDescription>
+                                    Applied {sale.payment_summary.applied_total} against a sale total of{' '}
+                                    {sale.payment_summary.total}
+                                    {absoluto !== null && (
+                                        <> — {sobra ? 'over by' : 'short by'} {absoluto}.</>
+                                    )}
+                                </AlertDescription>
+                            </Alert>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -329,6 +383,10 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                                         <dt>Total</dt>
                                         <dd className="tabular-nums">{sale.totals.grand_total}</dd>
                                     </div>
+                                    <div className="flex justify-between">
+                                        <dt>Applied to the sale</dt>
+                                        <dd className="tabular-nums">{sale.payment_summary.applied_total}</dd>
+                                    </div>
                                     {sale.totals.evidence_status && (
                                         <div className="flex justify-between">
                                             <dt className="text-muted-foreground">Evidence</dt>
@@ -349,14 +407,61 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                             {sale.payments.length === 0 ? (
                                 <p className="text-muted-foreground text-sm">This sale has no payments.</p>
                             ) : (
-                                <dl className="grid gap-3 text-sm">
-                                    {sale.payments.map((payment) => (
-                                        <div key={payment.id} className="flex justify-between">
-                                            <dt className="text-muted-foreground">{payment.payment_method ?? 'Payment'}</dt>
-                                            <dd className="tabular-nums">{payment.amount}</dd>
-                                        </div>
-                                    ))}
-                                </dl>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b">
+                                                <th className="px-2 py-2 text-left font-medium">Payment method</th>
+                                                <th className="px-2 py-2 text-left font-medium">Type</th>
+                                                <th className="px-2 py-2 text-right font-medium">Received</th>
+                                                <th className="px-2 py-2 text-right font-medium">Applied</th>
+                                                <th className="px-2 py-2 text-right font-medium">Change</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            {sale.payments.map((payment) => (
+                                                <tr key={payment.id} className="border-b last:border-0">
+                                                    <td className="px-2 py-2">
+                                                        <span className="block">{payment.payment_method ?? 'Payment'}</span>
+                                                        {payment.type === 'credit' && (
+                                                            <span className="text-muted-foreground block text-xs">
+                                                                Credit is not money in the drawer
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-2 py-2">{payment.type}</td>
+                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                        {payment.received}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right font-medium tabular-nums">
+                                                        {payment.applied}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                        {payment.change === '0.0000' ? '—' : payment.change}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+
+                                        <tfoot>
+                                            <tr className="border-t">
+                                                <td className="px-2 py-2 font-medium" colSpan={2}>
+                                                    Totals
+                                                </td>
+                                                <td className="px-2 py-2 text-right tabular-nums">
+                                                    {sale.payment_summary.received_total}
+                                                </td>
+                                                <td className="px-2 py-2 text-right font-semibold tabular-nums">
+                                                    {sale.payment_summary.applied_total}
+                                                </td>
+                                                <td className="px-2 py-2 text-right tabular-nums">
+                                                    {sale.payment_summary.change_total}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
                             )}
                         </CardContent>
                     </Card>

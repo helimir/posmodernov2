@@ -20,6 +20,7 @@ interface SaleSummary {
     customer: string | null;
     status: string;
     grand_total: string | null;
+    applied_total: string;
     items_count: number;
     fiscal: FiscalStatus;
 }
@@ -73,6 +74,7 @@ export default function SalesIndex({ sales }: { sales: SaleSummary[] }) {
                                             <th className="px-2 py-2 text-left font-medium">Fiscal</th>
                                             <th className="px-2 py-2 text-right font-medium">Lines</th>
                                             <th className="px-2 py-2 text-right font-medium">Total</th>
+                                            <th className="px-2 py-2 text-right font-medium">Applied</th>
                                         </tr>
                                     </thead>
 
@@ -105,6 +107,7 @@ export default function SalesIndex({ sales }: { sales: SaleSummary[] }) {
                                                 </td>
                                                 <td className="px-2 py-2 text-right tabular-nums">{sale.items_count}</td>
                                                 <td className="px-2 py-2 text-right tabular-nums">{sale.grand_total ?? '—'}</td>
+                                                <td className="px-2 py-2 text-right tabular-nums">{sale.applied_total}</td>
                                             </tr>
                                         ))}
                                     </tbody>

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Accounting;
 
+use App\Domain\Sales\AppliedAmount;
 use App\Models\PaymentMethod;
 use App\Support\Pos\PosAmount;
 use Brick\Math\BigDecimal;
@@ -144,7 +145,9 @@ final readonly class CashDay
                 // `applied`): lo aplicado de una fila sin `applied` es su
                 // BRUTO, porque una fila sin `applied` no tiene cambio
                 // registrado (la razon esta en la migracion de la columna).
-                .'SUM(COALESCE(sale_payments.applied, sale_payments.amount)) as amount'
+                // El CRITERIO es uno solo (`AppliedAmount`): el mismo que
+                // usan el estado de pago y la pantalla de ventas.
+                .'SUM('.AppliedAmount::sql('sale_payments').') as amount'
             )
             ->get();
 

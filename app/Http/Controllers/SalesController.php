@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Fiscal\SaleFiscalStatus;
+use App\Domain\Sales\SalePayments;
 use App\Models\LedgerEntry;
 use App\Models\PrintTarget;
 use App\Models\Sale;
@@ -40,6 +41,7 @@ class SalesController extends Controller
 
     public function __construct(
         private readonly SaleFiscalStatus $fiscal,
+        private readonly SalePayments $payments,
         private readonly Connection $connection,
     ) {}
 
@@ -68,6 +70,13 @@ class SalesController extends Controller
             $ventas->map(fn (Sale $venta): int => (int) $venta->id)->all()
         );
 
+        // Lo APLICADO de las ventas de la pagina, tambien en UNA consulta: el
+        // listado es el RECENTRO de la caja, y lo que cada venta COBRIO es
+        // una pregunta de todas, no una por venta.
+        $aplicados = $this->payments->appliedTotals(
+            $ventas->map(fn (Sale $venta): int => (int) $venta->id)->all()
+        );
+
         return Inertia::render('sales/index', [
             'sales' => $ventas->map(fn (Sale $venta): array => [
                 'id' => (int) $venta->id,
@@ -76,6 +85,10 @@ class SalesController extends Controller
                 'customer' => $venta->customer?->name,
                 'status' => (string) $venta->status,
                 'grand_total' => $venta->total?->grand_total,
+                // Lo APLICADO de la venta: la verdad de lo que cobro. Una
+                // venta sin pagos tiene cero aplicado, no una cifra
+                // desconocida.
+                'applied_total' => $aplicados[(int) $venta->id] ?? '0.0000',
                 'items_count' => (int) $venta->items_count,
                 'fiscal' => $this->estadoFiscalPara($estados[(int) $venta->id] ?? null),
             ])->values()->all(),
@@ -95,7 +108,6 @@ class SalesController extends Controller
             ->with(['customer:id,name', 'store:id,name'])
             ->with(['items.product:id,code,name'])
             ->with('total')
-            ->with(['payments.paymentMethod:id,name'])
             ->find($sale);
 
         abort_if($model === null, 404);
@@ -107,6 +119,14 @@ class SalesController extends Controller
             ->first();
 
         $estados = $this->fiscal->forSales([(int) $model->id]);
+
+        // Los PAGOS, con sus TRES cifras, y el RESUMEN de la venta: lo
+        // aplicado es la verdad, y su diferencia con el total es el hueco que
+        // la pantalla tiene que enseñar.
+        $resumen = $this->payments->summary(
+            (int) $model->id,
+            $model->total === null ? null : (string) $model->total->grand_total,
+        );
 
         return Inertia::render('sales/show', [
             'sale' => [
@@ -140,11 +160,15 @@ class SalesController extends Controller
                     'grand_total' => (string) $model->total->grand_total,
                     'evidence_status' => $model->total->evidence_status,
                 ],
-                'payments' => $model->payments->map(fn ($payment): array => [
-                    'id' => (int) $payment->id,
-                    'payment_method' => $payment->paymentMethod?->name,
-                    'amount' => (string) $payment->amount,
-                ])->values()->all(),
+                'payments' => $this->payments->forSale((int) $model->id),
+                'payment_summary' => [
+                    'received_total' => $resumen->receivedTotal,
+                    'applied_total' => $resumen->appliedTotal,
+                    'change_total' => $resumen->changeTotal,
+                    'total' => $resumen->total,
+                    'difference' => $resumen->difference,
+                    'matches_total' => $resumen->matchesTotal,
+                ],
                 'ledger' => $asiento === null ? null : [
                     'id' => (int) $asiento->id,
                     'entry_type' => (string) ($asiento->entryType?->code ?? ''),

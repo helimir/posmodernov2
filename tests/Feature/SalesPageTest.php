@@ -138,7 +138,9 @@ test('test_la_pagina_de_detalle_devuelve_la_venta_con_sus_lineas_y_sus_totales',
             ->where('sale.totals.rounding_adjustment', '0.0000')
             ->where('sale.totals.grand_total', '24.0000')
             ->has('sale.payments', 1)
-            ->where('sale.payments.0.amount', '24.0000')
+            ->where('sale.payments.0.received', '24.0000')
+            ->where('sale.payments.0.applied', '24.0000')
+            ->where('sale.payments.0.change', '0.0000')
             ->etc());
 });
 
