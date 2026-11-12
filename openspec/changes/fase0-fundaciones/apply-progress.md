@@ -1409,6 +1409,27 @@ El 2026-11-11 el mantenedor cerro **cuatro decisiones de dominio**, y las cuatro
 
 - **El detalle de venta** enseña el `amount` bruto del pago (100) y no el `applied` (58): en un sobrepago, la ficha muestra 100 en una venta de 58. Es informacion incompleta, no una mala interpretacion, y es un cambio de UI fuera de la unidad. **Senalado.**
 
+### El T2 fiscal conectado al checkout (1.7)
+
+La venta **emite su propio comprobante fiscal**. Antes se guardaba con `fiscal_document_id` en `null` y el comprobante se emitia **a mano**. El dominio fiscal de la Fase 0 estaba **completo y bien pensado** (el coordinador, el servicio de emision, el contrato del proveedor, las series atomicas): lo que faltaba era **el cableado**.
+
+**El proveedor se RESUELVE, no se hardcodea**: perfil -> entorno (rol `issuer`, de pruebas o de produccion) -> proveedor (activo) -> implementacion, por el `kind`. Solo `printer` tiene implementacion, y es **el camino que el propio diseno contempla**: el sistema es emisor **e** imprenta (el **rol dual**), asi que el numero de control lo da el `ControlNumberGenerator` local. Un `pac` o `portal` **no se emula**: error con mensaje util.
+
+**Un fallo fiscal NUNCA pierde una venta.** T1 ya esta confirmada cuando T2 corre, asi que la caja responde **201** con la venta y el aviso de que el documento fallo y hay que reintentar. Si respondiera un error, el cajero creeria que no se vendio y **cobraria otra vez**: eso es peor que un comprobante pendiente. Las reservas **NO** se liberan, y `ops:emit-fiscal` reintenta **sin quemar numeros**.
+
+**Y el numero de control se reservaba DOS VECES por venta.** Esto se encontro **midiendo**, no leyendo: T1 reservaba uno para el recibo y el proveedor **otro** para el documento fiscal, asi que la serie avanzaba de dos en dos y el comprobante impreso llevaba un numero que **no era** el del documento fiscal. En el mundo real (imprenta externa) es **el MISMO numero**. Ahora la reserva esta **enlazada a la venta** (como la del documento) y el proveedor la **reutiliza**: la serie avanza **una** vez y los dos numeros coinciden.
+
+**El QR**: el research dice que el QR **no es un requisito legal** de la providencia venezolana, asi que el contrato no lo exige. El proveedor lo construye **solo si el perfil declara sus tokens** (`qr_required_tokens`), y si un token declarado no se puede resolver, el QR **no se hace**: uno a medias es peor que ninguno. Con el perfil sembrado hoy, el proveedor local **no emite QR** y el documento lo dice dejando el campo en `null`.
+
+**Tambien se arreglo**: T1 reservaba control incluso para un perfil que **no lo exige**.
+
+### Deuda que queda
+
+- **`PosContext::resolveSeries()` lee `stores.country_id` como si fuera `fiscal_profile_id`**: funciona por casualidad en la tienda de demostracion (ambos son 1) y degrada a "la primera serie de la tienda" en un local multi-pais. **Es una unidad propia**, con su propio analisis de cual debe ser la relacion tienda -> perfil fiscal. La implementacion del T2 es inmune (busca la reserva por el **enlace**, no por la serie).
+- **La UI no muestra el estado fiscal**: ni la caja ni las ventas. Es la unidad siguiente.
+- El **detalle de venta** sigue enseñando el `amount` bruto del pago (100) y no el `applied` (58).
+- La base de desarrollo tiene **10 reservas de control huerfanas** de las ventas anteriores al arreglo. **No se tocan**: la regla del repo es *"turn it off, never renumber"*.
+
 ### Siguiente
 
-**Fase 1 COMPLETA** (1.1 a 1.6). Lo que sigue es la **Fase 2**: el T2 fiscal conectado al checkout, el comprobante (que no tiene ni controller ni vista) y el plan de cuentas por tienda.
+**Fase 1 COMPLETA** (1.1 a 1.7). Lo que sigue: la **UI del estado fiscal** (caja y ventas), el **comprobante** (que no tiene controller ni vista, y `ReceiptTemplate` y `PrintPayload` son dos modelos sin conexion), el **plan de cuentas por tienda**, y la unidad suelta de `resolveSeries()`.
