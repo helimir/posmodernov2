@@ -1423,13 +1423,39 @@ La venta **emite su propio comprobante fiscal**. Antes se guardaba con `fiscal_d
 
 **Tambien se arreglo**: T1 reservaba control incluso para un perfil que **no lo exige**.
 
+### El estado fiscal visible y el comprobante (1.8)
+
+El T2 ya emitia el documento, pero **nadie lo veia** y el comprobante **no tenia endpoint**: el renderizador y la plantilla existian, con sus tests, y **nadie los usaba**.
+
+**El documento era un comprobante con CUATRO huecos**, y los cuatro eran graves:
+
+| Hueco | Antes | Ahora |
+|---|---|---|
+| Las **partes** | `fiscal_document_parties` **VACIA**: nadie las escribia | el emisor (la tienda y su inscripcion fiscal **primaria**) y el receptor (el cliente, o el consumidor final con el nombre como token del perfil) |
+| Las **lineas** | `lines: []` | las lineas de la venta, con cantidad, precio y total |
+| La **denominacion** | el `document_type` crudo (`'invoice'`) | la que declara el **perfil** («Factura») |
+| El **instante** | la fecha a medianoche | la fecha y la **hora** de emision, en la zona de la tienda |
+
+Las partes se escriben **de forma idempotente** (la tabla es UNIQUE sobre `(documento, rol)`), asi que un reintento no puede duplicarlas. Y el hueco se ve: una tienda sin inscripcion fiscal tiene un comprobante **sin** identificador, no uno con un identificador inventado.
+
+**El comprobante**: `GET /comprobantes/{documento}` con el ancho del papel de la impresora termica y el boton de imprimir. Un documento de otra tienda es **404** (a un cajero no se le dice que existe); uno en borrador es **409** (existe, pero no es un comprobante).
+
+**Y el puente al ticket ESC/POS**: `ReceiptTemplate` y `PrintPayload` eran **dos modelos sin conexion**. Ahora el mismo modelo alimenta a los dos renderizadores, y el ticket lleva el **mismo numero de control** que el comprobante: el defecto que la 1.7 acababa de arreglar habria vuelto por el otro lado.
+
+**El estado fiscal se ve** en la lista de ventas, en el detalle y en el **dialogo de la caja**, con el reintento sin salir del mostrador y sin perder la venta.
+
+**Verificado por HTTP real**: el cobro devuelve `fiscal.status = issued` con su numero de control, y el comprobante sale con la denominacion, la fecha y la hora, el emisor, el total y la base con el impuesto por alicuota.
+
 ### Deuda que queda
 
-- **`PosContext::resolveSeries()` lee `stores.country_id` como si fuera `fiscal_profile_id`**: funciona por casualidad en la tienda de demostracion (ambos son 1) y degrada a "la primera serie de la tienda" en un local multi-pais. **Es una unidad propia**, con su propio analisis de cual debe ser la relacion tienda -> perfil fiscal. La implementacion del T2 es inmune (busca la reserva por el **enlace**, no por la serie).
-- **La UI no muestra el estado fiscal**: ni la caja ni las ventas. Es la unidad siguiente.
+- **Una instalacion nueva NO TIENE CATALOGO**: `db:seed` no siembra productos, ni fichas de tienda, ni lotes, ni clientes. Una tienda recien sembrada **no puede cobrar nada** (el error es claro: *"El producto 1 no tiene categoria fiscal en la tienda 1"*). Es la deuda mas urgente que queda: un POS sin catalogo no es un POS. Lo unico que crea el producto de demostracion es el **comando de humo** (`ops:smoke-sale`), que es una prueba, no un sembrador.
+- El **QR no se dibuja como imagen** en el HTML (no hay generador de QR en las dependencias y no se admiten nuevas): el HTML lleva el **contenido** en `data-qr-content` y la impresora termica imprime un QR real. Con el proveedor local el contenido es `null` (el QR no es requisito legal).
+- El **POS no distingue un RIF de una cedula**: el cliente tiene un unico `tax_id`, y el tipo del identificador del receptor sale del `id_scheme_code` del perfil. Distinguirlo necesita **un campo mas en `customers`**, y eso es una decision, no una adivinanza.
+- `PosContext::resolveSeries()` lee `stores.country_id` como si fuera `fiscal_profile_id` (funciona por casualidad; degrada en multi-pais).
 - El **detalle de venta** sigue enseñando el `amount` bruto del pago (100) y no el `applied` (58).
-- La base de desarrollo tiene **10 reservas de control huerfanas** de las ventas anteriores al arreglo. **No se tocan**: la regla del repo es *"turn it off, never renumber"*.
+- El **plan de cuentas** en `config/pos.php` (deberia ser tabla por tienda).
+- `AGENTS.md` y `openspec/config.yaml` describen el ledger `sdd-attempt`, que **ya no existe** (CLI 4.0.0).
 
 ### Siguiente
 
-**Fase 1 COMPLETA** (1.1 a 1.7). Lo que sigue: la **UI del estado fiscal** (caja y ventas), el **comprobante** (que no tiene controller ni vista, y `ReceiptTemplate` y `PrintPayload` son dos modelos sin conexion), el **plan de cuentas por tienda**, y la unidad suelta de `resolveSeries()`.
+Lo mas urgente: **un catalogo de demostracion sembrado**, para que una instalacion nueva sea operable. Despues, el **plan de cuentas por tienda**, la unidad suelta de `resolveSeries()`, y el **detalle de venta** con el `applied`.
