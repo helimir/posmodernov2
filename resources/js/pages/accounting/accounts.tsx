@@ -206,7 +206,7 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
             return {
                 title: `Deactivate the account ${pending.account.code}?`,
                 description:
-                    'It will stop fulfilling its role, and the plan of the store may become incomplete. The till cannot charge without every role.',
+                    'It will leave the plan: it stops fulfilling its role, and the plan of the store may become incomplete. The till cannot charge without every role. Assign the role to another account to complete it.',
                 label: 'Deactivate',
                 destructive: true,
             };
@@ -215,7 +215,8 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
         if (pending.action === 'activate') {
             return {
                 title: `Activate the account ${pending.account.code}?`,
-                description: 'It will fulfil its role again, and the plan of the store may become complete again.',
+                description:
+                    'It will be active again, but it will play NO role: it left the plan when it was deactivated. You have to assign the role again to put it back in the plan.',
                 label: 'Activate',
                 destructive: false,
             };
@@ -257,7 +258,7 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
                         <CardHeader>
                             <CardTitle className="text-destructive flex items-center gap-2 text-base">
                                 <AlertTriangle className="size-4" />
-                                The plan of a store may be incomplete
+                                The plan of a store changed
                             </CardTitle>
                             <CardDescription>
                                 <ul className="list-disc space-y-1 pl-4">

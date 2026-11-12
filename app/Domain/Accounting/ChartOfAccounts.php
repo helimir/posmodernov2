@@ -41,7 +41,11 @@ use RuntimeException;
  *    contable con espacios es un codigo que se teclea mal;
  *  - UNA CUENTA CON HISTORIA NO SE BORRA: se APAGA. Solo se borra la cuenta
  *    que NUNCA se ha usado: la que no tiene movimientos contables, no
- *    cumple ningun rol y no tiene plan en ninguna tienda.
+ *    cumple ningun rol y no tiene plan en ninguna tienda;
+ *  - UNA CUENTA APAGADA NO CUMPLE NINGUN ROL: SALE DEL PLAN. Apagarla quita
+ *    sus vinculos, y encenderla NO le devuelve el rol: el rol se vuelve a
+ *    asignar si se quiere. Y el plan NUNCA se contradice: no puede decir a
+ *    la vez que le falta un rol y que ya lo cumple una cuenta apagada.
  */
 final readonly class ChartOfAccounts
 {
@@ -159,9 +163,15 @@ final readonly class ChartOfAccounts
      * REGLA que fija este metodo: *el tipo de la cuenta debe ser el que el
      * rol exige*, y la comprobacion es AL ASIGNAR.
      *
+     * Y LA REGLA DE "un rol por tienda" se PREGUNTA COMO `roles()`: una
+     * cuenta APAGADA no cumple ningun rol, asi que su vinculo no ocupa el
+     * rol y no bloquea a nadie. Si aparece uno, es un RESIDUO y se LIBERA:
+     * el dominio se repara solo de los datos que quedaron de antes, en vez
+     * de quedarse bloqueado.
+     *
      * @throws RuntimeException Cuando la cuenta no existe, cuando su tipo no
      *                          es el que el rol exige, o cuando el rol ya lo
-     *                          cumple otra cuenta de la tienda.
+     *                          cumple otra cuenta ACTIVA de la tienda.
      */
     public function assign(int $storeId, int $accountId, AccountRole $role): void
     {
@@ -193,18 +203,36 @@ final readonly class ChartOfAccounts
         }
 
         // UN ROL POR TIENDA: si lo cumple otra cuenta, no se puede.
+        //
+        // Y SE PREGUNTA COMO `roles()`: una cuenta APAGADA no cumple ningun
+        // rol, asi que su vinculo no cuenta como ocupante del rol. Y si lo
+        // encuentra, no bloquea: lo LIBERA. El vinculo de una cuenta apagada
+        // es un RESIDUO (de unos datos viejos o de una migracion a mano), y
+        // el dominio se repara solo en vez de quedarse bloqueado.
         $otro = $this->connection->table('store_accounts')
             ->join('accounts', 'accounts.id', '=', 'store_accounts.account_id')
             ->where('store_accounts.store_id', $storeId)
             ->where('store_accounts.role', $role->value)
             ->where('store_accounts.account_id', '!=', $accountId)
-            ->first();
+            ->first([
+                'store_accounts.id as id',
+                'store_accounts.account_id as account_id',
+                'accounts.code as code',
+                'accounts.is_active as is_active',
+            ]);
 
         if ($otro !== null) {
-            throw new RuntimeException(
-                "El rol '{$role->value}' ya lo cumple la cuenta {$otro->code} en la tienda {$storeId}: "
-                .'un rol tiene una sola cuenta por tienda.'
-            );
+            if (! (bool) $otro->is_active) {
+                $this->connection->table('store_accounts')
+                    ->where('store_id', $storeId)
+                    ->where('account_id', $otro->account_id)
+                    ->delete();
+            } else {
+                throw new RuntimeException(
+                    "El rol '{$role->value}' ya lo cumple la cuenta {$otro->code} en la tienda {$storeId}: "
+                    .'un rol tiene una sola cuenta por tienda.'
+                );
+            }
         }
 
         // UN ROL POR CUENTA: el suyo se cambia, no se acumula.
@@ -313,11 +341,12 @@ final readonly class ChartOfAccounts
      * contables NO se borra: se APAGA*. La apaga no la destruye: su
      * historia se queda, y deja de admitir movimientos nuevos.
      *
-     * Al apagarla, sus VINCULOS con la tienda NO se tocan: el rol sigue
-     * declarado, pero la cuenta apagada no lo cumple (`roles()` filtra por
-     * `accounts.is_active`). El plan de la tienda puede quedarse incompleto,
-     * y eso hay que verlo ANTES de que el cobro falle: por eso este metodo
-     * devuelve los roles que la cuenta deja de cumplir.
+     * Y LA REGLA DE LA UNIDAD: *una cuenta APAGADA no cumple NINGUN rol: SALE
+     * DEL PLAN*. Por eso apagarla quita ademas sus VINCULOS con las tiendas:
+     * un vinculo que su cuenta no cumple es un residuo, y un residuo bloquea
+     * el plan. El plan de la tienda puede quedarse incompleto, y eso hay que
+     * verlo ANTES de que el cobro falle: por eso este metodo devuelve los
+     * roles que la cuenta deja de cumplir.
      *
      * @return array<int, string> Los roles que la cuenta DEJA de cumplir: id
      *                            de tienda => rol.
@@ -332,12 +361,21 @@ final readonly class ChartOfAccounts
         // ya no cumpliria ninguno y el aviso se perderia.
         $roles = $this->rolesByStore($accountId);
 
-        $this->connection->table('accounts')
-            ->where('id', $accountId)
-            ->update([
-                'is_active' => false,
-                'updated_at' => now(),
-            ]);
+        // Las DOS escrituras van juntas: una cuenta apagada con su vinculo
+        // puesto es el estado que hace que el plan se contradiga.
+        $this->connection->transaction(function () use ($accountId): void {
+            $this->connection->table('accounts')
+                ->where('id', $accountId)
+                ->update([
+                    'is_active' => false,
+                    'updated_at' => now(),
+                ]);
+
+            // Y sale del PLAN: sus vinculos se quitan.
+            $this->connection->table('store_accounts')
+                ->where('account_id', $accountId)
+                ->delete();
+        });
 
         return $roles;
     }
@@ -345,12 +383,12 @@ final readonly class ChartOfAccounts
     /**
      * ENCIENDE una cuenta del catalogo.
      *
-     * Es lo inverso de apagarla, y SIEMPRE es posible: el rol que la cuenta
-     * tuviera declarado vuelve a ser suyo, y el plan de la tienda se
-     * completa.
+     * Es lo inverso de apagarla en el ESTADO, y NO en el plan: *encender NO
+     * devuelve el rol*. La cuenta salio del plan cuando se apago, y volver a
+     * cumplir un rol es una ASIGNACION nueva, una decision del negocio.
      *
-     * @return array<int, string> Los roles que la cuenta VUELVE a cumplir: id
-     *                            de tienda => rol.
+     * @return array<int, string> Siempre vacio: encender no devuelve ningun
+     *                            rol.
      *
      * @throws RuntimeException Cuando la cuenta no existe.
      */
@@ -365,7 +403,7 @@ final readonly class ChartOfAccounts
                 'updated_at' => now(),
             ]);
 
-        return $this->rolesByStore($accountId);
+        return [];
     }
 
     /**

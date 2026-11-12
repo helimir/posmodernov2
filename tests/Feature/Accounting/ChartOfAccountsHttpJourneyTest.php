@@ -18,7 +18,9 @@ use Tests\Support\PosHttpServer;
  *  - editar el rol de una cuenta por la API funciona, y el cambio se ve en la
  *    pantalla;
  *  - una VENTA se cobra con el plan de la base: el asiento usa las cuentas
- *    del plan, no unas escritas a mano en el codigo.
+ *    del plan, no unas escritas a mano en el codigo;
+ *  - APAGAR la caja y poner el Banco como caja se hace EN UN PASO: el plan
+ *    no queda bloqueado.
  *
  * POR QUE ESTE TEST NO ES COMO LOS OTROS: un test con `actingAs()` verifica
  * la PAGINA. Este verifica el CAMINO: el arranque de verdad, el login de
@@ -210,6 +212,113 @@ test('test_una_venta_por_http_cobra_con_el_plan_de_cuentas_leido_de_la_base', fu
             ->and($cuentas)->toContain('4010000')
             ->and($cuentas)->toContain('2110000')
             ->and($cuentas)->not->toContain('1100000');
+    } finally {
+        $servidor->stop();
+    }
+});
+
+/**
+ * El CAMINO de la CAJA CAMBIADA, por HTTP de verdad: apagar la caja y poner
+ * el Banco como caja, EN UN PASO.
+ *
+ * REGLA que fija este test: *una cuenta APAGADA no cumple ningun rol: sale del
+ * plan*. El plan no puede quedarse bloqueado diciendo a la vez que le falta
+ * el rol y que ya lo cumple una cuenta apagada: son dos metodos del mismo
+ * dominio preguntando lo mismo, y tienen que responder lo mismo.
+ */
+test('test_apagar_la_caja_y_poner_el_banco_como_caja_se_hace_en_un_paso_por_http', function () {
+    $servidor = PosHttpServer::start();
+
+    try {
+        // 1. El ESCENARIO, en la base de datos del camino.
+        $escenario = PosFixture::escenario();
+
+        $cajero = PosFixture::usuario($escenario['store_id']);
+        $cajero->email = 'cambio-de-caja@camino.test';
+        $cajero->password = 'clave-del-camino';
+        $cajero->save();
+
+        // 2. El login, con su token CSRF.
+        $jar = new CookieJar;
+
+        $login = $servidor->cliente($jar)
+            ->get($servidor->url('/login'));
+
+        expect($login->status())->toBe(200);
+
+        $token = token_csrf_de_la_contabilidad($login->body());
+
+        expect($token)->not->toBe('');
+
+        $sesion = $servidor->cliente($jar, ['allow_redirects' => false])
+            ->withHeaders(['X-CSRF-TOKEN' => $token, 'Accept' => 'application/json'])
+            ->post($servidor->url('/login'), [
+                'email' => 'cambio-de-caja@camino.test',
+                'password' => 'clave-del-camino',
+            ]);
+
+        expect($sesion->status())->toBe(302);
+
+        // 3. La PANTALLA del plan, y su token NUEVO.
+        $pagina = $servidor->cliente($jar)
+            ->get($servidor->url('/contabilidad/cuentas'));
+
+        expect($pagina->status())->toBe(200);
+
+        $token = token_csrf_de_la_contabilidad($pagina->body());
+
+        expect($token)->not->toBe('');
+
+        $efectivo = Account::query()->where('code', '1100000')->firstOrFail();
+        $banco = Account::query()->where('code', '1110000')->firstOrFail();
+
+        // 4. La caja se APAGA: el plan se queda SIN el rol 'cash'.
+        $apagada = $servidor->cliente($jar, ['allow_redirects' => false])
+            ->withHeaders([
+                'X-CSRF-TOKEN' => $token,
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+            ])
+            ->post($servidor->url('/api/contabilidad/cuentas/'.$efectivo->id.'/desactivar'));
+
+        expect($apagada->status())->toBe(200)
+            ->and($apagada->json('is_active'))->toBeFalse()
+            ->and($apagada->json('missing_roles'))->toBe(['cash']);
+
+        // 5. Y el BANCO puede ser la caja EN EL MISMO PASO: el plan NO queda
+        //    bloqueado.
+        $asignada = $servidor->cliente($jar, ['allow_redirects' => false])
+            ->withHeaders([
+                'X-CSRF-TOKEN' => $token,
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+            ])
+            ->put($servidor->url('/api/contabilidad/cuentas/'.$banco->id.'/rol'), [
+                'role' => 'cash',
+            ]);
+
+        expect($asignada->status())->toBe(200)
+            ->and($asignada->json('roles.cash'))->toBe('1110000')
+            ->and($asignada->json('missing_roles'))->toBe([]);
+
+        // 6. Y la pantalla dice que el plan esta COMPLETO, con la caja nueva.
+        $pagina = $servidor->cliente($jar)
+            ->get($servidor->url('/contabilidad/cuentas'));
+
+        expect($pagina->status())->toBe(200);
+
+        $props = pagina_de_inertia_de_la_contabilidad($pagina->body());
+        $cuentas = collect($props['props']['accounts'] ?? []);
+
+        $caja = $cuentas->firstWhere('code', '1100000');
+        $banco = $cuentas->firstWhere('code', '1110000');
+
+        expect($props['props']['missing_roles'] ?? null)->toBe([])
+            ->and($banco)->not->toBeNull()
+            ->and($banco['role'])->toBe('cash')
+            // Y la caja apagada ya no cumple NINGUN rol.
+            ->and($caja)->not->toBeNull()
+            ->and($caja['role'])->toBeNull();
     } finally {
         $servidor->stop();
     }

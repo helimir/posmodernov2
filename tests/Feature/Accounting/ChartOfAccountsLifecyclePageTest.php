@@ -19,7 +19,11 @@ use Tests\Fixtures\PosFixture;
  *    responde 422 con su mensaje;
  *  - APAGAR una cuenta que cumple un rol deja el plan INCOMPLETO, y la
  *    pantalla lo avisa: el sistema no podra cobrar y el hueco se ve ANTES de
- *    cobrar;
+ *    cobrar. Y el aviso dice que la cuenta salio del PLAN;
+ *  - ENCENDER una cuenta NO le devuelve el rol: el plan sigue sin el, y el
+ *    aviso lo dice;
+ *  - APAGAR la caja y poner otra cuenta como caja se hace EN UN PASO: el
+ *    plan no queda bloqueado;
  *  - BORRAR una cuenta con movimientos contables se rechaza con 422 y su
  *    mensaje, y una cuenta nunca usada se borra de verdad.
  */
@@ -119,6 +123,9 @@ test('test_un_codigo_repetido_devuelve_422_con_su_mensaje', function () {
 /**
  * APAGAR una cuenta que cumple un rol deja el plan INCOMPLETO, y la pantalla
  * lo AVISA: el sistema no podra cobrar, y el hueco se ve antes de cobrar.
+ *
+ * Y el aviso dice que la cuenta SALIO DEL PLAN: una cuenta apagada no cumple
+ * ningun rol, asi que su vinculo se quito.
  */
 test('test_la_pantalla_avisa_que_el_plan_quedo_incompleto_al_apagar_una_cuenta', function () {
     $escenario = PosFixture::escenario();
@@ -134,7 +141,16 @@ test('test_la_pantalla_avisa_que_el_plan_quedo_incompleto_al_apagar_una_cuenta',
         ->assertJsonPath('missing_roles', ['cash']);
 
     // Y AVISA: el plan de la tienda puede quedarse sin ese rol.
-    expect($apagada->json('warnings'))->not->toBeEmpty();
+    $avisos = $apagada->json('warnings');
+
+    expect($avisos)->not->toBeEmpty();
+
+    foreach ($avisos as $aviso) {
+        expect($aviso)->toContain('has left the plan');
+    }
+
+    // Y ya NO dice que el rol sigue declarado: la cuenta salio del plan.
+    expect(implode(' ', $avisos))->not->toContain('stays declared');
 
     // Y la pantalla lo dice: el hueco se ve ANTES de cobrar.
     $this->actingAs($usuario)
@@ -148,9 +164,10 @@ test('test_la_pantalla_avisa_que_el_plan_quedo_incompleto_al_apagar_una_cuenta',
 });
 
 /**
- * ENCENDER la cuenta devuelve el plan a su COMPLETIDAD.
+ * ENCENDER una cuenta NO le devuelve el rol: el plan sigue sin el, y el
+ * aviso lo dice, para que nadie piense que al reencender vuelve el rol.
  */
-test('test_encender_una_cuenta_devuelve_el_plan_a_su_completitud', function () {
+test('test_encender_una_cuenta_no_le_devuelve_el_rol_y_lo_dice', function () {
     $escenario = PosFixture::escenario();
     $usuario = PosFixture::usuario($escenario['store_id']);
 
@@ -165,14 +182,56 @@ test('test_encender_una_cuenta_devuelve_el_plan_a_su_completitud', function () {
 
     $encendida->assertOk()
         ->assertJsonPath('is_active', true)
-        ->assertJsonPath('missing_roles', []);
+        // El plan SIGUE sin el rol: encender no lo devuelve.
+        ->assertJsonPath('missing_roles', ['cash']);
+
+    // Y lo DICE.
+    expect(implode(' ', $encendida->json('warnings')))->toContain('assign the role again');
 
     $this->actingAs($usuario)
         ->get('/contabilidad/cuentas')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
             ->component('accounting/accounts')
+            ->where('missing_roles', ['cash'])
+            ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1100000')['is_active'] === true
+                && collect($cuentas)->firstWhere('code', '1100000')['role'] === null)
+            ->etc());
+});
+
+/**
+ * APAGAR la caja y poner el Banco como caja se hace EN UN PASO: el plan no
+ * queda bloqueado.
+ */
+test('test_apagar_la_caja_y_poner_el_banco_como_caja_se_hace_en_un_paso', function () {
+    $escenario = PosFixture::escenario();
+    $usuario = PosFixture::usuario($escenario['store_id']);
+
+    $efectivo = Account::query()->where('code', '1100000')->firstOrFail();
+    $banco = Account::query()->where('code', '1110000')->firstOrFail();
+
+    // 1. La caja se apaga: el plan se queda sin el rol 'cash'.
+    $this->actingAs($usuario)
+        ->postJson('/api/contabilidad/cuentas/'.$efectivo->id.'/desactivar')
+        ->assertOk()
+        ->assertJsonPath('missing_roles', ['cash']);
+
+    // 2. Y el Banco puede ser la caja EN EL MISMO PASO.
+    $this->actingAs($usuario)
+        ->putJson('/api/contabilidad/cuentas/'.$banco->id.'/rol', ['role' => 'cash'])
+        ->assertOk()
+        ->assertJsonPath('roles.cash', '1110000')
+        ->assertJsonPath('missing_roles', []);
+
+    // 3. Y la pantalla lo dice: el plan esta COMPLETO.
+    $this->actingAs($usuario)
+        ->get('/contabilidad/cuentas')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
+            ->component('accounting/accounts')
             ->where('missing_roles', [])
+            ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1110000')['role'] === 'cash'
+                && collect($cuentas)->firstWhere('code', '1100000')['role'] === null)
             ->etc());
 });
 

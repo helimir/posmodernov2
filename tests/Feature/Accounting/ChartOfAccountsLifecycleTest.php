@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Accounting\ChartOfAccounts;
+use App\Domain\Accounting\Enums\AccountRole;
 use App\Domain\Accounting\Enums\AccountType;
 use App\Domain\Accounting\LedgerWriter;
 use App\Models\Account;
@@ -26,8 +27,9 @@ use Tests\Fixtures\PosFixture;
  *    primero, porque el plan de la tienda depende de ella;
  *  - una cuenta con VINCULOS (aunque no cumpla un rol) tampoco se borra: el
  *    vinculo es el plan de la tienda;
- *  - APAGAR una cuenta la saca de los roles de la tienda, y el plan puede
- *    quedar incompleto: eso se ve. ENCENDERla la devuelve.
+ *  - UNA CUENTA APAGADA NO CUMPLE NINGUN ROL: SALE DEL PLAN. Apagarla quita
+ *    sus vinculos, y encenderla NO le devuelve el rol: el rol se vuelve a
+ *    asignar si se quiere.
  */
 
 /**
@@ -136,8 +138,8 @@ test('test_un_nombre_vacio_falla', function () {
  * APAGAR una cuenta la saca de los roles de la tienda: deja de cumplir NINGUN
  * rol, y el plan puede quedarse incompleto. Eso se ve.
  *
- * Y sus vinculos NO se tocan: el rol sigue declarado, pero la cuenta apagada
- * no lo cumple.
+ * Y sale del PLAN: sus vinculos se quitan, porque una cuenta apagada no
+ * cumple ningun rol y un vinculo que no se cumple es un residuo.
  */
 test('test_apagar_una_cuenta_la_saca_de_los_roles_de_la_tienda', function () {
     $escenario = PosFixture::escenario();
@@ -158,18 +160,46 @@ test('test_apagar_una_cuenta_la_saca_de_los_roles_de_la_tienda', function () {
     // tienda puede quedarse incompleto.
     expect($rolesDejados)->toBe([(int) $escenario['store_id'] => 'cash']);
 
-    // El VINCULO sigue: el rol sigue declarado en el plan de la tienda.
-    expect((string) DB::table('store_accounts')
+    // Y sale del PLAN: sus VINCULOS se quitan.
+    expect(DB::table('store_accounts')
         ->where('store_id', $escenario['store_id'])
         ->where('account_id', $efectivo->id)
-        ->value('role'))->toBe('cash');
+        ->count())->toBe(0);
 });
 
 /**
- * ENCENDER es lo inverso: la cuenta vuelve a cumplir su rol y el plan se
- * completa.
+ * APAGAR una cuenta la SACA DEL PLAN: otra cuenta puede cumplir ese rol, y
+ * el plan NO queda bloqueado.
+ *
+ * REGLA que fija este test: *una cuenta apagada no cumple ningun rol*. El
+ * dominio no puede decir a la vez que le falta el rol y que ya lo cumple
+ * una cuenta apagada: son dos metodos del mismo dominio preguntando lo
+ * mismo, y tienen que responder lo mismo.
  */
-test('test_encender_una_cuenta_la_devuelve_a_los_roles_de_la_tienda', function () {
+test('test_apagar_una_cuenta_la_saca_del_plan_y_otra_cuenta_puede_cumplir_ese_rol', function () {
+    $escenario = PosFixture::escenario();
+    $plan = new ChartOfAccounts(DB::connection());
+
+    $efectivo = Account::query()->where('code', '1100000')->firstOrFail();
+    $banco = Account::query()->where('code', '1110000')->firstOrFail();
+
+    // La caja se apaga: el plan se queda SIN el rol 'cash'.
+    $plan->deactivate((int) $efectivo->id);
+
+    expect($plan->missingRoles((int) $escenario['store_id']))->toContain('cash');
+
+    // Y otra cuenta puede cumplir ese rol: el plan NO queda bloqueado.
+    $plan->assign((int) $escenario['store_id'], (int) $banco->id, AccountRole::Cash);
+
+    expect($plan->roles((int) $escenario['store_id']))->toHaveKey('cash', '1110000')
+        ->and($plan->missingRoles((int) $escenario['store_id']))->toBe([]);
+});
+
+/**
+ * ENCENDER es lo inverso de apagar, pero NO devuelve el rol: una cuenta
+ * apagada sale del PLAN, y volver a cumplir un rol es una ASIGNACION nueva.
+ */
+test('test_encender_una_cuenta_no_le_devuelve_el_rol', function () {
     $escenario = PosFixture::escenario();
     $plan = new ChartOfAccounts(DB::connection());
 
@@ -179,11 +209,60 @@ test('test_encender_una_cuenta_la_devuelve_a_los_roles_de_la_tienda', function (
 
     expect($plan->missingRoles((int) $escenario['store_id']))->toContain('cash');
 
-    $rolesCumplidos = $plan->activate((int) $efectivo->id);
+    // Encender la deja ACTIVA, pero el plan SIGUE sin el rol.
+    $cumplidos = $plan->activate((int) $efectivo->id);
 
-    expect($plan->roles((int) $escenario['store_id']))->toHaveKey('cash', '1100000')
-        ->and($plan->missingRoles((int) $escenario['store_id']))->toBe([])
-        ->and($rolesCumplidos)->toBe([(int) $escenario['store_id'] => 'cash']);
+    expect($cumplidos)->toBe([])
+        ->and($plan->roles((int) $escenario['store_id']))->not->toHaveKey('cash')
+        ->and($plan->missingRoles((int) $escenario['store_id']))->toContain('cash')
+        ->and((bool) Account::query()->where('id', $efectivo->id)->value('is_active'))->toBeTrue();
+
+    // Y el rol vuelve cuando se ASIGNA, no antes.
+    $plan->assign((int) $escenario['store_id'], (int) $efectivo->id, AccountRole::Cash);
+
+    expect($plan->roles((int) $escenario['store_id']))->toHaveKey('cash', '1100000');
+});
+
+/**
+ * `assign()` LIBERA el vinculo RESIDUAL de una cuenta apagada, en vez de
+ * dejar el plan bloqueado.
+ *
+ * El residuo es el estado que dejaron los datos viejos (y el que puede
+ * hacer una migracion a mano): una cuenta APAGADA con el rol declarado. Una
+ * cuenta apagada no cumple ningun rol, asi que su vinculo no bloquea a
+ * nadie: el dominio se repara solo.
+ */
+test('test_assign_libera_el_vinculo_residual_de_una_cuenta_apagada', function () {
+    $escenario = PosFixture::escenario();
+    $plan = new ChartOfAccounts(DB::connection());
+
+    $efectivo = Account::query()->where('code', '1100000')->firstOrFail();
+    $banco = Account::query()->where('code', '1110000')->firstOrFail();
+
+    $plan->deactivate((int) $efectivo->id);
+
+    // El vinculo RESIDUAL, montado a mano: la cuenta apagada con el rol
+    // declarado.
+    DB::table('store_accounts')->insert([
+        'account_id' => $efectivo->id,
+        'store_id' => $escenario['store_id'],
+        'role' => 'cash',
+        'status' => 'active',
+        'sort_order' => 0,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Asignar el rol a otra cuenta NO se bloquea.
+    $plan->assign((int) $escenario['store_id'], (int) $banco->id, AccountRole::Cash);
+
+    expect($plan->roles((int) $escenario['store_id']))->toHaveKey('cash', '1110000');
+
+    // Y el residuo ya no esta: el vinculo de la cuenta apagada se libero.
+    expect(DB::table('store_accounts')
+        ->where('store_id', $escenario['store_id'])
+        ->where('account_id', $efectivo->id)
+        ->count())->toBe(0);
 });
 
 /**

@@ -42,7 +42,8 @@ use RuntimeException;
  *    que el rol exige se rechaza con un 422 y su mensaje.
  *  - EL CATALOGO SE MANTIENE DESDE AQUI: la cuenta entra con su codigo, su
  *    nombre y su tipo, y sale con su motivo. Una cuenta que tiene historia
- *    NO se borra: se apaga, y la pantalla avisa cuando el plan se queda
+ *    NO se borra: se apaga, y al apagarla SALE DEL PLAN (encenderla no le
+ *    devuelve el rol). La pantalla avisa cuando el plan se queda
  *    incompleto.
  *
  * LOS IMPORTES no viajan por aqui: un plan de cuentas no tiene importes.
@@ -166,10 +167,9 @@ class ChartOfAccountsController extends Controller
     /**
      * APAGA una cuenta del catalogo.
      *
-     * La cuenta deja de cumplir ningun rol, pero sus vinculos NO se tocan: el
-     * rol sigue declarado y el plan de la tienda puede quedarse incompleto.
-     * Por eso la respuesta AVISA de ese plan: el hueco se ve antes de que el
-     * cobro falle.
+     * La cuenta deja de cumplir ningun rol y SALE DEL PLAN: sus vinculos se
+     * quitan. El plan de la tienda puede quedarse incompleto, y por eso la
+     * respuesta AVISA de eso: el hueco se ve antes de que el cobro falle.
      */
     public function deactivate(Request $request, Account $account): JsonResponse
     {
@@ -185,12 +185,19 @@ class ChartOfAccountsController extends Controller
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
 
-        return $this->respuestaDelEstado($account, $store, $dejados, true);
+        return $this->respuestaDelEstado(
+            $account,
+            $store,
+            $this->avisosDelApagado((string) $account->code, $dejados)
+        );
     }
 
     /**
-     * ENCIENDE una cuenta del catalogo: vuelve a cumplir su rol, y el plan de
-     * la tienda se completa.
+     * ENCIENDE una cuenta del catalogo.
+     *
+     * Encenderla NO le devuelve el rol: la cuenta salio del plan cuando se
+     * apago, y volver a cumplir un rol es una ASIGNACION nueva. El aviso lo
+     * dice, para que nadie piense que el rol volvio solo.
      */
     public function activate(Request $request, Account $account): JsonResponse
     {
@@ -201,12 +208,16 @@ class ChartOfAccountsController extends Controller
         }
 
         try {
-            $cumplidos = $this->chart->activate((int) $account->id);
+            $this->chart->activate((int) $account->id);
         } catch (RuntimeException $fallo) {
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
 
-        return $this->respuestaDelEstado($account, $store, $cumplidos, false);
+        return $this->respuestaDelEstado(
+            $account,
+            $store,
+            $this->avisosDelEncendido((string) $account->code)
+        );
     }
 
     /**
@@ -234,9 +245,9 @@ class ChartOfAccountsController extends Controller
      * La RESPUESTA del estado de una cuenta: si esta activa, los roles de la
      * tienda activa, los que le faltan y los AVISOS.
      *
-     * @param  array<int, string>  $roles  Id de tienda => rol.
+     * @param  list<string>  $avisos
      */
-    private function respuestaDelEstado(Account $account, Store $store, array $roles, bool $apagada): JsonResponse
+    private function respuestaDelEstado(Account $account, Store $store, array $avisos): JsonResponse
     {
         // La cuenta viene de antes del cambio: se recarga para que el estado
         // que se responde sea el de AHORA, no el que se Recordaba.
@@ -248,13 +259,13 @@ class ChartOfAccountsController extends Controller
             'is_active' => (bool) $account->is_active,
             'roles' => $this->chart->roles((int) $store->id),
             'missing_roles' => $this->chart->missingRoles((int) $store->id),
-            'warnings' => $this->avisos((string) $account->code, $roles, $apagada),
+            'warnings' => $avisos,
         ]);
     }
 
     /**
-     * Los AVISOS de un apagado o un encendido: que plan puede haber quedado
-     * incompleto, y en que tienda.
+     * Los AVISOS de un APAGADO: la cuenta salio del plan, y el plan de esa
+     * tienda puede quedarse incompleto.
      *
      * El texto es de PANTALLA, y por eso esta en ingles: lo que el dominio
      * decide es QUE roles cambian, y como se dice es de la costura.
@@ -262,27 +273,47 @@ class ChartOfAccountsController extends Controller
      * @param  array<int, string>  $roles  Id de tienda => rol.
      * @return list<string>
      */
-    private function avisos(string $codigo, array $roles, bool $apagada): array
+    private function avisosDelApagado(string $codigo, array $roles): array
     {
         $avisos = [];
 
         foreach ($roles as $storeId => $rol) {
-            $tienda = Store::query()->find($storeId);
-
-            $nombre = $tienda === null
-                ? "the store {$storeId}"
-                : "the store {$tienda->name}";
+            $nombre = $this->nombreDeLaTienda($storeId);
 
             $etiqueta = $this->etiquetaDelRol($rol);
 
-            $avisos[] = $apagada
-                ? "The account {$codigo} no longer fulfils the role '{$etiqueta}' in {$nombre}. "
-                    .'The plan of that store may now be incomplete: the till cannot charge without every role. '
-                    .'The role stays declared until the account is removed from the plan.'
-                : "The account {$codigo} fulfils the role '{$etiqueta}' in {$nombre} again.";
+            $avisos[] = "The account {$codigo} has left the plan: it no longer fulfils the role '{$etiqueta}' in {$nombre}. "
+                .'The plan of that store may now be incomplete: the till cannot charge without every role. '
+                .'Assign the role to another account to complete it.';
         }
 
         return $avisos;
+    }
+
+    /**
+     * Los AVISOS de un ENCENDIDO: la cuenta vuelve a estar activa, pero NO
+     * vuelve al plan. El rol se asigna otra vez, si se quiere.
+     *
+     * @return list<string>
+     */
+    private function avisosDelEncendido(string $codigo): array
+    {
+        return [
+            "The account {$codigo} is active again, but it plays NO role: it left the plan when it was deactivated. "
+            .'You have to assign the role again to put it back in the plan.',
+        ];
+    }
+
+    /**
+     * El NOMBRE de una tienda, para un aviso.
+     */
+    private function nombreDeLaTienda(int $storeId): string
+    {
+        $tienda = Store::query()->find($storeId);
+
+        return $tienda === null
+            ? "the store {$storeId}"
+            : "the store {$tienda->name}";
     }
 
     /**
