@@ -68,6 +68,12 @@ function pedido_de_caja(array $escenario, string $importe = '58.0000', ?int $cus
  * asiento.
  */
 test('test_el_cobro_escribe_la_venta_con_cabecera_lineas_totales_pago_y_asiento', function () {
+    // La emision fiscal APAGADA: este test prueba la CAJA (la venta), no el
+    // canal fiscal, y su premisa es que el documento fiscal lo cierra T2.
+    // El interruptor se declara aqui para que el test no dependa del `.env`
+    // de la maquina.
+    config(['fiscal.emission_enabled' => false]);
+
     $escenario = PosFixture::escenario();
     $usuario = PosFixture::usuario($escenario['store_id']);
 
@@ -163,18 +169,21 @@ test('test_el_cobro_reserva_el_numero_de_documento_y_el_de_control', function ()
         ->and($documento->reference_type)->toBe('sale')
         ->and((int) $documento->reference_id)->toBe($saleId);
 
-    // 2. Y la del CONTROL: con su rol. El control NO se enlaza: la emision
-    //    fiscal lo necesita, no la venta.
+    // 2. Y la del CONTROL: con su rol y ENLAZADA a la venta. Ese enlace es
+    //    lo que hace que el documento fiscal reutilice el control del
+    //    comprobante en vez de reservar otro.
     $control = DB::table('fiscal_document_reservations')
         ->where('series_id', $escenario['control_series_id'])
         ->first();
 
     expect($control)->not->toBeNull()
         ->and($control->series_role)->toBe('control')
-        ->and((int) $control->number)->toBe(1);
+        ->and((int) $control->number)->toBe(1)
+        ->and($control->reference_type)->toBe('sale')
+        ->and((int) $control->reference_id)->toBe($saleId);
 
-    // 3. Y los DOS contadores de las series avanzan: el numero se RESERVA, no
-    //    se deriva de un SELECT.
+    // 3. Y los DOS contadores de las series avanzan UNA vez cada uno: el
+    //    numero se RESERVA, no se deriva de un SELECT.
     expect((int) DB::table('fiscal_series')
         ->where('id', $escenario['document_series_id'])->value('next_number'))->toBe(2)
         ->and((int) DB::table('fiscal_series')

@@ -8,13 +8,20 @@ use App\Domain\Accounting\LedgerWriter;
 use App\Domain\Checkout\CheckoutService;
 use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Credit\CustomerPaymentService;
+use App\Domain\Fiscal\Contracts\ElectronicInvoiceProvider;
 use App\Domain\Fiscal\ControlNumberGenerator;
+use App\Domain\Fiscal\FiscalIssuanceCoordinator;
+use App\Domain\Fiscal\FiscalIssuanceRunner;
+use App\Domain\Fiscal\FiscalIssuanceService;
+use App\Domain\Fiscal\FiscalProviderResolver;
+use App\Domain\Fiscal\FiscalProviderScope;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Fiscal\TaxRateResolver;
 use App\Domain\Inventory\LotConsumer;
 use App\Domain\Inventory\StockInvariant;
 use App\Domain\Sales\SalePaymentStatus;
 use App\Support\Pos\PosBudget;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Connection;
 use Illuminate\Support\ServiceProvider;
 
@@ -84,6 +91,42 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(CashDay::class, function ($app): CashDay {
             return new CashDay($app->make(Connection::class));
+        });
+
+        // La EMISION FISCAL (T2).
+        //
+        // EL PROVEEDOR SE RESUELVE, NO SE FIJA: el binding del contenedor no
+        // elige una implementacion, la deduce de las FILAS del perfil
+        // (entorno, proveedor y tipo). El ambito dice de que venta es la
+        // emision, y sin ambito no hay canal que resolver.
+        //
+        // El ambito es SCOPED: vive lo que dura una peticion, y no se filtra
+        // de una emision a la siguiente.
+        $this->app->scoped(FiscalProviderScope::class);
+
+        $this->app->bind(ElectronicInvoiceProvider::class, function (Container $app): ElectronicInvoiceProvider {
+            $ambito = $app->make(FiscalProviderScope::class);
+
+            return $app->make(FiscalProviderResolver::class)
+                ->resolve($ambito->documentSeriesId(), $ambito->saleId());
+        });
+
+        // El COORDINADOR no es singleton: se construye con el proveedor que
+        // este en curso, y no con el de la emision anterior.
+        $this->app->bind(FiscalIssuanceCoordinator::class, function (Container $app): FiscalIssuanceCoordinator {
+            $connection = $app->make(Connection::class);
+
+            return new FiscalIssuanceCoordinator(
+                $connection,
+                new FiscalIssuanceService($connection, $app->make(ElectronicInvoiceProvider::class)),
+                new SalePaymentStatus($connection),
+            );
+        });
+
+        // El EMISOR: el que dispara T2 y convierte el resultado en el estado
+        // fiscal que viaja en la respuesta del cobro.
+        $this->app->bind(FiscalIssuanceRunner::class, function (Container $app): FiscalIssuanceRunner {
+            return new FiscalIssuanceRunner($app->make(Connection::class), $app);
         });
     }
 

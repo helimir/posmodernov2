@@ -9,6 +9,8 @@ use App\Domain\Checkout\CheckoutPaymentInput;
 use App\Domain\Checkout\CheckoutResult;
 use App\Domain\Checkout\CheckoutService;
 use App\Domain\Credit\CustomerBalanceService;
+use App\Domain\Fiscal\FiscalIssuanceRunner;
+use App\Domain\Fiscal\ValueObjects\FiscalIssuanceOutcome;
 use App\Models\PaymentMethod;
 use App\Models\Store;
 use App\Support\Pos\PosAmount;
@@ -71,6 +73,7 @@ class PosController extends Controller
         private readonly CustomerBalanceService $balances,
         private readonly PosBudget $budget,
         private readonly CashRegisterService $registers,
+        private readonly FiscalIssuanceRunner $emision,
     ) {
         $this->catalog = new PosCatalog($connection);
     }
@@ -237,7 +240,12 @@ class PosController extends Controller
      * venta tampoco.
      *
      * Responde 201 con `{ sale_id, invoice_no, control_number, grand_total,
-     * status, change }`. Los importes son TEXTO decimal.
+     * status, change, fiscal }`. Los importes son TEXTO decimal.
+     *
+     * El campo `fiscal` es el ESTADO FISCAL de la venta: `{ status,
+     * document_id, control_number, message }`, con `status` en `issued`
+     * (emitido), `failed` (fallido, con su motivo) o `not_emitted` (el
+     * interruptor de emision esta apagado).
      *
      * NO SE COBRA SIN CAJA DEL DIA ABIERTA.
      *
@@ -342,7 +350,40 @@ class PosController extends Controller
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
 
-        return response()->json($resultado, 201);
+        // LA EMISION FISCAL (T2), FUERA de la transaccion de T1.
+        //
+        // REGLA que fija este metodo: *un fallo fiscal NO puede hacer perder
+        // una venta*. La venta ya esta confirmada: si el comprobante no sale,
+        // el cobro responde 201 IGUAL, con el aviso, y la venta queda
+        // pendiente de reintento. Si el cobro devolviera un error, el cajero
+        // creeria que no se vendio, y cobraria otra vez: eso es PEOR que un
+        // comprobante pendiente.
+        $fiscal = $this->estadoFiscal((int) $resultado['sale_id'], $actorId);
+
+        return response()->json(array_merge($resultado, ['fiscal' => $fiscal]), 201);
+    }
+
+    /**
+     * El ESTADO FISCAL de la venta, para la respuesta del cobro.
+     *
+     * REGLA que fija este metodo: *el interruptor apagado es una emision que
+     * NO ocurre, no una emision que falla*. Con el interruptor apagado no se
+     * entra en T2: no se resuelve ningun canal y no se toca nada mas. Es el
+     * modo de puesta en marcha.
+     *
+     * Y CON EL INTERRUPTOR ENCENDIDO, el estado es el que dice la emision:
+     * emitido (con su numero de control), fallido (con su motivo) o no
+     * emitido.
+     *
+     * @return array{status: string, document_id: int|null, control_number: string|null, message: string|null}
+     */
+    private function estadoFiscal(int $saleId, ?int $actorId): array
+    {
+        if (! config('fiscal.emission_enabled')) {
+            return FiscalIssuanceOutcome::noEmitido()->aArray();
+        }
+
+        return $this->emision->issue($saleId, $actorId)->aArray();
     }
 
     /**

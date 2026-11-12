@@ -110,8 +110,16 @@ final class PosHttpServer
 
     /**
      * Levanta el servidor y devuelve el arnes.
+     *
+     * @param  array<string, string>  $entorno  Variables de entorno ADICIONALES
+     *                                          para el servidor. Un camino que
+     *                                          depende de un interruptor de
+     *                                          modulo (el de emision fiscal) los
+     *                                          declara aqui: el servidor es un
+     *                                          proceso aparte, y no hereda el
+     *                                          entorno del proceso de pruebas.
      */
-    public static function start(): self
+    public static function start(array $entorno = []): self
     {
         $original = config('database.connections.pgsql.database');
         $database = 'pos_moderno_v2_http_'.bin2hex(random_bytes(4));
@@ -132,7 +140,7 @@ final class PosHttpServer
         $process = new Process(
             [PHP_BINARY, 'artisan', 'serve', '--no-reload', '--host=127.0.0.1', '--port='.$port],
             base_path(),
-            self::environment($database, $port),
+            self::environment($database, $port, $entorno),
             null,
             null,
         );
@@ -169,13 +177,16 @@ final class PosHttpServer
      * tiene que hablar con la base de datos del camino, no con la de
      * desarrollo, y la cache no puede depender de Redis.
      *
+     * @param  array<string, string>  $extra  Variables ADICIONALES: las del
+     *                                        camino, que el proceso de
+     *                                        pruebas no puede heredar.
      * @return array<string, string>
      */
-    private static function environment(string $database, string $port): array
+    private static function environment(string $database, string $port, array $extra = []): array
     {
         $conexion = config('database.connections.pgsql');
 
-        return [
+        return array_merge([
             'APP_ENV' => 'local',
             'APP_DEBUG' => 'true',
             'APP_KEY' => (string) config('app.key'),
@@ -191,7 +202,13 @@ final class PosHttpServer
             'SESSION_DRIVER' => 'database',
             'CACHE_STORE' => 'array',
             'QUEUE_CONNECTION' => 'sync',
-        ];
+            // La emision fiscal APAGADA, como en el resto de la suite: el
+            // servidor del camino no hereda el `.env` de la maquina, y un
+            // interruptor encendido ahi cambiaria el camino que se prueba.
+            // El camino que necesita la emision la declara en el entorno que
+            // pasa a `start()`.
+            'FISCAL_EMISSION_ENABLED' => 'false',
+        ], $extra);
     }
 
     /**

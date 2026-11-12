@@ -109,8 +109,40 @@ php artisan ops:smoke-sale
 
 El comando monta el escenario (tienda, perfil fiscal, producto, compra y lote), ejecuta un **checkout real** e imprime la anatomia de la venta: la cabecera con sus dos numeros (documento y control), las lineas con el snapshot de la tasa, los totales con el **ajuste de redondeo**, el pago, el **asiento contable** (con la comprobacion de que cuadra), las reservas y como bajo el stock. Las comprobaciones finales **son el codigo de salida**: si una cifra no cuadra, el comando sale con codigo distinto de cero.
 
-### Las ventas en el navegador
+### La emision fiscal: el interruptor y el reintento
 
+La emision fiscal (T2) esta **conectada al cobro** y desligada por un
+interruptor:
+
+```bash
+FISCAL_EMISSION_ENABLED=true    # el interruptor de modulo
+FISCAL_ENVIRONMENT=testing      # el despliegue: testing | production
+```
+
+Con el interruptor **apagado**, el cobro no entra en la emision: la venta sale
+sin documento fiscal, y la respuesta lo dice (`fiscal.status` =
+`not_emitted`). Con el interruptor **encendido**, el cobro emite el
+comprobante **fuera** de la transaccion de la venta (design D4, decision C5),
+y la respuesta lleva el estado fiscal: `issued` (con su numero de control),
+`failed` (con el motivo) o `not_emitted`.
+
+Un fallo de emision **no pierde la venta**: la venta queda en
+`fiscal_failed`, con su reserva intacta, y el reintento la vuelve a emitir
+sin quemar numeros:
+
+```bash
+php artisan ops:emit-fiscal               # todas las pendientes
+php artisan ops:emit-fiscal --sale=42     # una concreta
+```
+
+El canal fiscal se **resuelve**, no se fija: perfil fiscal -> entorno ->
+proveedor -> implementacion, segun el `kind` del proveedor. El unico canal
+sembrado hoy es el **local** (`printer`), que es el de rol dual: el sistema
+es emisor E imprenta, y el numero de control lo genera el generador local.
+Un canal externo (`pac`, `portal`) da un error claro: no hay actor al que
+conectarse.
+
+### Las ventas en el navegador
 | Ruta | Que se ve |
 |---|---|
 | `/ventas` | la lista de ventas: numero, fecha de negocio, cliente, estado y total |

@@ -77,6 +77,10 @@ function escenarioCheckout(bool $controlAgotado = false): array
         'rounding_rule' => 'line',
         'tax_inclusive_default' => false,
         'default_currency_id' => $currency->id,
+        // El perfil EXIGE numero de control: es el caso de rol dual (el
+        // sistema es emisor E imprenta), y es el que hace que T1 reserve el
+        // control de la venta.
+        'requires_control_number' => true,
     ]);
 
     $provider = FiscalProvider::create([
@@ -394,18 +398,23 @@ test('test_sin_stock_suficiente_la_venta_falla_y_tambien_vuelve_el_numero_de_con
 });
 
 /**
- * 0.6.6 — la venta ENLAZA su reserva con el numero de documento.
+ * 0.6.6 — la venta ENLAZA sus reservas con su numero de venta.
  *
  * Regla que fija: *la reserva del numero sabe a que venta pertenece*. Sin
  * ese enlace, el reintento de la emision fiscal (T2) no puede encontrar la
  * reserva que ya tiene y tendria que reservar un numero NUEVO: quemando un
  * correlativo por un fallo de la red.
  *
+ * Y EL CONTROL TAMBIEN SE ENLAZA: es la MISMA regla para la reserva del
+ * numero de control. El documento fiscal reutiliza esa reserva, y asi el
+ * comprobante y el documento llevan el MISMO numero de control y la serie
+ * avanza UNA vez por venta.
+ *
  * El enlace se ve desde la SEGUNDA sesion (`pgsql_b`), que no ve lo no
  * confirmado: asi se prueba que es real y no solo visible en la sesion que
  * reservo.
  */
-test('test_la_venta_enlaza_su_reserva_de_documento_con_su_numero_de_venta', function () {
+test('test_la_venta_enlaza_su_reserva_de_documento_y_su_de_control_con_su_numero_de_venta', function () {
     $escenario = escenarioCheckout();
     $service = servicioCheckout();
 
@@ -422,15 +431,17 @@ test('test_la_venta_enlaza_su_reserva_de_documento_con_su_numero_de_venta', func
         ->and($reserva->reference_type)->toBe('sale')
         ->and((int) $reserva->reference_id)->toBe($result->saleId);
 
-    // 2. Y la del CONTROL NO se enlaza: T2 no la necesita, y el control
-    //    compuesto no se puede deducir del texto.
+    // 2. Y la del CONTROL TAMBIÉN: es la que el documento fiscal va a
+    //    reutilizar, y asi el comprobante y el documento llevan el mismo
+    //    numero de control.
     $control = $otra->table('fiscal_document_reservations')
         ->where('series_id', $escenario['control_series_id'])
         ->first();
 
     expect($control)->not->toBeNull()
-        ->and($control->reference_type)->toBeNull()
-        ->and($control->reference_id)->toBeNull();
+        ->and($control->series_role)->toBe('control')
+        ->and($control->reference_type)->toBe('sale')
+        ->and((int) $control->reference_id)->toBe($result->saleId);
 });
 
 /**
