@@ -26,7 +26,14 @@ uses(WithoutWrappingTransaction::class);
 
 afterEach(function () {
     DB::table('legacy_translation_map')->delete();
-    DB::table('users')->where('email', 'test@example.com')->delete();
+
+    // Las PERSONAS de la semilla: el superusuario y el cajero. Se borran
+    // para que el test siguiente no encuentre datos que no son suyos: la
+    // semilla los deja con su rol y con su vinculo por la tienda.
+    DB::table('users')->whereIn('email', [
+        'test@example.com',
+        'cashier@example.com',
+    ])->delete();
 
     // Y la CAPA DE PAIS Y FISCAL que siembran los seeders: se borra para que
     // el test siguiente no encuentre datos que no son suyos. Una moneda o un

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Domain\Accounting\CashDay;
 use App\Domain\Accounting\CashRegisterService;
 use App\Domain\Accounting\LedgerWriter;
+use App\Domain\Auth\Enums\Permission;
 use App\Domain\Checkout\CheckoutService;
 use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Credit\CustomerPaymentService;
@@ -20,9 +21,11 @@ use App\Domain\Fiscal\TaxRateResolver;
 use App\Domain\Inventory\LotConsumer;
 use App\Domain\Inventory\StockInvariant;
 use App\Domain\Sales\SalePaymentStatus;
+use App\Models\User;
 use App\Support\Pos\PosBudget;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Connection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -135,6 +138,41 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        $this->registraLosPermisos();
+    }
+
+    /**
+     * El CATALOGO de permisos, en el Gate.
+     *
+     * REGLA que fija este metodo: *el Gate conoce el catalogo entero, y el
+     * superusuario lo puede todo*.
+     *
+     *  - Cada slug del catalogo es una HABILIDAD del Gate: asi
+     *    `$usuario->can('sales.create')` y `Gate::check('sales.create')` son
+     *    la misma pregunta, y el middleware no necesita un camino propio.
+     *  - El `Gate::before` concede TODOS los permisos al superusuario, y solo
+     *    los del CATALOGO: una capacidad que no esta en el catalogo no
+     *    existe, y no se concede por ser superusuario. Asi un slug equivocado
+     *    en una ruta no abre la puerta a nadie.
+     *  - Y NADA MAS: un rol sin el permiso no lo tiene. El `before` devuelve
+     *    `null` (y no `false`) para que la comprobacion de la habilidad siga
+     *    su curso.
+     */
+    private function registraLosPermisos(): void
+    {
+        Gate::before(function (User $user, string $ability): ?bool {
+            if (! Permission::tryFrom($ability) instanceof Permission) {
+                return null;
+            }
+
+            return $user->isSuperuser() ? true : null;
+        });
+
+        foreach (Permission::cases() as $permission) {
+            Gate::define(
+                $permission->value,
+                fn (User $user): bool => $user->hasPermission($permission->value),
+            );
+        }
     }
 }

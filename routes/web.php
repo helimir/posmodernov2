@@ -12,6 +12,30 @@ use App\Http\Controllers\StockReportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+/*
+|--------------------------------------------------------------------------
+| Las rutas de la aplicacion
+|--------------------------------------------------------------------------
+|
+| REGLA que fija este fichero: *el PERMISO de una ruta se declara JUNTO a la
+| ruta, no dentro del controlador*. El inventario de "que protege cada ruta"
+| se lee de un vistazo, aqui, y no hay que abrir veintidos controladores para
+| saberlo.
+|
+| Y LA COMPROBACION ESTA EN EL SERVIDOR: el boton que se oculta en la
+| interfaz es una cortesia, y el permiso es la ley. El defecto del legacy no
+| se hereda (alli el boton se ocultaba y el formatter no comprobaba nada).
+|
+| LAS RUTAS SIN PERMISO, Y POR QUE:
+|
+|  - las de AJUSTES y las de AUTENTICACION: son del propio usuario (su
+|    perfil, su clave, su sesion). Un permiso de negocio no protege el
+|    propio perfil, y un usuario sin rol puede cambiar su clave.
+|  - las del AGENTE DE IMPRESION y las del SYNC: tienen su propia
+|    autenticacion (token) y viven en `routes/api.php`.
+|
+*/
+
 Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
@@ -19,12 +43,17 @@ Route::get('/', function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', function () {
         return Inertia::render('dashboard');
-    })->name('dashboard');
+    })
+        ->middleware('permission:dashboard.read')
+        ->name('dashboard');
 
     // Las ventas: la costura en el navegador. La lista y el detalle.
-    Route::get('ventas', [SalesController::class, 'index'])->name('ventas.index');
+    Route::get('ventas', [SalesController::class, 'index'])
+        ->middleware('permission:sales.read')
+        ->name('ventas.index');
     Route::get('ventas/{sale}', [SalesController::class, 'show'])
         ->whereNumber('sale')
+        ->middleware('permission:sales.read')
         ->name('ventas.show');
 
     // El REINTENTO de la emision fiscal de una venta.
@@ -37,6 +66,7 @@ Route::middleware(['auth'])->group(function () {
     // sigue existiendo y la respuesta dice por que.
     Route::post('ventas/{sale}/emision', [FiscalIssuanceController::class, 'reintentar'])
         ->whereNumber('sale')
+        ->middleware('permission:sales.fiscal_retry')
         ->name('ventas.emision.reintentar');
 
     // El COMPROBANTE FISCAL: el HTML que se ve y se imprime.
@@ -48,9 +78,11 @@ Route::middleware(['auth'])->group(function () {
     // comprobante.
     Route::get('comprobantes/{documento}', [ReceiptController::class, 'show'])
         ->whereNumber('documento')
+        ->middleware('permission:receipt.read')
         ->name('comprobantes.show');
     Route::post('comprobantes/{documento}/imprimir', [ReceiptController::class, 'imprimir'])
         ->whereNumber('documento')
+        ->middleware('permission:receipt.print')
         ->name('comprobantes.imprimir');
 
     // La CAJA: el punto de venta. La pantalla, la busqueda de productos, el
@@ -61,10 +93,18 @@ Route::middleware(['auth'])->group(function () {
     // El PRESUPUESTO tambien POSTea y NO cobra: devuelve el total que
     // calcula el motor de impuestos, para que la pantalla lo enseñe sin
     // replicar la aritmetica fiscal en el navegador.
-    Route::get('caja', [PosController::class, 'index'])->name('caja.index');
-    Route::get('caja/productos', [PosController::class, 'products'])->name('caja.productos');
-    Route::post('caja/presupuesto', [PosController::class, 'budget'])->name('caja.presupuesto');
-    Route::post('caja/cobrar', [PosController::class, 'checkout'])->name('caja.cobrar');
+    Route::get('caja', [PosController::class, 'index'])
+        ->middleware('permission:pos.access')
+        ->name('caja.index');
+    Route::get('caja/productos', [PosController::class, 'products'])
+        ->middleware('permission:pos.access')
+        ->name('caja.productos');
+    Route::post('caja/presupuesto', [PosController::class, 'budget'])
+        ->middleware('permission:pos.budget')
+        ->name('caja.presupuesto');
+    Route::post('caja/cobrar', [PosController::class, 'checkout'])
+        ->middleware('permission:sales.create')
+        ->name('caja.cobrar');
 
     // La CAJA DEL DIA: la pantalla con sus tres estados (no hay caja, esta
     // abierta, esta cerrada), la apertura y el cierre.
@@ -75,13 +115,21 @@ Route::middleware(['auth'])->group(function () {
     //
     // NO SE COBRA SIN CAJA ABIERTA: el cobro de la caja lo exige, y por eso
     // la apertura y el cierre son hechos, no un numero que se puede repetir.
-    Route::get('caja/dia', [CashDayController::class, 'index'])->name('caja.dia');
-    Route::post('caja/dia/abrir', [CashDayController::class, 'abrir'])->name('caja.dia.abrir');
-    Route::post('caja/dia/cerrar', [CashDayController::class, 'cerrar'])->name('caja.dia.cerrar');
+    Route::get('caja/dia', [CashDayController::class, 'index'])
+        ->middleware('permission:cash_day.read')
+        ->name('caja.dia');
+    Route::post('caja/dia/abrir', [CashDayController::class, 'abrir'])
+        ->middleware('permission:cash_day.open')
+        ->name('caja.dia.abrir');
+    Route::post('caja/dia/cerrar', [CashDayController::class, 'cerrar'])
+        ->middleware('permission:cash_day.close')
+        ->name('caja.dia.cerrar');
 
     // El REPORTE DE STOCK BAJO: los productos de la tienda que se estan
     // acabando, con su stock REAL.
-    Route::get('reportes/stock', [StockReportController::class, 'index'])->name('reportes.stock');
+    Route::get('reportes/stock', [StockReportController::class, 'index'])
+        ->middleware('permission:report.read')
+        ->name('reportes.stock');
 
     // Los CLIENTES y su CREDITO: las PAGINAS y la API.
     //
@@ -91,42 +139,56 @@ Route::middleware(['auth'])->group(function () {
     // la API, y la UI ESCRIBE con `fetch` y REDIRIGE con `router.visit`.
     //
     // Por eso las dos cosas NO pueden vivir en la misma ruta: `GET
-    // /clientes/{id}` es la PANTALLA de la ficha y `GET
-    // /api/clientes/{id}` es su JSON. Una ruta que sirve las dos no
-    // decide nunca que responder.
+    // /clientes/{id}` es la PANTALLA de la ficha y `GET /api/clientes/{id}` es
+    // su JSON. Una ruta que sirve las dos no decide nunca que responder.
     //
     // El ALTA y el COBRO van por POST, y la EDICION por PUT: escriben el
     // cliente y su ficha de tienda, y el cobro escribe un movimiento en el
     // libro del cliente. Un cobro que se repitiera por un doble envio
     // cobraria dos veces, asi que el movimiento es un hecho, no una pantalla.
-    Route::get('clientes', [CustomerController::class, 'listado'])->name('clientes.index');
-    Route::get('clientes/nuevo', [CustomerController::class, 'alta'])->name('clientes.create');
+    Route::get('clientes', [CustomerController::class, 'listado'])
+        ->middleware('permission:customer.read')
+        ->name('clientes.index');
+    Route::get('clientes/nuevo', [CustomerController::class, 'alta'])
+        ->middleware('permission:customer.create')
+        ->name('clientes.create');
     Route::get('clientes/{customer}/editar', [CustomerController::class, 'edicion'])
         ->whereNumber('customer')
+        ->middleware('permission:customer.update')
         ->name('clientes.edit');
     Route::get('clientes/{customer}', [CustomerController::class, 'ficha'])
         ->whereNumber('customer')
+        ->middleware('permission:customer.read')
         ->name('clientes.show');
 
     // La API de clientes: la lista, la ficha, el alta, la edicion y el cobro.
     // Vive en `/api` y conserva su contrato: los mismos campos y los mismos
     // 422 con `{"errorMsg": "..."}`.
     Route::prefix('api')->group(function () {
-        Route::get('clientes', [CustomerController::class, 'index'])->name('api.clientes.index');
-        Route::post('clientes', [CustomerController::class, 'store'])->name('api.clientes.store');
+        Route::get('clientes', [CustomerController::class, 'index'])
+            ->middleware('permission:customer.read')
+            ->name('api.clientes.index');
+        Route::post('clientes', [CustomerController::class, 'store'])
+            ->middleware('permission:customer.create')
+            ->name('api.clientes.store');
         Route::get('clientes/{customer}', [CustomerController::class, 'show'])
             ->whereNumber('customer')
+            ->middleware('permission:customer.read')
             ->name('api.clientes.show');
         Route::put('clientes/{customer}', [CustomerController::class, 'update'])
             ->whereNumber('customer')
+            ->middleware('permission:customer.update')
             ->name('api.clientes.update');
         Route::post('clientes/{customer}/cobros', [CustomerController::class, 'cobro'])
             ->whereNumber('customer')
+            ->middleware('permission:customer.payment')
             ->name('api.clientes.cobros.store');
 
         // El SELECTOR DE CLIENTES de la caja: los clientes con ficha en la
         // tienda activa, con su saldo derivado.
-        Route::get('caja/clientes', [PosController::class, 'clientes'])->name('api.caja.clientes');
+        Route::get('caja/clientes', [PosController::class, 'clientes'])
+            ->middleware('permission:pos.access')
+            ->name('api.caja.clientes');
     });
 
     // El PLAN DE CUENTAS de la tienda: el catalogo de cuentas con el rol que
@@ -139,13 +201,16 @@ Route::middleware(['auth'])->group(function () {
     //
     // Y EL PLAN ES POR TIENDA: la pantalla enseña el plan de la tienda
     // activa, y editarlo no toca el de las demas.
-    Route::get('contabilidad/cuentas', [ChartOfAccountsController::class, 'index'])->name('contabilidad.cuentas.index');
+    Route::get('contabilidad/cuentas', [ChartOfAccountsController::class, 'index'])
+        ->middleware('permission:accounting.read')
+        ->name('contabilidad.cuentas.index');
 
     Route::prefix('api')->group(function () {
         // El ROL de una cuenta en la tienda activa: se asigna o se quita. Un
         // rol `null` quita el rol de la cuenta.
         Route::put('contabilidad/cuentas/{account}/rol', [ChartOfAccountsController::class, 'updateRole'])
             ->whereNumber('account')
+            ->middleware('permission:accounting.update')
             ->name('api.contabilidad.cuentas.rol.update');
 
         // El CATALOGO de cuentas se mantiene desde la aplicacion: la cuenta
@@ -155,15 +220,19 @@ Route::middleware(['auth'])->group(function () {
         // UNA CUENTA CON HISTORIA NO SE BORRA: se apaga. Y el rechazo dice
         // QUE hacer, con el 422 de siempre (`{"errorMsg": "..."}`).
         Route::post('contabilidad/cuentas', [ChartOfAccountsController::class, 'store'])
+            ->middleware('permission:accounting.create')
             ->name('api.contabilidad.cuentas.store');
         Route::post('contabilidad/cuentas/{account}/desactivar', [ChartOfAccountsController::class, 'deactivate'])
             ->whereNumber('account')
+            ->middleware('permission:accounting.update')
             ->name('api.contabilidad.cuentas.desactivar');
         Route::post('contabilidad/cuentas/{account}/encender', [ChartOfAccountsController::class, 'activate'])
             ->whereNumber('account')
+            ->middleware('permission:accounting.update')
             ->name('api.contabilidad.cuentas.encender');
         Route::delete('contabilidad/cuentas/{account}', [ChartOfAccountsController::class, 'destroy'])
             ->whereNumber('account')
+            ->middleware('permission:accounting.delete')
             ->name('api.contabilidad.cuentas.destroy');
     });
 
@@ -173,25 +242,36 @@ Route::middleware(['auth'])->group(function () {
     // El ALTA y la EDICION van por POST y PUT: escriben el maestro y la
     // ficha de la tienda activa con Eloquent y con validacion, como
     // cualquier CRUD de Laravel.
-    Route::get('catalogo', [CatalogController::class, 'index'])->name('catalogo.index');
-    Route::get('catalogo/nuevo', [CatalogController::class, 'create'])->name('catalogo.create');
-    Route::post('catalogo', [CatalogController::class, 'store'])->name('catalogo.store');
+    Route::get('catalogo', [CatalogController::class, 'index'])
+        ->middleware('permission:catalog.read')
+        ->name('catalogo.index');
+    Route::get('catalogo/nuevo', [CatalogController::class, 'create'])
+        ->middleware('permission:catalog.create')
+        ->name('catalogo.create');
+    Route::post('catalogo', [CatalogController::class, 'store'])
+        ->middleware('permission:catalog.create')
+        ->name('catalogo.store');
     Route::get('catalogo/{product}', [CatalogController::class, 'show'])
         ->whereNumber('product')
+        ->middleware('permission:catalog.read')
         ->name('catalogo.show');
     Route::put('catalogo/{product}', [CatalogController::class, 'update'])
         ->whereNumber('product')
+        ->middleware('permission:catalog.update')
         ->name('catalogo.update');
 
     // El PRECIO POR TIENDA: la API que usa la caja y que edita el precio de
     // una tienda concreta.
     Route::get('catalogo/{product}/precios', [CatalogController::class, 'prices'])
         ->whereNumber('product')
+        ->middleware('permission:catalog.read')
         ->name('catalogo.precios');
     Route::put('catalogo/{product}/precios', [CatalogController::class, 'updatePrices'])
         ->whereNumber('product')
+        ->middleware('permission:catalog.price')
         ->name('catalogo.precios.update');
 });
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
+require __DIR__.'/administration.php';
