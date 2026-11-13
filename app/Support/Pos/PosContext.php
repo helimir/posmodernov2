@@ -26,9 +26,10 @@ use RuntimeException;
  *
  * QUE RESUELVE, Y POR QUE:
  *
- *  - LA TIENDA ACTIVA: la primera tienda del usuario (`user_stores`), y si el
- *    usuario no tiene ninguna, la primera tienda activa del sistema. Ver
- *    `store()`.
+ *  - LA TIENDA ACTIVA: la primera tienda del usuario (`user_stores`) DENTRO
+ *    del ambito de tiendas de su rol (`role_store_scopes`), y si el usuario
+ *    no tiene ninguna, la primera tienda activa del sistema que este en ese
+ *    ambito. Un rol sin ambito alcanza todas las tiendas. Ver `store()`.
  *  - LAS SERIES: la del documento y la del CONTROL de esa tienda. Las dos
  *    salen del PERFIL FISCAL de la tienda, y el perfil se RESUELVE: el que la
  *    tienda declara, o el vigente de su pais. Ver `documentSeriesId()` y
@@ -72,6 +73,16 @@ final class PosContext
 
     /** La fecha de negocio ya resuelta. */
     private ?DateTimeImmutable $businessDate = null;
+
+    /**
+     * El AMBITO DE TIENDAS del rol del usuario, ya resuelto.
+     *
+     * Una lista vacia significa "sin ambito": el alcance son todas las
+     * tiendas. `null` significa "todavia no resuelto".
+     *
+     * @var list<int>|null
+     */
+    private ?array $ambito = null;
 
     /**
      * @param  Connection  $connection  La MISMA conexion que usa el checkout:
@@ -316,6 +327,10 @@ final class PosContext
      *
      * La tienda tambien tiene que estar ACTIVA: una tienda desactivada no es
      * una tienda donde se cobre.
+     *
+     * Y TIENE QUE ESTAR EN EL AMBITO DEL ROL: un usuario cuyo rol tiene
+     * ambito en la tienda A no vende en la tienda B, ni aunque tenga el
+     * vinculo. El ambito manda sobre el vinculo.
      */
     private function storeIdOfUser(): ?int
     {
@@ -323,11 +338,19 @@ final class PosContext
             return null;
         }
 
-        $storeId = $this->connection->table('user_stores')
+        $consulta = $this->connection->table('user_stores')
             ->join('stores', 'stores.id', '=', 'user_stores.store_id')
             ->where('user_stores.user_id', $this->userId)
             ->where('user_stores.status', 'active')
-            ->where('stores.status', true)
+            ->where('stores.status', true);
+
+        $ambito = $this->scopeIds();
+
+        if ($ambito !== null) {
+            $consulta->whereIn('stores.id', $ambito);
+        }
+
+        $storeId = $consulta
             ->orderBy('user_stores.sort_order')
             ->orderBy('user_stores.id')
             ->value('stores.id');
@@ -337,15 +360,82 @@ final class PosContext
 
     /**
      * La PRIMERA tienda activa del sistema.
+     *
+     * Y la primera DENTRO del ambito del rol: el recurso es la tienda donde
+     * se puede cobrar, y el ambito del rol dice donde se puede cobrar.
      */
     private function firstActiveStoreId(): ?int
     {
-        $storeId = $this->connection->table('stores')
-            ->where('status', true)
+        $consulta = $this->connection->table('stores')
+            ->where('status', true);
+
+        $ambito = $this->scopeIds();
+
+        if ($ambito !== null) {
+            $consulta->whereIn('id', $ambito);
+        }
+
+        $storeId = $consulta
             ->orderBy('id')
             ->value('id');
 
         return $storeId === null ? null : (int) $storeId;
+    }
+
+    /**
+     * El AMBITO DE TIENDAS del rol del usuario: las tiendas donde puede
+     * operar.
+     *
+     * REGLA que fija este metodo: *el ambito es del ROL, y si el rol no tiene
+     * ninguno, el alcance son todas las tiendas*. El ambito se lee de
+     * `role_store_scopes`, que es la fila: el codigo no escribe el nombre de
+     * ninguna tienda.
+     *
+     * Y UN USUARIO SIN ROL NO TIENE AMBITO: sin rol no hay ambito, y el
+     * alcance es todo. Los permisos son los que ordenan lo que puede hacer,
+     * no el ambito.
+     *
+     * @return list<int>|null Las tiendas del ambito, o `null` si el alcance
+     *                        son todas.
+     */
+    public function scopeIds(): ?array
+    {
+        if ($this->ambito === null) {
+            $this->ambito = $this->tiendasDelAmbito();
+        }
+
+        return $this->ambito === [] ? null : $this->ambito;
+    }
+
+    /**
+     * Las TIENDAS del ambito del rol del usuario.
+     *
+     * Una lista VACIA significa "sin ambito": el alcance son todas las
+     * tiendas.
+     *
+     * @return list<int>
+     */
+    private function tiendasDelAmbito(): array
+    {
+        if ($this->userId === null) {
+            return [];
+        }
+
+        $roleId = $this->connection->table('users')
+            ->where('id', $this->userId)
+            ->value('group_id');
+
+        if ($roleId === null) {
+            return [];
+        }
+
+        $tiendas = $this->connection->table('role_store_scopes')
+            ->where('role_id', (int) $roleId)
+            ->orderBy('store_id')
+            ->pluck('store_id')
+            ->all();
+
+        return array_values(array_map('intval', $tiendas));
     }
 
     /**

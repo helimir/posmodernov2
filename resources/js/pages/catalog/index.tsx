@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { usePermissions } from '@/lib/permissions';
 import { type PosCurrency, formatAmount, formatPlainAmount } from '@/lib/pos';
 import { Plus, Search } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -60,6 +61,7 @@ const NONE = 'none';
  * The catalog: the master of products and the price of the active store.
  */
 export default function CatalogIndex({ products, pagination, filters, categories, store, currency }: CatalogIndexProps) {
+    const { can } = usePermissions();
     const [query, setQuery] = useState(filters.q);
     const [category, setCategory] = useState(filters.category_id === null ? NONE : String(filters.category_id));
     const [status, setStatus] = useState(filters.status ?? NONE);
@@ -115,12 +117,14 @@ export default function CatalogIndex({ products, pagination, filters, categories
                     <CardHeader className="flex-row items-center justify-between gap-3">
                         <CardTitle>Catalog</CardTitle>
 
-                        <Button asChild size="sm">
-                            <Link href="/catalogo/nuevo">
-                                <Plus />
-                                New product
-                            </Link>
-                        </Button>
+                        {can('catalog.create') && (
+                            <Button asChild size="sm">
+                                <Link href="/catalogo/nuevo">
+                                    <Plus />
+                                    New product
+                                </Link>
+                            </Button>
+                        )}
                     </CardHeader>
 
                     <CardContent>

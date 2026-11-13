@@ -21,6 +21,10 @@ use RuntimeException;
  *     primera tienda activa del sistema.
  *  2. CUALQUIER otra tienda a la que el usuario tenga un vinculo ACTIVO: un
  *     usuario puede vender en varias, y el vinculo es lo que da acceso.
+ *
+ * Y EL AMBITO DEL ROL MANDA: un usuario cuyo rol tiene ambito en la tienda A
+ * no tiene acceso a la tienda B, ni aunque tenga el vinculo. El ambito es la
+ * frontera, y el vinculo solo dice dentro de cual se opera.
  */
 final readonly class StoreAccess
 {
@@ -36,9 +40,11 @@ final readonly class StoreAccess
         }
 
         // 1. La tienda activa del usuario: la MISMA que resuelve la caja.
-        try {
-            $contexto = new PosContext($this->connection, $userId);
+        $contexto = new PosContext($this->connection, $userId);
 
+        $ambito = $contexto->scopeIds();
+
+        try {
             if ((int) $contexto->store()->id === $storeId) {
                 return true;
             }
@@ -46,15 +52,21 @@ final readonly class StoreAccess
             // Sin tienda activa solo puede valer el vinculo explicito.
         }
 
-        // 2. Una tienda mas a la que el usuario tiene vinculo ACTIVO, y que
-        //    esta activa: una tienda desactivada no es una tienda donde se
-        //    opera.
-        return $this->connection->table('user_stores')
+        // 2. Una tienda mas a la que el usuario tiene vinculo ACTIVO, que
+        //    esta activa y que esta EN SU AMBITO: una tienda desactivada no
+        //    es una tienda donde se opera, y una tienda fuera del ambito del
+        //    rol tampoco.
+        $consulta = $this->connection->table('user_stores')
             ->join('stores', 'stores.id', '=', 'user_stores.store_id')
             ->where('user_stores.user_id', $userId)
             ->where('user_stores.store_id', $storeId)
             ->where('user_stores.status', 'active')
-            ->where('stores.status', true)
-            ->exists();
+            ->where('stores.status', true);
+
+        if ($ambito !== null) {
+            $consulta->whereIn('user_stores.store_id', $ambito);
+        }
+
+        return $consulta->exists();
     }
 }

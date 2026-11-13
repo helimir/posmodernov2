@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { usePermissions } from '@/lib/permissions';
 import { type PosCurrency, formatAmount } from '@/lib/pos';
 import { Plus, Search } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -51,6 +52,7 @@ export interface CustomersIndexProps {
  * are allowed to owe.
  */
 export default function CustomersIndex({ customers, pagination, filters, store, currency }: CustomersIndexProps) {
+    const { can } = usePermissions();
     const [query, setQuery] = useState(filters.q);
 
     /**
@@ -101,12 +103,14 @@ export default function CustomersIndex({ customers, pagination, filters, store, 
                     <CardHeader className="flex-row items-center justify-between gap-3">
                         <CardTitle>Customers</CardTitle>
 
-                        <Button asChild size="sm">
-                            <Link href="/clientes/nuevo">
-                                <Plus />
-                                New customer
-                            </Link>
-                        </Button>
+                        {can('customer.create') && (
+                            <Button asChild size="sm">
+                                <Link href="/clientes/nuevo">
+                                    <Plus />
+                                    New customer
+                                </Link>
+                            </Button>
+                        )}
                     </CardHeader>
 
                     <CardContent>
@@ -189,9 +193,11 @@ export default function CustomersIndex({ customers, pagination, filters, store, 
                                                     )}
                                                 </td>
                                                 <td className="px-2 py-2 text-right">
-                                                    <Button asChild variant="outline" size="sm">
-                                                        <Link href={`/clientes/${customer.id}/editar`}>Edit</Link>
-                                                    </Button>
+                                                    {can('customer.update') && (
+                                                        <Button asChild variant="outline" size="sm">
+                                                            <Link href={`/clientes/${customer.id}/editar`}>Edit</Link>
+                                                        </Button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}

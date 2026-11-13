@@ -114,4 +114,22 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | The SUPERUSER role
+    |--------------------------------------------------------------------------
+    |
+    | The role that can do EVERYTHING is identified by its SLUG, and the slug
+    | is a ROW, not a literal in the code: the application reads the role of
+    | the user and compares its slug with this one.
+    |
+    | The default value is the installation's convention, and it can be
+    | changed with the environment (`SUPERUSER_ROLE_SLUG`) without touching
+    | the code. The seeder that creates the default roles reads THIS value,
+    | so the slug of the superuser is written in exactly one place.
+    |
+    */
+
+    'superuser_role_slug' => env('SUPERUSER_ROLE_SLUG', 'superuser'),
+
 ];

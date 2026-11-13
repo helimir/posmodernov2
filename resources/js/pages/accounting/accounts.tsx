@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { deleteJson, postJson, putJson } from '@/lib/api';
+import { usePermissions } from '@/lib/permissions';
 import { AlertTriangle, Plus, Power, PowerOff, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -82,6 +83,7 @@ type PendingAction = 'deactivate' | 'activate' | 'delete';
  * the role each one plays in this store.
  */
 export default function ChartOfAccounts({ accounts, roles, types, missing_roles, store }: ChartOfAccountsProps) {
+    const { can } = usePermissions();
     const [error, setError] = useState<string | null>(null);
     const [warnings, setWarnings] = useState<string[]>([]);
     const [saving, setSaving] = useState<number | null>(null);
@@ -293,17 +295,19 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
                             </CardDescription>
                         </div>
 
-                        <Button
-                            size="sm"
-                            onClick={() => {
-                                setError(null);
-                                setDraft({ code: '', name: '', type: types[0]?.value ?? '' });
-                                setCreating(true);
-                            }}
-                        >
-                            <Plus />
-                            New account
-                        </Button>
+                        {can('accounting.create') && (
+                            <Button
+                                size="sm"
+                                onClick={() => {
+                                    setError(null);
+                                    setDraft({ code: '', name: '', type: types[0]?.value ?? '' });
+                                    setCreating(true);
+                                }}
+                            >
+                                <Plus />
+                                New account
+                            </Button>
+                        )}
                     </CardHeader>
 
                     <CardContent>
@@ -343,7 +347,7 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
                                                 <td className="px-2 py-2">
                                                     <Select
                                                         value={account.role ?? NONE}
-                                                        disabled={saving === account.id || !account.is_active}
+                                                        disabled={saving === account.id || !account.is_active || !can('accounting.update')}
                                                         onValueChange={(value) => changeRole(account, value)}
                                                     >
                                                         <SelectTrigger
@@ -374,30 +378,34 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
                                                 </td>
                                                 <td className="px-2 py-2">
                                                     <div className="flex justify-end gap-2">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            disabled={saving === account.id}
-                                                            onClick={() =>
-                                                                setPending({
-                                                                    account,
-                                                                    action: account.is_active ? 'deactivate' : 'activate',
-                                                                })
-                                                            }
-                                                        >
-                                                            {account.is_active ? <PowerOff /> : <Power />}
-                                                            {account.is_active ? 'Deactivate' : 'Activate'}
-                                                        </Button>
+                                                        {can('accounting.update') && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                disabled={saving === account.id}
+                                                                onClick={() =>
+                                                                    setPending({
+                                                                        account,
+                                                                        action: account.is_active ? 'deactivate' : 'activate',
+                                                                    })
+                                                                }
+                                                            >
+                                                                {account.is_active ? <PowerOff /> : <Power />}
+                                                                {account.is_active ? 'Deactivate' : 'Activate'}
+                                                            </Button>
+                                                        )}
 
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            disabled={saving === account.id}
-                                                            onClick={() => setPending({ account, action: 'delete' })}
-                                                        >
-                                                            <Trash2 />
-                                                            Delete
-                                                        </Button>
+                                                        {can('accounting.delete') && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                disabled={saving === account.id}
+                                                                onClick={() => setPending({ account, action: 'delete' })}
+                                                            >
+                                                                <Trash2 />
+                                                                Delete
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

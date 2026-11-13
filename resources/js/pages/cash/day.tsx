@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { postJson } from '@/lib/api';
+import { usePermissions } from '@/lib/permissions';
 import { type PosCurrency, formatAmount } from '@/lib/pos';
 import { useState, type FormEvent } from 'react';
 
@@ -115,6 +116,7 @@ export default function CashDay({
     payments,
     cash_total,
 }: CashDayProps) {
+    const { can } = usePermissions();
     const [openingBalance, setOpeningBalance] = useState('0.0000');
     const [countedBalance, setCountedBalance] = useState('');
     const [saving, setSaving] = useState(false);
@@ -215,9 +217,11 @@ export default function CashDay({
                                     <p className="text-muted-foreground text-xs">The money counted by hand in the drawer.</p>
                                 </div>
 
-                                <Button type="submit" disabled={saving}>
-                                    {saving ? 'Opening…' : 'Open cash register'}
-                                </Button>
+                                {can('cash_day.open') && (
+                                    <Button type="submit" disabled={saving}>
+                                        {saving ? 'Opening…' : 'Open cash register'}
+                                    </Button>
+                                )}
                             </form>
                         </CardContent>
                     )}
@@ -336,9 +340,11 @@ export default function CashDay({
                                     </p>
                                 </div>
 
-                                <Button type="submit" disabled={saving}>
-                                    {saving ? 'Closing…' : 'Close cash register'}
-                                </Button>
+                                {can('cash_day.close') && (
+                                    <Button type="submit" disabled={saving}>
+                                        {saving ? 'Closing…' : 'Close cash register'}
+                                    </Button>
+                                )}
                             </form>
                         </CardContent>
                     </Card>

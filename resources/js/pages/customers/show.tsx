@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { postJson } from '@/lib/api';
+import { usePermissions } from '@/lib/permissions';
 import { type PosCurrency, formatAmount } from '@/lib/pos';
 import { AlertTriangle, ArrowLeft, Pencil } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
@@ -105,6 +106,8 @@ export default function CustomersShow({
     store,
     currency,
 }: CustomersShowProps) {
+    const { can } = usePermissions();
+
     const [amount, setAmount] = useState('');
     const [referenceNo, setReferenceNo] = useState('');
     const [entryDate, setEntryDate] = useState('');
@@ -213,12 +216,14 @@ export default function CustomersShow({
                             </span>
                         </CardTitle>
 
-                        <Button asChild variant="outline" size="sm">
-                            <Link href={`/clientes/${customer.id}/editar`}>
-                                <Pencil />
-                                Edit
-                            </Link>
-                        </Button>
+                        {can('customer.update') && (
+                            <Button asChild variant="outline" size="sm">
+                                <Link href={`/clientes/${customer.id}/editar`}>
+                                    <Pencil />
+                                    Edit
+                                </Link>
+                            </Button>
+                        )}
                     </CardHeader>
 
                     <CardContent>
@@ -365,50 +370,56 @@ export default function CustomersShow({
                         </CardHeader>
 
                         <CardContent>
-                            <form onSubmit={pay} className="flex flex-col gap-3">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="amount">Amount</Label>
-                                    <Input
-                                        id="amount"
-                                        value={amount}
-                                        onChange={(event) => setAmount(event.target.value)}
-                                        inputMode="decimal"
-                                        placeholder="0.0000"
-                                        required
-                                    />
-                                </div>
+                            {can('customer.payment') ? (
+                                <form onSubmit={pay} className="flex flex-col gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="amount">Amount</Label>
+                                        <Input
+                                            id="amount"
+                                            value={amount}
+                                            onChange={(event) => setAmount(event.target.value)}
+                                            inputMode="decimal"
+                                            placeholder="0.0000"
+                                            required
+                                        />
+                                    </div>
 
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="reference_no">Reference</Label>
-                                    <Input
-                                        id="reference_no"
-                                        value={referenceNo}
-                                        onChange={(event) => setReferenceNo(event.target.value)}
-                                        required
-                                    />
-                                </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="reference_no">Reference</Label>
+                                        <Input
+                                            id="reference_no"
+                                            value={referenceNo}
+                                            onChange={(event) => setReferenceNo(event.target.value)}
+                                            required
+                                        />
+                                    </div>
 
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="entry_date">Date</Label>
-                                    <Input
-                                        id="entry_date"
-                                        type="date"
-                                        value={entryDate}
-                                        onChange={(event) => setEntryDate(event.target.value)}
-                                    />
-                                    <p className="text-muted-foreground text-xs">
-                                        Without a date, the business date of {store.name} is used.
-                                    </p>
-                                </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="entry_date">Date</Label>
+                                        <Input
+                                            id="entry_date"
+                                            type="date"
+                                            value={entryDate}
+                                            onChange={(event) => setEntryDate(event.target.value)}
+                                        />
+                                        <p className="text-muted-foreground text-xs">
+                                            Without a date, the business date of {store.name} is used.
+                                        </p>
+                                    </div>
 
-                                {error !== null && (
-                                    <p className="bg-destructive/10 text-destructive rounded-md px-2 py-1 text-sm">{error}</p>
-                                )}
+                                    {error !== null && (
+                                        <p className="bg-destructive/10 text-destructive rounded-md px-2 py-1 text-sm">{error}</p>
+                                    )}
 
-                                <Button type="submit" disabled={paying}>
-                                    {paying ? 'Registering…' : 'Register the payment'}
-                                </Button>
-                            </form>
+                                    <Button type="submit" disabled={paying}>
+                                        {paying ? 'Registering…' : 'Register the payment'}
+                                    </Button>
+                                </form>
+                            ) : (
+                                <p className="text-muted-foreground text-sm">
+                                    Your role cannot register the payments of a customer.
+                                </p>
+                            )}
                         </CardContent>
                     </Card>
                 </div>

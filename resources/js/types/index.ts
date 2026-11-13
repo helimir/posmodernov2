@@ -2,6 +2,12 @@ import { LucideIcon } from 'lucide-react';
 
 export interface Auth {
     user: User;
+    /** The SLUGS of the permissions the user has: the same ones the routes ask for. */
+    permissions: string[];
+    /** The role of the user, or `null` when it has none. */
+    role: { id: number; name: string; slug: string } | null;
+    /** Whether the user is the superuser: the role that can do everything. */
+    is_superuser: boolean;
 }
 
 export interface BreadcrumbItem {
@@ -19,6 +25,8 @@ export interface NavItem {
     url: string;
     icon?: LucideIcon | null;
     isActive?: boolean;
+    /** The SLUG of the permission this section needs: the entry is hidden without it. */
+    permission?: string;
 }
 
 export interface SharedData {

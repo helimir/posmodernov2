@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,6 +18,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+        ]);
+
+        // El PERMISO de una ruta: `Route::middleware('permission:sales.read')`.
+        //
+        // El permiso se declara JUNTO a la ruta, y no en todos los
+        // controladores: asi el inventario de lo que protege cada ruta se lee
+        // de un vistazo.
+        $middleware->alias([
+            'permission' => EnsurePermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

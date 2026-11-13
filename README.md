@@ -38,15 +38,40 @@ veces no duplica ninguna fila.
 
 ### Credenciales de la semilla
 
-| | |
-|---|---|
-| Correo | `test@example.com` |
-| Contraseña | `password` |
+| Correo | Contraseña | Rol |
+|---|---|---|
+| `test@example.com` | `password` | Superuser (todo) |
+| `cashier@example.com` | `password` | Cajero (el mostrador, con ámbito en la tienda `DEMO`) |
 
 La semilla deja además una tienda de demostración (`code_name = 'DEMO'`), los
 perfiles fiscales de los países sembrados, el catálogo de tipos de asiento, el
 mapa de traducción del terminal legacy y el saldo de apertura de caja **sin
 certificar** (la certificación es un acto humano, no un dato).
+
+### Los permisos y los roles
+
+El **catálogo de permisos** vive en un solo sitio, en código:
+`app/Domain/Auth/Enums/Permission.php`. Un permiso que no está en el catálogo
+no existe, y uno que está existe para todos. El catálogo son 28 permisos en 11
+módulos, con la forma `{modulo}.{accion}`.
+
+El permiso de una ruta se declara **junto a la ruta**
+(`Route::middleware('permission:sales.read')`), y lo comprueba el servidor: el
+botón que se oculta en la interfaz es una cortesía, y el permiso es la ley.
+
+Los **tres roles por defecto** son un contrato, y los siembra
+`PermissionSeeder`:
+
+| Rol | Puede |
+|---|---|
+| `superuser` | todo, sin excepción (lo concede el `Gate::before`, por el slug de su rol) |
+| `cashier` | la caja, la caja del día (abrir, ver y cerrar), las ventas, los clientes y el catálogo en lectura |
+| `accountant` | las ventas y los clientes en lectura, la contabilidad en lectura y los reportes |
+
+Un usuario **sin rol** no puede hacer nada. La pantalla de administración
+(`/usuarios` y `/roles`) asigna el rol de una persona, los permisos de un rol
+y su ámbito de tiendas, y **todo cambio queda auditado** en `audit_logs` con
+su usuario y su IP.
 
 ## La puerta de calidad
 

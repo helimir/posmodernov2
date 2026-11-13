@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import PosLayout from '@/layouts/pos-layout';
 import { getJson, postJson } from '@/lib/api';
 import { type FiscalStatus, fiscalLabel, fiscalVariant } from '@/lib/fiscal';
+import { usePermissions } from '@/lib/permissions';
 import {
     type PosCurrency,
     addAmount,
@@ -159,6 +160,7 @@ function lineAmount(line: CartLine): string {
  * blind.
  */
 export default function PosIndex({ store, catalog, payment_methods, business_date, currency }: PosIndexProps) {
+    const { can } = usePermissions();
     const [products, setProducts] = useState<PosProduct[]>(catalog);
     const [query, setQuery] = useState('');
     const [searching, setSearching] = useState(false);
@@ -871,10 +873,12 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                                     ⌫
                                 </Button>
 
-                                <Button type="button" className="col-span-3 h-16 text-lg" onClick={charge} disabled={!canCharge}>
-                                    {charging ? <Loader2 className="animate-spin" /> : null}
-                                    {creditMode ? 'Charge on credit' : 'Charge'}
-                                </Button>
+                                {can('sales.create') && (
+                                    <Button type="button" className="col-span-3 h-16 text-lg" onClick={charge} disabled={!canCharge}>
+                                        {charging ? <Loader2 className="animate-spin" /> : null}
+                                        {creditMode ? 'Charge on credit' : 'Charge'}
+                                    </Button>
+                                )}
                             </div>
                         </div>
 
@@ -998,7 +1002,7 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                     {fiscalError && <p className="text-destructive mt-2 text-sm">{fiscalError}</p>}
 
                     <DialogFooter>
-                        {sale !== null && sale.fiscal.status === 'failed' && (
+                        {sale !== null && sale.fiscal.status === 'failed' && can('sales.fiscal_retry') && (
                             <Button variant="outline" onClick={retryFiscalIssuance} disabled={retryingFiscal}>
                                 {retryingFiscal ? 'Retrying…' : 'Retry issuance'}
                             </Button>
