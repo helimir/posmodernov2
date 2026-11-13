@@ -1507,4 +1507,10 @@ Ahora: el perfil **declarado** por la tienda (nueva columna `stores.fiscal_profi
 
 ### Siguiente
 
-La **Fase 2**, que no esta planificada: el T2 fiscal mas a fondo (el emisor contra una autoridad real), el **impresor** (la cola `print_jobs` y el agente LAN de punta a punta), los **reportes** de ventas, clientes y productos, y el **cierre de caja** con arqueo por medio de pago.
+La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
+
+**Decisiones del mantenedor (2026-11-12)**: el alcance es **el minimo operable**; el canal fiscal es **el Portal del SENIAT**; el Z es un **snapshot inmutable**; y el agente LAN es un **servicio .NET** (fuera del corte 1).
+
+**El corte 1 son 14 unidades** (F2-01 a F2-14), cada una **un PR**: **los permisos y los roles aplicados primero** (hoy cualquier usuario autenticado hace todo), luego los **tokens del perfil** y la **inscripcion fiscal** del emisor, la **resolucion de credenciales**, el **modelo del control con canal externo** (que hay que decidir antes de que llegue el adaptador), el **cableado del cobro al ticket**, el **escritor directo a la impresora** (`server_socket`, que hoy no existe), los **destinos de impresion**, la **reimpresion y el barrido de leases**, el **canal del agente endurecido**, el **asiento de apertura y el Z inmutable**, el **arqueo por denominacion con motivo**, el **Z imprimible**, la **auditoria de negocio** y los **backups con el scheduler**.
+
+**Quedan fuera del corte 1, con su motivo escrito**: el adaptador del Portal (**bloqueado** por el Manual Tecnico del art. 41 y la API del SENIAT: **no se escribe ni una linea** del adaptador antes de tenerlos en la mano), la entrega del comprobante al cliente, la remision mensual y la contingencia, el agente .NET, el motor de reportes (que exige el modulo de gastos y de banca: hoy solo se escriben 2 de los 7 tipos de asiento), la i18n, la configuracion por tienda y **el corte con el legacy**, que no estaba planificado en ninguna unidad y es una decision del mantenedor.

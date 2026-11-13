@@ -563,3 +563,119 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
 > de produccion que aparecieron al probar el arranque por HTTP (el 419 del CSRF y
 > las mayusculas de las rutas de Inertia) **no los veia ni el CI**. La Fase 1 tiene
 > que probarse **por HTTP de verdad**, no solo con tests.
+
+---
+
+## Fase 2 - Cerrar el sistema
+
+> La Fase 1 esta **completa**: 13 unidades, 19 reglas de dominio. El **dominio** esta solido
+> y bien pensado; lo que falta es **todo el borde**: el cableado del cobro a la impresora,
+> el Z de fin de dia, los permisos aplicados, la auditoria y los backups.
+>
+> **Decisiones del mantenedor (2026-11-12)**: el alcance es **el minimo operable**; el canal
+> fiscal es **el Portal del SENIAT** (sin intermediario: el control lo asigna el SENIAT); el Z
+> es un **snapshot inmutable** (el dia se sella y una venta de ayer no lo cambia); y el agente
+> LAN es un **servicio .NET** (fuera de este corte, pero el canal se endurece antes).
+>
+> La exploracion completa esta en **`exploration-fase2.md`**. Cada unidad es **un PR**.
+
+### El corte 1 — el minimo operable
+
+- [ ] **F2-01** **Los permisos y los roles aplicados.** Hoy **cualquier usuario autenticado hace
+  todo**: no hay `Gate`, ni `Policy`, ni middleware, ni permisos sembradas, ni usuarios sembrados
+  (el `User::factory(10)` esta comentado). Un cajero puede **cerrar la caja de otro** y editar el
+  plan de cuentas. Catalogo de permisos sembrado desde una unica fuente, roles por defecto,
+  `->can()` en cada ruta sensible, `Gate::before` para el superusuario, `role_store_scopes`
+  aplicado y la UI que oculta por el **mismo** slug (el defecto del legacy era ocultar el boton
+  sin comprobar el permiso en el formatter). **Va primero**: sin esto, todo lo demas se puede usar
+  mal. Riesgo: rompe pantallas que hoy funcionan -> aplicar por ruta **nuevas primero** y probar
+  cada ruta con cada rol. Dep: -
+- [ ] **F2-02** **Los tres tokens que faltan del perfil, y la inscripcion fiscal del emisor.**
+  El codigo ya lee `provision_reference` (sin el, el comprobante **no dice "conforme a la
+  providencia"**, art. 19), `final_consumer_name` (sin el, una venta **sin cliente no tiene
+  receptor**, art. 8.6) y `qr_required_tokens` (vacio = sin QR, que es lo correcto). Y sembrar la
+  `store_fiscal_registrations` de la tienda: hoy el comprobante sale con el RIF del emisor en
+  `null` (art. 8.4). Dep: -
+- [ ] **F2-03** **La resolucion de credenciales fiscales.** `fiscal_providers.credentials_ref` es
+  texto libre y **nadie lo resuelve**: no hay `Env::get()` equivalente. Anadir
+  `credential_env_prefix` a la tabla (como ya existe en `sms_providers`) y el metodo
+  `FiscalProvider::credential($variable)`, espejo de `SmsProvider::credential()`. Dep: -
+- [ ] **F2-04** **El modelo del control cuando el canal es externo.** Con el **Portal del SENIAT**
+  el control **lo asigna el SENIAT, no el emisor**: hoy `CheckoutService` reserva control local en
+  T1 y el proveedor reutiliza esa reserva. **Sin cambiar esto, el adaptador habria que rehacer el
+  checkout.** La reserva local de control se hace **solo** cuando el canal es local. Dep: 1.13
+- [ ] **F2-05** **El cableado del cobro al ticket.** `CheckoutService` **no toca `print_jobs`**: el
+  unico productor de trabajos es `ReceiptController::imprimir()`, que exige que un humano abra el
+  comprobante y pulse imprimir. `POST /caja/cobrar` encola el trabajo con los bytes **congelados**,
+  **fuera** de la transaccion de T1: **el fallo de impresora nunca puede perder una venta**. Dep: 1.8
+- [ ] **F2-06** **El escritor directo a la impresora.** El transporte `server_socket` esta en el
+  esquema y **no hay ni un `stream_socket_client` en `app/`**: un destino `server_socket` es un
+  trabajo que se encola y **nunca sale**. Escribir los bytes a `tcp://host:9100`, a `smb://` o a la
+  cola de Windows, con cola y reintento. Con esto el POS imprime **sin agente**. Dep: F2-05
+- [ ] **F2-07** **Los destinos de impresion administrables.** CRUD de `printers` y `print_targets`
+  por tienda: perfil ESC/POS, codepagina, **ancho** (`char_per_line`), soporte de QR y limite del
+  payload del QR, con un **test de conexion** al endpoint. Y validar el **ancho contra el
+  contenido**: hoy `escribirLinea()` no recorta ni ajusta, y el resultado es el **"ticket mudo"**
+  (bytes que la impresora no soporta). Dep: F2-06
+- [ ] **F2-08** **La reimpresion, el reintento y el barrido de leases.** `PrintJobReprinter` **no
+  tiene ruta HTTP**; `releaseExpiredLeases()` **no tiene consumidor** (un trabajo con lease caducado
+  queda bloqueado **para siempre**); y `PrintJobDispatcher::dispatch()` no admite `reason` ni
+  `reprint_of_job_id`. Ruta de reimpresion, comando programado `ops:print-lease-sweep` y pantalla de
+  la cola con reintento. Dep: F2-05
+- [ ] **F2-09** **El canal del agente endurecido.** Diez defectos del lado servidor: el token se
+  guarda con **SHA-256 plano** (no argon2id), no hay `instance_id` (no se detecta un segundo agente
+  con el mismo token), no hay revocacion, no se exige **TLS** (y el payload lleva datos fiscales), el
+  **heartbeat ignora el cuerpo** (el agente no puede inventariar sus impresoras ni el servidor
+  autorizar el destino) y la rotacion no tiene **ventana de gracia**. **Va antes que el agente
+  .NET**: si el cliente sale con un token en SHA-256, hay que migrar a todos. Dep: F2-01
+- [ ] **F2-10** **El asiento de apertura y el Z inmutable.** Hoy la apertura **no deja asiento** (el
+  tipo `opening_balance` existe en el catalogo y **nunca se escribe**): el saldo de partida es un
+  dato suelto y **el libro no cuadra con la caja**. Y el Z **no existe**: el descuadre se **calcula
+  en vivo**, asi que si manana se corrige una venta de ayer, el "cierre" de ayer **cambia**. Una
+  tabla `cash_closes` que **sella** el dia (totales, impuestos, correlativos, medios de pago) en la
+  **misma transaccion** que el `close()`. **El asiento va ANTES que el snapshot**, y `esperado` pasa
+  a ser **solo el saldo en curso**: si la partida entra al libro, `partida + en curso` cuadra dos
+  veces. Dep: 1.5, F2-01
+- [ ] **F2-11** **El arqueo con motivo y por denominacion.** El desglose por medio de pago existe,
+  pero el cajero cuenta **billetes y monedas**: falta el catalogo de denominaciones y el conteo
+  ("sobran 2 billetes de 50"). Y un descuadre **exige justificacion** por encima de un **umbral
+  configurable**: `cash_registers.note` existe y **nadie lo lee**. Dep: F2-10
+- [ ] **F2-12** **El Z imprimible.** El Z en papel (HTML y ESC/POS), reutilizando el
+  `ReceiptTemplate` y el `PrintPayload`. Dep: F2-10, F2-11
+- [ ] **F2-13** **La auditoria de negocio.** `audit_logs` existe y **un solo escritor** audita **una
+  de 40+ acciones** (con el `ip_address` en `null`), y **no es append-only** (si lo es
+  `fiscal_document_events`, con trigger). Un `AuditTrail` en todas las escrituras, **append-only**,
+  con pantalla de consulta y retencion. Dep: F2-01
+- [ ] **F2-14** **Los backups y el scheduler.** **No hay nada**: cero coincidencias de `backup` en
+  `app/`, `config/` y `database/`. `ops:backup`, `ops:restore`, **verificacion** de restauracion, y
+  el **scheduler que hoy no existe** (`bootstrap/app.php` no declara `withSchedule`), que es donde
+  vive el barrido de leases y el reintento de los trabajos. Dep: F2-08
+
+### Lo que NO entra en este corte (y por que)
+
+| Fuera | Por que |
+|---|---|
+| El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41 (O1)** y la **API del SENIAT (O4)**. El Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |
+| La **entrega del comprobante al cliente** (~700 l) | depende del adaptador, y del Hosting de los PDF |
+| La **remision mensual y la contingencia D+1** (~900 l) | dependen del adaptador; las tablas (`fiscal_periodic_reports`, `fiscal_contingency_forms`) ya estan en el esquema y sin usar |
+| El **agente LAN en .NET** (1 500-2 500 l, fuera de PHP) | decision tomada (.NET, servicio nativo), pero es otro lenguaje y otro repositorio. El corte 1 imprime **desde el servidor** (F2-06) |
+| El **motor de reportes y los primeros reportes** (~3 300 l) | R7/R8/R9 **exigen el modulo de gastos y de banca**: hoy solo se escriben 2 de los 7 tipos de asiento, asi que "ingresos y gastos" daria ceros |
+| El **modulo de gastos, ingresos y banca** (~2 000 l) | es la precondicion de los reportes anteriores |
+| La **i18n** (~2 500 l, el 80 % extraccion mecanica) | no bloquea el uso; el texto de la UI esta en ingles y los `errorMsg` en castellano |
+| La **configuracion por tienda y el selector de tienda** (~1 200 l) | `store_settings.auto_print` y `remote_printing` no los lee nadie, y un usuario con dos tiendas cobra siempre en la primera |
+| El **corte con el legacy** (exportar e importar) | **no esta planificado en ninguna unidad** y es una decision del mantenedor: "sustitucion, no convivencia" |
+
+### Los riesgos que este corte tiene
+
+| # | Riesgo | Como se mitiga |
+|---|---|---|
+| R1 | El Manual Tecnico llega y cambia el payload | el adaptador se escribe **al final**, y todo lo demas es independiente del formato |
+| R2 | Con canal externo hay que **revertir** "la venta reserva el control" | **F2-04 va antes** que el adaptador |
+| R3 | El asiento de apertura rompe el saldo en curso | **F2-10**: el asiento antes que el snapshot; `esperado = solo en curso`; test de arqueo |
+| R4 | Los permisos rompen pantallas que hoy funcionan | F2-01: por ruta **nuevas primero**; roles **antes** de los middleware; probar cada ruta con cada rol |
+| R6 | El "ticket mudo": bytes que la impresora no soporta | F2-07: validar el **ancho** contra el contenido |
+| R8 | El Z se sella con una aritmetica que luego cambia | el snapshot **y** una politica de correccion: una venta de un dia cerrado genera **una nota**, no una edicion |
+| R10 | `opening_balances` sin certificar | **acto humano** (`certified_at` + `certified_by`): "no code can close that" |
+| R12 | El test anti-pais es un proxy debil | crear `app/Providers/Fiscal/` y extender el test a verificar la ruta |
+| R13 | El rango de control es de demostracion | `NumberSeries` ya falla con mensaje explicito; falta la **alerta** de rango agotado |
+| R15 | `legacy` y `v2` con datos distintos y el mismo cliente | el corte hay que decidirlo **antes** de la Fase 2, no durante |
