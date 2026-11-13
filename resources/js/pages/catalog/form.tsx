@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { usePermissions } from '@/lib/permissions';
 import { type PosCurrency, formatPlainAmount } from '@/lib/pos';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
@@ -135,6 +136,7 @@ export default function CatalogForm({
     store,
     currency,
 }: CatalogFormProps) {
+    const { can } = usePermissions();
     const activePrice = product?.prices.find((price) => price.is_active_store);
 
     /**
@@ -527,9 +529,11 @@ export default function CatalogForm({
                     </Card>
 
                     <div className="flex items-center gap-3">
-                        <Button type="submit" disabled={form.processing}>
-                            {form.processing ? 'Saving…' : product ? 'Save changes' : 'Create product'}
-                        </Button>
+                        {can(product === null ? 'catalog.create' : 'catalog.update') && (
+                            <Button type="submit" disabled={form.processing}>
+                                {form.processing ? 'Saving…' : product ? 'Save changes' : 'Create product'}
+                            </Button>
+                        )}
 
                         <Button variant="ghost" asChild>
                             <Link href="/catalogo">

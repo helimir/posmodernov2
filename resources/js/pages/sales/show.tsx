@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { postJson } from '@/lib/api';
 import { type FiscalStatus, fiscalLabel, fiscalVariant } from '@/lib/fiscal';
+import { usePermissions } from '@/lib/permissions';
 import { useState } from 'react';
 
 /**
@@ -134,6 +135,7 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 export default function SaleShow({ sale }: { sale: SaleDetail }) {
+    const { can } = usePermissions();
     const [retrying, setRetrying] = useState(false);
     const [printing, setPrinting] = useState(false);
     const [fiscalError, setFiscalError] = useState<string | null>(null);
@@ -279,13 +281,14 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                                 </Button>
                             )}
 
-                            {sale.fiscal.can_retry && (
+                            {sale.fiscal.can_retry && can('sales.fiscal_retry') && (
                                 <Button onClick={retryIssuance} disabled={retrying}>
                                     {retrying ? 'Retrying…' : 'Retry issuance'}
                                 </Button>
                             )}
 
                             {sale.fiscal.receipt_url &&
+                                can('receipt.print') &&
                                 sale.print_targets.map((target) => (
                                     <Button
                                         key={target.id}

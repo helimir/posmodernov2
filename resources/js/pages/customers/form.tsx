@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { postJson, putJson } from '@/lib/api';
+import { usePermissions } from '@/lib/permissions';
 import { type PosCurrency, formatAmount } from '@/lib/pos';
 import { ArrowLeft } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
@@ -84,6 +85,7 @@ const NONE = 'none';
  * the writes are JSON.
  */
 export default function CustomerForm({ customer, countries, store, currency }: CustomerFormProps) {
+    const { can } = usePermissions();
     const [form, setForm] = useState<CustomerFormData>({
         name: customer?.name ?? '',
         tax_id: customer?.tax_id ?? '',
@@ -295,9 +297,11 @@ export default function CustomerForm({ customer, countries, store, currency }: C
                     )}
 
                     <div className="flex items-center gap-3">
-                        <Button type="submit" disabled={saving}>
-                            {saving ? 'Saving…' : customer ? 'Save' : 'Create'}
-                        </Button>
+                        {can(customer === null ? 'customer.create' : 'customer.update') && (
+                            <Button type="submit" disabled={saving}>
+                                {saving ? 'Saving…' : customer ? 'Save' : 'Create'}
+                            </Button>
+                        )}
 
                         <Button variant="ghost" asChild>
                             <Link href="/clientes">
