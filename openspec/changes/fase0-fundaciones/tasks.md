@@ -132,6 +132,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 54 | `feat/fase1-11-alta-cuentas` | 1.11 | el catalogo de cuentas mantenible desde la aplicacion, y la coherencia de una cuenta apagada con el plan | **1767** | PR #112 - issue #111 | **fusionado** `d9d6047` |
 | 55 | `feat/fase1-13-series-tienda` | 1.13 | la tienda resuelve su perfil fiscal (declarado, o vigente de su pais) y no su pais por casualidad | **1084** | PR #114 - issue #113 | **fusionado** `3c0ebad` |
 | 56 | `feat/fase1-12-applied-detalle` | 1.12 | el detalle de venta con lo aplicado de cada pago: lo recibido, lo aplicado y el cambio | **1084** | PR #116 - issue #115 | **fusionado** `a0caed2` |
+| 57 | `feat/fase2-01-permisos` | F2-01 | los permisos y los roles aplicados: el catalogo cerrado, la matriz de roles y el permiso por ruta | **3931** | PR #118 - issue #117 | **fusionado** `9ee2533` |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
@@ -581,7 +582,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
 
 ### El corte 1 — el minimo operable
 
-- [ ] **F2-01** **Los permisos y los roles aplicados.** Hoy **cualquier usuario autenticado hace
+- [x] **F2-01** **Los permisos y los roles aplicados.** Hoy **cualquier usuario autenticado hace
   todo**: no hay `Gate`, ni `Policy`, ni middleware, ni permisos sembradas, ni usuarios sembrados
   (el `User::factory(10)` esta comentado). Un cajero puede **cerrar la caja de otro** y editar el
   plan de cuentas. Catalogo de permisos sembrado desde una unica fuente, roles por defecto,

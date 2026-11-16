@@ -1505,7 +1505,29 @@ Ahora: el perfil **declarado** por la tienda (nueva columna `stores.fiscal_profi
 - `SmokeSaleCommand::perfilYSeries()` tiene su **propia** regla de resolucion de perfil: hoy coincide con la de la caja solo por el orden de siembra.
 - `income_sources`/`expense_categories` vacias; tokens del escaner duplicados; `releaseExpiredLeases()` sin consumidor; `DispatchPrintJob` con nombre engañoso; `print_agents` sin `instance_id`; `char_per_line` legacy no migrado.
 
+### F2-01 — Los permisos y los roles aplicados (PR #118, `9ee2533`)
+
+**El dominio esta solido; lo que faltaba era el BORDE, y el borde empezaba por la puerta.** El esquema de permisos estaba normalizado y era bueno, y **ningun codigo lo leia**: no habia `Gate`, ni `Policy`, ni middleware, ni permisos sembradas, ni usuarios sembrados (el `User::factory(10)` estaba comentado). **Hoy cualquier usuario autenticado hacia todo**: un cajero podia abrir la caja del dia, **cerrar la caja de otro** y editar el plan de cuentas.
+
+**El conjunto de permisos es CERRADO y vive en UN solo sitio**: un enum cuyo valor es el slug (`{modulo}.{accion}`), que el seeder siembra. **28 permisos en 11 modulos**, derivados de las **rutas que existen**, no de los ~190 del legacy (y **sin sus typos**: `crate_category`, `updadte_pmethod_status`).
+
+**Tres roles son un CONTRATO**: superuser (todo, por `Gate::before`), cajero (el mostrador y la caja del dia) y contador (lectura y reportes). El superusuario se reconoce por el **slug de un rol**, que es DATO.
+
+**El permiso de una ruta se declara JUNTO A LA RUTA** (43 de 74; las 31 restantes son publicas, del agente de impresion y del sync —con autenticacion propia—, o de auto-servicio), y un test recorre las 43 con un dataset: cada una **rechaza** al rol sin su permiso y **acepta** al que lo tiene. Esa es la red que impide que la unidad rompa lo que funciona.
+
+**Y `Gate::before` concede SOLO los slugs del catalogo**: un slug mal escrito en una ruta **no abre la puerta a nadie**, ni al superusuario. **Falla cerrado**, al contrario del costumbre de Laravel, y a proposito.
+
+**El ambito por tienda** se aplico tambien a los **comprobantes**, no solo a la caja: con el ambito solo en el `PosContext`, un cajero de la tienda A habria seguido viendo el comprobante de la B, y el aislamiento no habria sido real.
+
+**El cambio de fondo**: la `UserFactory` crea al **administrador**. Sin eso, **164 tests existentes fallaban con 403**, porque estaban escritos bajo la suposicion —falsa, y el defecto que se corrige— de que "cualquier usuario autenticado hace todo". Los tests de dominio usan al usuario como **medio**, no como sujeto; el permiso se prueba donde tiene que probarse, con roles creados explicitamente. **Ningun test existente se relajo.**
+
+**Verificado por HTTP de verdad**: el superusuario entra en las ocho rutas; el cajero entra en caja, dia, ventas, clientes y catalogo, y recibe **403** en contabilidad, usuarios y roles.
+
+**Dos riesgos que hay que tener presentes**: un usuario **sin rol no puede hacer nada** (en una instalacion viva eso es un **corte**, no una mejora: hay que asignar roles **antes** de desplegar), y **`db:seed` repone la matriz** de los tres roles por defecto (son un contrato, no una sugerencia).
+
 ### Siguiente
+
+**F2-02**: los tres tokens que faltan del perfil (`provision_reference`, `final_consumer_name`, `qr_required_tokens`) y la **inscripcion fiscal del emisor**. Hoy el comprobante **no dice "conforme a la providencia"** (art. 19) y una venta **sin cliente no tiene receptor** (art. 8.6), y el RIF del emisor sale en `null` (art. 8.4).
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 
