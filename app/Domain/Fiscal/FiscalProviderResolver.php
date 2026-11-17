@@ -36,7 +36,18 @@ final class FiscalProviderResolver
      */
     private const ENTORNOS = ['testing', 'production'];
 
-    public function __construct(private readonly Connection $connection) {}
+    /**
+     * La DEMANDA de las credenciales del canal.
+     *
+     * No tiene dependencias: la regla (que credencial falta, y de que
+     * variable sale) la fija ella.
+     */
+    private readonly ProviderCredentialResolver $credenciales;
+
+    public function __construct(private readonly Connection $connection)
+    {
+        $this->credenciales = new ProviderCredentialResolver;
+    }
 
     /**
      * Resuelve el proveedor del perfil fiscal de la tienda.
@@ -62,6 +73,34 @@ final class FiscalProviderResolver
         $proveedor = $this->proveedor($entorno, $perfilId);
 
         return $this->implementacion($proveedor, $perfilId, $documentSeriesId, $tiendaId, $saleId);
+    }
+
+    /**
+     * La CREDENCIAL que un canal necesita, o un ERROR UTIL.
+     *
+     * El camino es el de la RESOLUCION: la serie -> el perfil -> el entorno ->
+     * el proveedor. El canal no sabe de que proveedor se trata (eso lo dicen
+     * las FILAS), y el proveedor es el que declara el prefijo de la variable
+     * de entorno donde vive el secreto.
+     *
+     * Y EL SECRETO NO SE ESCRIBE EN NINGUN SITIO: solo se devuelve a quien
+     * lo pide, y el mensaje que dice que falta nombra la VARIABLE, no el
+     * valor.
+     *
+     * @throws RuntimeException Cuando el canal local la pide, cuando la fila
+     *                          no declara prefijo o cuando la variable de
+     *                          entorno no esta definida.
+     */
+    public function credential(int $documentSeriesId, string $variable): string
+    {
+        $serie = $this->serie($documentSeriesId);
+
+        $perfilId = (int) $serie->fiscal_profile_id;
+
+        $entorno = $this->entorno($perfilId);
+        $proveedor = $this->proveedor($entorno, $perfilId);
+
+        return $this->credenciales->resolve($proveedor, $variable);
     }
 
     /**

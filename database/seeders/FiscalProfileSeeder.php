@@ -233,11 +233,15 @@ class FiscalProfileSeeder extends Seeder
                 'base_url' => null,
                 'auth_scheme' => null,
                 'credentials_ref' => null,
+                // El canal local NO tiene credenciales: no hay a quien
+                // autenticarse. Su prefijo en `null` es una configuracion
+                // LEGITIMA, no un olvido.
+                'credential_env_prefix' => null,
                 'is_active' => true,
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
-        ], ['fiscal_profile_id', 'code'], ['name', 'kind', 'base_url', 'auth_scheme', 'credentials_ref', 'is_active', 'updated_at']);
+        ], ['fiscal_profile_id', 'code'], ['name', 'kind', 'base_url', 'auth_scheme', 'credentials_ref', 'credential_env_prefix', 'is_active', 'updated_at']);
     }
 
     /**
