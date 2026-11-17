@@ -21,17 +21,23 @@ use Illuminate\Support\Facades\DB;
  *  - La CONFIGURACION (`store_settings`): la zona horaria, el ancho de la
  *    linea de la impresora y los interruptores de interfaz. La zona horaria
  *    es la del PAIS, no la del servidor.
+ *  - La INSCRIPCION FISCAL (`store_fiscal_registrations`): el identificativo
+ *    fiscal del emisor. Sin ella el comprobante sale con el RIF del emisor en
+ *    `null`, y el art. 8.4 lo exige. El identificativo de DEMOSTRACION es
+ *    OBVIO: lleva la palabra `DEMO` delante, y nadie lo confunde con un RIF
+ *    de verdad ni lo usa por error.
  *  - La CUENTA DE CAJA de la tienda, con su vinculo por tienda
  *    (`bank_account_stores`): es la cuenta cuyo saldo de apertura se siembra
  *    en `OpeningBalancesSeeder`.
  *
- * Los datos de la tienda son de DEMOSTRACION y no afirman nada: no hay RIF, no
- * hay direccion y no hay certificado. Lo que el negocio real configure
- * despues se cambia en la fila.
+ * Los datos de la tienda son de DEMOSTRACION y no afirman nada: el RIF es de
+ * ejemplo, no hay direccion y no hay certificado. Lo que el negocio real
+ * configure despues se cambia en la fila.
  *
  * Es IDEMPOTENTE: la tienda y su configuracion se apoyan en las restricciones
- * unicas (`code_name`, `store_id`); la cuenta de caja y su vinculo no tienen
- * ninguna, asi que se buscan por su clave natural antes de escribirse.
+ * unicas (`code_name`, `store_id`); la inscripcion fiscal, la cuenta de caja y
+ * su vinculo no tienen ninguna, asi que se buscan por su clave natural antes
+ * de escribirse.
  */
 class DemoStoreSeeder extends Seeder
 {
@@ -41,7 +47,33 @@ class DemoStoreSeeder extends Seeder
     private const CODE_NAME = 'DEMO';
 
     /**
-     * Siembra la tienda de demostracion con su configuracion y su cuenta.
+     * El RIF de DEMOSTRACION del emisor.
+     *
+     * REGLA que fija este literal: *el identificativo de demostracion tiene
+     * que delatar que es de ejemplo*. Un RIF con formato verosimil (J-12345678-9)
+     * se podria usar por error en una impresion real, y un identificativo
+     * equivocado en un comprobante es un problema que no se ve hasta que ya
+     * salio. Este lleva la palabra `DEMO` delante, asi que se lee de un
+     * vistazo, y conserva la FORMA del RIF (letra, guion, digitos, guion,
+     * digito) para que la columna se lea como lo que es.
+     *
+     * El prefijo `J` es el de una persona juridica, que es lo que es una
+     * tienda.
+     */
+    private const RIF_DEMOSTRACION = 'DEMO-J-000000000-0';
+
+    /**
+     * El ESQUEMA del identificativo fiscal de demostracion.
+     *
+     * Es el que dice de que tipo de identificativo se trata, y de el sale el
+     * `fiscal_id_kind` del emisor (`rif`). Es DATO de la tienda, no del
+     * codigo.
+     */
+    private const ESQUEMA_DEMOSTRACION = 'rif';
+
+    /**
+     * Siembra la tienda de demostracion con su configuracion, su inscripcion
+     * fiscal y su cuenta.
      */
     public function run(): void
     {
@@ -49,6 +81,7 @@ class DemoStoreSeeder extends Seeder
 
         $tienda = $this->tienda($now);
         $this->configuracion($tienda, $now);
+        $this->inscripcionFiscal($tienda, $now);
         $this->cuentaDeCaja($tienda, $now);
     }
 
@@ -101,6 +134,55 @@ class DemoStoreSeeder extends Seeder
             'timezone', 'base_color', 'char_per_line', 'auto_print', 'remote_printing',
             'sound_effect', 'expiry_alert_enabled', 'updated_at',
         ]);
+    }
+
+    /**
+     * La INSCRIPCION FISCAL de la tienda: su identificativo fiscal de
+     * emisor.
+     *
+     * REGLA que fija este metodo: *el emisor tiene identificativo fiscal*. El
+     * art. 8.4 lo exige ("numero de Registro Unico de Informacion Fiscal
+     * (RIF) del emisor"), y sin inscripcion el comprobante sale con el RIF en
+     * `null`: un dato que falta, no un dato que se pueda rellenar con un
+     * literal.
+     *
+     * Y ES DE DEMOSTRACION: el RIF lleva la palabra `DEMO` delante, para que
+     * nadie lo confunda con el de un negocio real ni lo use por error.
+     *
+     * La tabla NO tiene restriccion unica (una tienda puede tener mas de una
+     * inscripcion), asi que la inscripcion PRIMARIA se busca por su clave
+     * natural antes de escribirse: sembrar dos veces no puede dejar dos
+     * inscripciones primarias.
+     *
+     * La FECHA DE EMISION queda en NULL: no hay inscripcion real, y una fecha
+     * sembrada seria inventar un acto administrativo que nadie ha verificado.
+     *
+     * @param  Carbon  $now
+     */
+    private function inscripcionFiscal(int $tienda, $now): void
+    {
+        $existente = DB::table('store_fiscal_registrations')
+            ->where('store_id', $tienda)
+            ->where('is_primary', true)
+            ->orderBy('id')
+            ->value('id');
+
+        $fila = [
+            'store_id' => $tienda,
+            'tax_id' => self::RIF_DEMOSTRACION,
+            'tax_id_scheme' => self::ESQUEMA_DEMOSTRACION,
+            'issued_at' => null,
+            'is_primary' => true,
+            'updated_at' => $now,
+        ];
+
+        if ($existente === null) {
+            DB::table('store_fiscal_registrations')->insert(array_merge($fila, ['created_at' => $now]));
+
+            return;
+        }
+
+        DB::table('store_fiscal_registrations')->where('id', $existente)->update($fila);
     }
 
     /**

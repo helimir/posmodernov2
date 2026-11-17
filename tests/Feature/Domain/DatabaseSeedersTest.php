@@ -160,7 +160,8 @@ test('test_sembrar_dos_veces_no_duplica_una_fila', function () {
         'currencies', 'countries', 'number_formats', 'fiscal_profiles',
         'fiscal_profile_document_types', 'fiscal_status_vocabularies',
         'fiscal_profile_fields', 'tax_categories', 'tax_rates', 'fiscal_series',
-        'stores', 'store_settings', 'bank_accounts', 'bank_account_stores',
+        'stores', 'store_settings', 'store_fiscal_registrations',
+        'bank_accounts', 'bank_account_stores',
         'opening_balances',
     ];
 

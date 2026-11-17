@@ -48,6 +48,22 @@ perfiles fiscales de los países sembrados, el catálogo de tipos de asiento, el
 mapa de traducción del terminal legacy y el saldo de apertura de caja **sin
 certificar** (la certificación es un acto humano, no un dato).
 
+### El identificativo fiscal de la tienda de demostración
+
+La tienda de demostración es el **emisor** de los comprobantes de
+demostración, y su inscripción fiscal la siembra `DemoStoreSeeder` con el RIF
+**`DEMO-J-000000000-0`** (esquema `rif`).
+
+Ese RIF es **obviamente de ejemplo**: lleva la palabra `DEMO` delante, y
+nadie lo confunde con el de un negocio real ni lo usa por error en una
+impresión. **Cámbialo por el RIF real de la tienda antes de emitir
+comprobantes de verdad**: el art. 8.4 de la providencia exige el número de RIF
+del emisor en el comprobante, y el que está sembrado no identifica a nadie.
+
+La fecha de emisión de la inscripción queda en `null`: no hay inscripción
+real, y una fecha sembrada sería inventar un acto administrativo que nadie ha
+verificado.
+
 ### Los permisos y los roles
 
 El **catálogo de permisos** vive en un solo sitio, en código:

@@ -22,8 +22,9 @@ use Illuminate\Support\Facades\DB;
  *
  *  - `verified`: el dato es una CITA LITERAL de la fuente citada, que se ha
  *    transcrito y cotejado. El token "serie" (art. 20), la frase "Contribuyentes
- *    Formales del IVA" (art. 8.7) y el marcador "(E)" (art. 8.7) estan en el
- *    texto de la providencia transcrita, y la `source_ref` dice de que
+ *    Formales del IVA" (art. 8.7), el marcador "(E)" (art. 8.7) y la mencion
+ *    de conformidad con la providencia (art. 19 y art. 9.3) estan en el texto
+ *    de la providencia transcrita, y la `source_ref` dice de que
  *    articulo sale cada uno.
  *  - `pending_confirmation`: el dato depende de una fuente que NO se ha
  *    alcanzado, o su aplicacion al caso no esta confirmada. La tasa de IVA
@@ -32,9 +33,17 @@ use Illuminate\Support\Facades\DB;
  *    `pending_confirmation` CON su `source_ref`, para que la fila sea
  *    localizable por la fuente y se pueda confirmar cuando el Decreto este a
  *    mano. Afirmarla como `verified` seria inventar una confirmacion legal.
+ *    El nombre del CONSUMIDOR FINAL esta en el mismo caso: el art. 8.6
+ *    transcribe el requisito (el receptor tiene nombre), no una designacion
+ *    literal, y la designacion la declara el perfil.
  *
- * LO QUE NO SE INVENTA (y por que):
+ * Y LO QUE NO SE SIEMBRA NI SE INVENTA, Y POR QUE:
  *
+ *  - Los TOKENS DEL QR (`qr_required_tokens`): el QR **no es requisito legal**
+ *    de la providencia. Es un HALLAZGO NEGATIVO verificado del research (el
+ *    QR no aparece ni en SNAT/2026/00093 ni en SNAT/2024/000102), asi que el
+ *    perfil NO los declara y el documento no lleva QR. Un QR mal hecho es
+ *    PEOR que ningun QR.
  *  - El `schema_version` de Venezuela es NULL: el Manual Tecnico del art. 41
  *    no se ha localizado. El de Chile es '1.0' (lo transcrito), no '2.2' (la
  *    inercia que el research descarta).
@@ -596,6 +605,49 @@ class FiscalProfileSeeder extends Seeder
                     'applies_to' => 'line',
                     'evidence_status' => 'verified',
                     'source_ref' => 'SNAT/2026/00093 art. 8.7 (G.O. 43.484)',
+                ],
+                [
+                    'key' => 'provision_reference',
+                    'data_type' => 'string',
+                    'label' => 'Mencion de conformidad con la providencia',
+                    // LA MENCION DE CONFORMIDAD (art. 19): la factura "debera
+                    // indicar que se emiten conforme a lo dispuesto en esta
+                    // Providencia Administrativa". Lo que va aqui es CON QUE
+                    // providencia: el art. 9.3 pide, para la imprenta
+                    // digital, la NOMENCLATURA y la FECHA de la providencia
+                    // de autorizacion. Las dos son las que transcribe la
+                    // evidencia: la providencia es la SNAT/2026/00093, de
+                    // fecha 07/09/2026, publicada en la Gaceta Oficial N.o
+                    // 43.484 del 21/10/2026.
+                    'value' => 'Providencia Administrativa SNAT/2026/00093 del 07/09/2026'
+                        .' (Gaceta Oficial N.º 43.484 del 21/10/2026)',
+                    'required' => true,
+                    'applies_to' => 'document',
+                    'evidence_status' => 'verified',
+                    'source_ref' => 'SNAT/2026/00093 art. 19 y art. 9.3 (G.O. 43.484 del 21/10/2026)',
+                ],
+                [
+                    'key' => 'final_consumer_name',
+                    'data_type' => 'string',
+                    'label' => 'Nombre del receptor cuando la venta no tiene cliente',
+                    // EL RECEPTOR DE UNA VENTA SIN CLIENTE (art. 8.6): la
+                    // factura lleva el "Nombre y apellido o razon social ...
+                    // del adquirente del bien o receptor del servicio". Cuando
+                    // la venta no tiene cliente, el receptor es la persona
+                    // natural que compra sin factura a efectos tributarios, y
+                    // su nombre es ESTE token.
+                    //
+                    // Y EL ESTADO DE EVIDENCIA NO ES 'verified' POR UNA RAZON:
+                    // el art. 8.6 transcribe el REQUISITO (el receptor tiene
+                    // nombre), pero NO transcribe una designacion literal para
+                    // el consumidor final. La designacion de abajo la declara
+                    // el PERFIL, y se marca como pendiente para que nadie la
+                    // lea como una cita de la providencia.
+                    'value' => 'Consumidor Final',
+                    'required' => true,
+                    'applies_to' => 'document',
+                    'evidence_status' => 'pending_confirmation',
+                    'source_ref' => 'SNAT/2026/00093 art. 8.6 (G.O. 43.484): el art. 8.6 exige el NOMBRE del receptor y no transcribe un literal para el consumidor final; la designacion la declara el perfil',
                 ],
             ],
             'categorias' => [
