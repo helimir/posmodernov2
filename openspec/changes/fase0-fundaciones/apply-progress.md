@@ -1541,9 +1541,19 @@ El codigo **ya leia** tres tokens del perfil fiscal que **nadie sembraba**, asi 
 
 **Un hueco real que queda abierto**: el art. 8.6 pide, para el consumidor final, *"como minimo, el numero de cedula de identidad o pasaporte"*, y **el mostrador no recoge ese documento**: el consumidor final sale **sin identificativo**. Es una decision de negocio (¿el mostrador debe pedir la identidad cuando la venta no lleva cliente?) y es una unidad propia.
 
+### F2-03 — Las credenciales del proveedor fiscal (PR #123, `3d58fa1`)
+
+`fiscal_providers.credentials_ref` era **texto libre que NADIE resolvia**: el codigo que necesita una clave, un token o un secreto de firma **no tenia de donde sacarlo**. No habia equivalente a `SmsProvider::credential()`.
+
+Ahora la fila declara el **prefijo** de sus variables de entorno (`credential_env_prefix`, **la misma convencion** que `sms_providers`) y el codigo resuelve `PREFIXO_` + `NOMBRE`. `credentials_ref` se queda (puede tener otros usos) pero esta unidad no lo usa.
+
+**El nombre de la variable vive en UN solo sitio**, para que el mensaje que la nombra **no pueda mentir** sobre ella. Y el test es una **triangulacion**: un `FiscalProvider` y un `SmsProvider` con el **mismo prefijo** tienen que leer la **misma** variable.
+
+**Tres mensajes distintos**, y ninguno dice el valor: el canal local **no necesita** credenciales (su prefijo en `null` es **legitimo**, y el seeder lo dice), una fila sin prefijo usada por un canal que las necesita es un error de **configuracion**, y el secreto que no esta en el entorno es una tercera cosa. **El secreto no se escribe en ningun sitio**: ni en la fila, ni en el log, ni en la respuesta.
+
 ### Siguiente
 
-**F2-03**: la **resolucion de credenciales fiscales**. `fiscal_providers.credentials_ref` es texto libre y **nadie lo resuelve**: no hay equivalente a `SmsProvider::credential()`. Anadir `credential_env_prefix` a la tabla (como ya existe en `sms_providers`) y el metodo `FiscalProvider::credential($variable)`.
+**F2-04**: **el modelo del control cuando el canal es externo**. Con el **Portal del SENIAT**, el control **lo asigna la autoridad, no el emisor**: hoy `CheckoutService` reserva control localmente en T1 y el proveedor reutiliza esa reserva. **Sin cambiar esto, el adaptador obligaria a rehacer el checkout** (riesgo R2 de la exploracion).
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 

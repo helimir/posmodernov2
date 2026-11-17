@@ -134,6 +134,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 56 | `feat/fase1-12-applied-detalle` | 1.12 | el detalle de venta con lo aplicado de cada pago: lo recibido, lo aplicado y el cambio | **1084** | PR #116 - issue #115 | **fusionado** `a0caed2` |
 | 57 | `feat/fase2-01-permisos` | F2-01 | los permisos y los roles aplicados: el catalogo cerrado, la matriz de roles y el permiso por ruta | **3931** | PR #118 - issue #117 | **fusionado** `9ee2533` |
 | 58 | `feat/fase2-02-tokens-perfil` | F2-02 | los tokens que faltaban del perfil (la providencia y el consumidor final) y la inscripcion fiscal del emisor | **665** | PR #121 - issue #120 | **fusionado** `eaff1c0` |
+| 59 | `feat/fase2-03-credenciales` | F2-03 | las credenciales del proveedor fiscal, resueltas del entorno con un prefijo declarado | **567** | PR #123 - issue #122 | **fusionado** `3d58fa1` |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
@@ -603,6 +604,15 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   inscripcion del emisor lleva un `tax_id` **obviamente de demostracion** (`DEMO-J-000000000-0`),
   con `issued_at` en `null`: no hay inscripcion real, y una fecha sembrada seria inventar un acto
   administrativo. Dep: 1.8
+- [x] **F2-03** **La resolucion de credenciales fiscales.** `fiscal_providers.credentials_ref` era
+  **texto libre que nadie resolvia**: el codigo que necesita una clave, un token o un secreto de firma
+  **no tenia de donde sacarlo**. Ahora la fila declara el **prefijo** de sus variables de entorno
+  (`credential_env_prefix`, la misma convencion que `sms_providers`) y el codigo resuelve
+  `PREFIXO_` + `NOMBRE`. El **nombre de la variable vive en un solo sitio**, para que el mensaje que
+  la nombra no pueda mentir. **Tres mensajes distintos** y ninguno dice el valor: el canal local no
+  necesita credenciales (su prefijo en `null` es legitimo), una fila sin prefijo usada por un canal
+  que las necesita es un error de **configuracion**, y el secreto ausente del entorno es una tercera
+  cosa. **El secreto no se escribe en ningun sitio**. Dep: 1.7
 - [ ] **F2-02** **Los tres tokens que faltan del perfil, y la inscripcion fiscal del emisor.**
   El codigo ya lee `provision_reference` (sin el, el comprobante **no dice "conforme a la
   providencia"**, art. 19), `final_consumer_name` (sin el, una venta **sin cliente no tiene
