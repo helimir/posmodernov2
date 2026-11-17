@@ -1525,9 +1525,25 @@ Ahora: el perfil **declarado** por la tienda (nueva columna `stores.fiscal_profi
 
 **Dos riesgos que hay que tener presentes**: un usuario **sin rol no puede hacer nada** (en una instalacion viva eso es un **corte**, no una mejora: hay que asignar roles **antes** de desplegar), y **`db:seed` repone la matriz** de los tres roles por defecto (son un contrato, no una sugerencia).
 
+### F2-02 — Los tokens del perfil y la inscripcion fiscal del emisor (PR #121, `eaff1c0`)
+
+El codigo **ya leia** tres tokens del perfil fiscal que **nadie sembraba**, asi que el comprobante que emitia el sistema **no cumplia la providencia**: **no decia que se emitia conforme a ella** (art. 19) y una venta **sin cliente no tenia receptor** (art. 8.6). Y `store_fiscal_registrations` no la sembraba nadie, asi que el emisor salia con su **RIF en `null`** (art. 8.4).
+
+**El perfil declara ahora su propia providencia**: `Providencia Administrativa SNAT/2026/00093 del 07/09/2026 (Gaceta Oficial N.º 43.484 del 21/10/2026)`, con la evidencia marcada **`verified`** (arts. 19 y 9.3, transcritos del research).
+
+**Y el nombre del consumidor final va con evidencia `pending_confirmation`**, a proposito: el research **no transcribe un literal**, asi que *"Consumidor Final"* es la **designacion que declara el perfil**, no una cita. Marcarlo `verified` romperia la convencion del propio seeder, e **inventar una cita es peor que marcarla pendiente**.
+
+**El `qr_required_tokens` NO se siembra**: el QR es un hallazgo **negativo** verificado (no aparece ni en SNAT/2026/00093 ni en SNAT/2024/000102). El codigo **ya** trataba igual "no existe" y "vacio": **faltaba el test**, y ahora los dos casos quedan fijados, para que mañana alguien siembre la fila vacia y el QR **no salga igual**.
+
+**La inscripcion del emisor** lleva un `tax_id` **obviamente de demostracion** (`DEMO-J-000000000-0`): conserva la **forma** del RIF para que la columna se lea como lo que es, y el prefijo `DEMO-` hace que **no se pueda usar por error**. `issued_at` queda en `null`: no hay inscripcion real, y una fecha sembrada seria **inventar un acto administrativo**.
+
+**Verificado por HTTP**: el comprobante de una venta sin cliente sale con la mencion de conformidad, el RIF del emisor y el **Consumidor Final** como receptor.
+
+**Un hueco real que queda abierto**: el art. 8.6 pide, para el consumidor final, *"como minimo, el numero de cedula de identidad o pasaporte"*, y **el mostrador no recoge ese documento**: el consumidor final sale **sin identificativo**. Es una decision de negocio (¿el mostrador debe pedir la identidad cuando la venta no lleva cliente?) y es una unidad propia.
+
 ### Siguiente
 
-**F2-02**: los tres tokens que faltan del perfil (`provision_reference`, `final_consumer_name`, `qr_required_tokens`) y la **inscripcion fiscal del emisor**. Hoy el comprobante **no dice "conforme a la providencia"** (art. 19) y una venta **sin cliente no tiene receptor** (art. 8.6), y el RIF del emisor sale en `null` (art. 8.4).
+**F2-03**: la **resolucion de credenciales fiscales**. `fiscal_providers.credentials_ref` es texto libre y **nadie lo resuelve**: no hay equivalente a `SmsProvider::credential()`. Anadir `credential_env_prefix` a la tabla (como ya existe en `sms_providers`) y el metodo `FiscalProvider::credential($variable)`.
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 

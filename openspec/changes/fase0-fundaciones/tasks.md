@@ -133,6 +133,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 55 | `feat/fase1-13-series-tienda` | 1.13 | la tienda resuelve su perfil fiscal (declarado, o vigente de su pais) y no su pais por casualidad | **1084** | PR #114 - issue #113 | **fusionado** `3c0ebad` |
 | 56 | `feat/fase1-12-applied-detalle` | 1.12 | el detalle de venta con lo aplicado de cada pago: lo recibido, lo aplicado y el cambio | **1084** | PR #116 - issue #115 | **fusionado** `a0caed2` |
 | 57 | `feat/fase2-01-permisos` | F2-01 | los permisos y los roles aplicados: el catalogo cerrado, la matriz de roles y el permiso por ruta | **3931** | PR #118 - issue #117 | **fusionado** `9ee2533` |
+| 58 | `feat/fase2-02-tokens-perfil` | F2-02 | los tokens que faltaban del perfil (la providencia y el consumidor final) y la inscripcion fiscal del emisor | **665** | PR #121 - issue #120 | **fusionado** `eaff1c0` |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
@@ -591,6 +592,17 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   sin comprobar el permiso en el formatter). **Va primero**: sin esto, todo lo demas se puede usar
   mal. Riesgo: rompe pantallas que hoy funcionan -> aplicar por ruta **nuevas primero** y probar
   cada ruta con cada rol. Dep: -
+- [x] **F2-02** **Los tres tokens que faltan del perfil, y la inscripcion fiscal del emisor.**
+  El codigo **ya leia** tres tokens que **nadie sembraba**, asi que el comprobante **no cumplia la
+  providencia**: no decia que se emitia conforme a ella (art. 19) y una venta **sin cliente no
+  tenia receptor** (art. 8.6). Y el emisor salia con su **RIF en `null`** (art. 8.4). Ahora el
+  perfil **declara su propia providencia** (nomenclatura, fecha y Gaceta Oficial, con la evidencia
+  `verified`) y el nombre del consumidor final (con evidencia **`pending_confirmation`**, porque el
+  research **no transcribe un literal**: es designacion del perfil, no cita). El `qr_required_tokens`
+  **no se siembra** (el QR es un hallazgo negativo verificado: no es requisito legal). Y la
+  inscripcion del emisor lleva un `tax_id` **obviamente de demostracion** (`DEMO-J-000000000-0`),
+  con `issued_at` en `null`: no hay inscripcion real, y una fecha sembrada seria inventar un acto
+  administrativo. Dep: 1.8
 - [ ] **F2-02** **Los tres tokens que faltan del perfil, y la inscripcion fiscal del emisor.**
   El codigo ya lee `provision_reference` (sin el, el comprobante **no dice "conforme a la
   providencia"**, art. 19), `final_consumer_name` (sin el, una venta **sin cliente no tiene
