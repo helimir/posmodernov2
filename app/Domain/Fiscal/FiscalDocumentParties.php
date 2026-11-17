@@ -276,6 +276,11 @@ final readonly class FiscalDocumentParties
 
     /**
      * Un TOKEN del perfil fiscal.
+     *
+     * Un token declarado y VACIO es lo mismo que un token que NO EXISTE: los
+     * dos significan "el perfil no lo declara". Un nombre vacio no es un
+     * nombre, y un receptor con el nombre vacio es un hueco que PARECE un
+     * nombre: el hueco se ve o no se ve, pero nunca finge.
      */
     private function token(object $document, string $clave): ?string
     {
@@ -284,7 +289,13 @@ final readonly class FiscalDocumentParties
             ->where('key', $clave)
             ->value('value');
 
-        return $valor === null ? null : (string) $valor;
+        if ($valor === null) {
+            return null;
+        }
+
+        $texto = trim((string) $valor);
+
+        return $texto === '' ? null : $texto;
     }
 
     /**

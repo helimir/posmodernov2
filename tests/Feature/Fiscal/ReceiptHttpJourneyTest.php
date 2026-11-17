@@ -116,6 +116,12 @@ function cobrar_por_http_del_comprobante(PosHttpServer $servidor, array $escenar
  * REGLA que fija: *el estado fiscal se ve y el comprobante se imprime*. El
  * cobro dice el estado, la pagina de la venta lo enseña con su numero de
  * control, y el comprobante se sirve con ese MISMO numero.
+ *
+ * Y LAS PARTES: desde F2-02 el comprobante tiene las DOS (el emisor y el
+ * receptor). Antes el receptor NO existia, porque el perfil no declaraba el
+ * nombre del consumidor final, y una venta sin cliente salia sin receptor
+ * (lo que el art. 8.6 no permite). El perfil de Venezuela lo declara, asi que
+ * el receptor es el consumidor final.
  */
 test('test_el_cobro_por_http_muestra_el_estado_fiscal_y_el_comprobante_se_abre', function () {
     $servidor = PosHttpServer::start(['FISCAL_EMISSION_ENABLED' => 'true']);
@@ -155,14 +161,16 @@ test('test_el_cobro_por_http_muestra_el_estado_fiscal_y_el_comprobante_se_abre',
             ->and($comprobante->body())->toContain('Total: 58.0000');
 
         // 4. Y las PARTES del comprobante son las de la venta: el emisor es
-        //    la tienda y el receptor es el consumidor final.
+        //    la tienda (con su identificativo fiscal) y el receptor es el
+        //    consumidor final que declara el perfil.
         $parties = DB::table('fiscal_document_parties')
             ->where('fiscal_document_id', $documentId)
+            ->orderBy('role')
             ->get();
 
-        expect($parties)->toHaveCount(1)
-            ->and($parties->first()->role)->toBe('issuer')
-            ->and((string) $parties->first()->name)->toBe('Tienda de demostracion');
+        expect($parties)->toHaveCount(2)
+            ->and((string) $parties->firstWhere('role', 'issuer')->name)->toBe('Tienda de demostracion')
+            ->and((string) $parties->firstWhere('role', 'receiver')->name)->toBe('Consumidor Final');
     } finally {
         $servidor->stop();
     }
