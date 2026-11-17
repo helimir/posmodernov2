@@ -620,6 +620,9 @@ test('test_una_instalacion_en_frio_deja_el_sistema_operable', function () {
         customerId: $clienteId,
         documentSeriesId: (int) $documentSeriesId,
         controlSeriesId: $controlSeriesId === null ? null : (int) $controlSeriesId,
+        // EL CANAL FISCAL: el de la tienda de demostracion, que es el
+        // proveedor local (el rol dual).
+        providerKind: $contexto->providerKind(),
         lines: [
             new CheckoutLineInput(
                 productId: $productoId,

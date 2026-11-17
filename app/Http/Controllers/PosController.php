@@ -282,6 +282,10 @@ class PosController extends Controller
             $context = $this->context($request);
             $store = $context->store();
             $documentSeriesId = $context->documentSeriesId();
+            // EL CANAL FISCAL, RESUELTO: el checkout no busca el proveedor
+            // por su cuenta. El contexto resuelve el entorno y el proveedor
+            // de la tienda, y aqui solo se le pasa el dato.
+            $providerKind = $context->providerKind();
             $lineas = $this->lineas($datos);
             $pagos = $this->pagos($datos);
         } catch (RuntimeException $fallo) {
@@ -317,6 +321,7 @@ class PosController extends Controller
                 $context,
                 $store,
                 $documentSeriesId,
+                $providerKind,
                 $lineas,
                 $pagos,
                 $customerId,
@@ -332,6 +337,7 @@ class PosController extends Controller
                     customerId: $customerId,
                     documentSeriesId: $documentSeriesId,
                     controlSeriesId: $context->controlSeriesId(),
+                    providerKind: $providerKind,
                     lines: $lineas,
                     payments: $pagos,
                     accounts: $context->accounts(),

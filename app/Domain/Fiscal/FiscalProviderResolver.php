@@ -28,6 +28,11 @@ use RuntimeException;
  * dato generico (design §C.1, ADR-0003). Un tipo sin implementacion es un
  * ERROR CON MENSAJE, no un silencio: no hay a que actor externo conectarse, y
  * un actor emulado emitiria comprobantes que no existen.
+ *
+ * Y LA RESOLUCION TIENE DOS PUERTAS: `resolve()` devuelve la IMPLEMENTACION
+ * (y falla si el canal no la tiene), y `kind()` devuelve solo el TIPO del
+ * canal (y no falla por eso). Preguntar por el canal de una tienda no es
+ * emitir por ese canal, y una pregunta no puede ser un fallo.
  */
 final class FiscalProviderResolver
 {
@@ -69,10 +74,29 @@ final class FiscalProviderResolver
         $perfilId = (int) $serie->fiscal_profile_id;
         $tiendaId = (int) $serie->store_id;
 
-        $entorno = $this->entorno($perfilId);
-        $proveedor = $this->proveedor($entorno, $perfilId);
+        $proveedor = $this->proveedorDe($serie);
 
         return $this->implementacion($proveedor, $perfilId, $documentSeriesId, $tiendaId, $saleId);
+    }
+
+    /**
+     * El TIPO del canal: el `ProviderKind` del proveedor que emite.
+     *
+     * REGLA que fija este método: *el canal se RESUELVE sin instanciarlo*.
+     * El camino es el MISMO que el de `resolve()` (la serie del documento ->
+     * el perfil -> el entorno -> el proveedor), pero se detiene ANTES de
+     * deducir la implementacion. Asi se puede preguntar por el canal de una
+     * tienda cuyo canal todavia NO tiene adaptador (un `portal`), sin que la
+     * pregunta sea un fallo: preguntar por el canal no es emitir.
+     *
+     * @throws RuntimeException Cuando no hay entorno, el proveedor esta
+     *                          inactivo, o su tipo no existe.
+     */
+    public function kind(int $documentSeriesId): ProviderKind
+    {
+        $serie = $this->serie($documentSeriesId);
+
+        return $this->tipo($this->proveedorDe($serie));
     }
 
     /**
@@ -200,6 +224,43 @@ final class FiscalProviderResolver
     }
 
     /**
+     * El PROVEEDOR del canal de una SERIE: el del entorno que le toca.
+     *
+     * REGLA que fija este método: *el camino de la resolución es UNO*. La
+     * serie dice el perfil, el perfil dice el entorno (el que dice el
+     * interruptor), el entorno dice el proveedor, y el proveedor dice el
+     * tipo. Tanto `resolve()` como `kind()` pasan por aquí: dos caminos
+     * serían dos reglas, y las dos divergirían.
+     */
+    private function proveedorDe(object $serie): FiscalProvider
+    {
+        $perfilId = (int) $serie->fiscal_profile_id;
+
+        $entorno = $this->entorno($perfilId);
+
+        return $this->proveedor($entorno, $perfilId);
+    }
+
+    /**
+     * El TIPO del proveedor: el `ProviderKind` que declara.
+     *
+     * @throws RuntimeException Cuando el tipo declarado no existe.
+     */
+    private function tipo(FiscalProvider $proveedor): ProviderKind
+    {
+        $tipo = ProviderKind::tryFrom((string) $proveedor->kind);
+
+        if ($tipo === null) {
+            throw new RuntimeException(
+                "El proveedor '{$proveedor->code}' declara el tipo '{$proveedor->kind}', que no existe: "
+                .'no se sabe que canal es.'
+            );
+        }
+
+        return $tipo;
+    }
+
+    /**
      * La IMPLEMENTACION, deducida del TIPO del proveedor.
      *
      * REGLA que fija este metodo: *un tipo sin implementacion NO se emula*.
@@ -213,14 +274,7 @@ final class FiscalProviderResolver
         int $storeId,
         ?int $saleId = null,
     ): ElectronicInvoiceProvider {
-        $tipo = ProviderKind::tryFrom((string) $proveedor->kind);
-
-        if ($tipo === null) {
-            throw new RuntimeException(
-                "El proveedor '{$proveedor->code}' declara el tipo '{$proveedor->kind}', que no existe: "
-                .'no se sabe que canal es.'
-            );
-        }
+        $tipo = $this->tipo($proveedor);
 
         return match ($tipo) {
             // El ROL DUAL: el sistema es emisor E imprenta, y el numero de

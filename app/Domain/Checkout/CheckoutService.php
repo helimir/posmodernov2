@@ -41,6 +41,13 @@ use RuntimeException;
  * control avanza UNA vez por venta: dos reservas serian dos numeros para una
  * venta, y el rango autorizado se gastaria el doble de rapido.
  *
+ * Y EL CONTROL SOLO SE RESERVA SI EL CANAL ES DE ROL DUAL: el numero de
+ * control lo reserva el emisor cuando el emisor es tambien la imprenta, y
+ * lo asigna la AUTORIDAD cuando hay una detras (un `pac` o un `portal`). La
+ * pregunta la hace el dominio (`ProviderKind::issuerReservesControl()`) y el
+ * canal llega RESUELTO en la entrada: el checkout no resuelve el proveedor
+ * por su cuenta.
+ *
  * El motor de impuestos se construye DENTRO, con el contexto que sale del
  * perfil de la serie del documento: su contexto depende de la tienda, asi
  * que no puede ser una dependencia fija del servicio.
@@ -248,9 +255,21 @@ final readonly class CheckoutService
             // Y SOLO se reserva si el PERFIL lo exige: un control que nadie
             // pidio no se asigna, ni al comprobante ni al documento, y el
             // rango autorizado no se gasta en numeros que nadie lleva.
+            //
+            // Y EL CANAL DECIDE QUIEN ASIGNA EL CONTROL: el numero de control
+            // lo reserva el emisor SOLO cuando el emisor es tambien la
+            // imprenta (el rol dual). Con una autoridad detras (un `pac` o
+            // un `portal`), el control lo asigna ELLA, y el emisor no quema
+            // ningun numero del rango autorizado: el numero llega con el
+            // acuse. La pregunta la hace el DOMINIO
+            // (`ProviderKind::issuerReservesControl()`), y el canal llega
+            // resuelto en la entrada: el checkout no resuelve el proveedor
+            // por su cuenta.
             $controlNumber = null;
 
-            if ($input->controlSeriesId !== null && $profile->requires_control_number) {
+            if ($input->controlSeriesId !== null
+                && $profile->requires_control_number
+                && $input->providerKind->issuerReservesControl()) {
                 $controlNumber = $this->controlNumberGenerator
                     ->assignForSale($input->controlSeriesId, $saleId, $input->issuedAt)
                     ->controlNumber;
