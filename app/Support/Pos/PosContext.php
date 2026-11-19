@@ -3,6 +3,8 @@
 namespace App\Support\Pos;
 
 use App\Domain\Accounting\ChartOfAccounts;
+use App\Domain\Fiscal\Enums\ProviderKind;
+use App\Domain\Fiscal\FiscalProviderResolver;
 use App\Domain\Fiscal\StoreFiscalProfileResolver;
 use App\Models\Store;
 use DateTimeImmutable;
@@ -34,6 +36,9 @@ use RuntimeException;
  *    salen del PERFIL FISCAL de la tienda, y el perfil se RESUELVE: el que la
  *    tienda declara, o el vigente de su pais. Ver `documentSeriesId()` y
  *    `controlSeriesId()`.
+ *  - EL CANAL FISCAL: el tipo de proveedor por el que emite la tienda, y la
+ *    respuesta a la pregunta de quien asigna el numero de control. Ver
+ *    `providerKind()` e `issuerReservesControl()`.
  *  - LAS DOS FECHAS: la de emision (el instante) y la de NEGOCIO (la que
  *    manda la caja). Las dos en la zona horaria de la TIENDA, no la del
  *    servidor. Ver `issuedAt()` y `businessDate()`.
@@ -58,6 +63,9 @@ final class PosContext
 
     /** El id de la serie del control. */
     private ?int $controlSeriesId = null;
+
+    /** El canal fiscal ya resuelto. */
+    private ?ProviderKind $providerKind = null;
 
     /** La moneda ya resuelta. */
     private ?string $currencyCode = null;
@@ -158,6 +166,58 @@ final class PosContext
         $this->resolveSeries();
 
         return $this->controlSeriesId;
+    }
+
+    /**
+     * El CANAL fiscal de la tienda: el tipo de proveedor por el que emite.
+     *
+     * REGLA que fija este método: *el canal se RESUELVE, no se supone*. La
+     * pregunta "¿quien asigna el numero de control?" es una propiedad del
+     * CANAL, y el canal sale de las FILAS: la serie del documento -> el perfil
+     * fiscal -> el entorno de emision -> el proveedor -> su tipo. El resolutor
+     * (`FiscalProviderResolver`) es el dueño de ese camino, y aqui no se
+     * reimplementa: se le pregunta.
+     *
+     * Y SE RESUELVE SIN INSTANTIAR EL CANAL: preguntar por el tipo del canal
+     * no es emitir por ese canal, asi que un canal que todavia no tiene
+     * adaptador (un `portal`) se puede preguntar sin que la pregunta sea un
+     * fallo.
+     *
+     * @throws RuntimeException Cuando la tienda no tiene serie de documento,
+     *                          o su perfil no declara ningun canal de
+     *                          emision.
+     */
+    public function providerKind(): ProviderKind
+    {
+        if ($this->providerKind !== null) {
+            return $this->providerKind;
+        }
+
+        $seriesId = $this->documentSeriesId();
+
+        if ($seriesId === null) {
+            throw new RuntimeException(
+                'La tienda '.$this->store()->id.' no tiene serie de documento: '
+                .'sin serie no hay canal fiscal que resolver.'
+            );
+        }
+
+        return $this->providerKind = (new FiscalProviderResolver($this->connection))
+            ->kind($seriesId);
+    }
+
+    /**
+     * ¿El EMISOR reserva el numero de control en este canal?
+     *
+     * REGLA que fija este método: *la respuesta la da el DOMINIO*. El canal
+     * es un dato, y el dato sabe quien asigna el control
+     * (`ProviderKind::issuerReservesControl()`): el emisor reserva el
+     * numero cuando es tambien la imprenta, y no lo reserva cuando hay una
+     * autoridad detras.
+     */
+    public function issuerReservesControl(): bool
+    {
+        return $this->providerKind()->issuerReservesControl();
     }
 
     /**

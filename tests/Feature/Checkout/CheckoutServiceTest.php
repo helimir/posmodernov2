@@ -7,6 +7,7 @@ use App\Domain\Checkout\CheckoutPaymentInput;
 use App\Domain\Checkout\CheckoutService;
 use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Fiscal\ControlNumberGenerator;
+use App\Domain\Fiscal\Enums\ProviderKind;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Fiscal\TaxRateResolver;
 use App\Domain\Inventory\LotConsumer;
@@ -265,6 +266,9 @@ function ventaCheckout(array $escenario, ?int $customerId = null): CheckoutInput
         customerId: $customerId,
         documentSeriesId: $escenario['document_series_id'],
         controlSeriesId: $escenario['control_series_id'],
+        // EL CANAL FISCAL: el escenario es de ROL DUAL (el proveedor es una
+        // imprenta), asi que el emisor reserva el numero de control.
+        providerKind: ProviderKind::Printer,
         lines: [
             new CheckoutLineInput(
                 productId: $escenario['product_id'],
@@ -358,6 +362,9 @@ test('test_sin_stock_suficiente_la_venta_falla_y_tambien_vuelve_el_numero_de_con
         customerId: null,
         documentSeriesId: $escenario['document_series_id'],
         controlSeriesId: $escenario['control_series_id'],
+        // EL CANAL FISCAL: el escenario es de ROL DUAL (el proveedor es una
+        // imprenta), asi que el emisor reserva el numero de control.
+        providerKind: ProviderKind::Printer,
         lines: [
             new CheckoutLineInput(
                 productId: $escenario['product_id'],
@@ -607,6 +614,9 @@ test('test_el_redondeo_que_no_cuadra_va_al_ingreso_y_el_asiento_sigue_cuadrando'
         customerId: (int) $customer->id,
         documentSeriesId: $escenario['document_series_id'],
         controlSeriesId: $escenario['control_series_id'],
+        // EL CANAL FISCAL: el escenario es de ROL DUAL (el proveedor es una
+        // imprenta), asi que el emisor reserva el numero de control.
+        providerKind: ProviderKind::Printer,
         lines: [
             new CheckoutLineInput(
                 productId: $escenario['product_id'],
@@ -681,6 +691,9 @@ test('test_la_suma_de_lineas_mas_el_ajuste_de_redondeo_iguala_el_total_redondead
         customerId: null,
         documentSeriesId: $escenario['document_series_id'],
         controlSeriesId: $escenario['control_series_id'],
+        // EL CANAL FISCAL: el escenario es de ROL DUAL (el proveedor es una
+        // imprenta), asi que el emisor reserva el numero de control.
+        providerKind: ProviderKind::Printer,
         lines: [
             new CheckoutLineInput(
                 productId: $escenario['product_id'],

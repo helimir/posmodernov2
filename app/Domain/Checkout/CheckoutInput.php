@@ -2,6 +2,7 @@
 
 namespace App\Domain\Checkout;
 
+use App\Domain\Fiscal\Enums\ProviderKind;
 use DateTimeImmutable;
 
 /**
@@ -15,6 +16,12 @@ use DateTimeImmutable;
  * `issuedAt` y `businessDate` son DATOS, no calculos: el dominio no pide la
  * hora al reloj. La fecha de negocio es la que manda la caja, y puede no ser
  * el dia de emision.
+ *
+ * Y `providerKind` es el CANAL por el que emite la tienda: el tipo de
+ * proveedor que hay detras. Es DATO de la entrada y no una consulta del
+ * dominio, porque el dominio no resuelve el proveedor por su cuenta (eso es
+ * del `FiscalProviderResolver`): el canal llega resuelto y el checkout PREGUNTA
+ * por el, antes de decidir si reserva el numero de control.
  */
 final readonly class CheckoutInput
 {
@@ -31,6 +38,8 @@ final readonly class CheckoutInput
         public int $documentSeriesId,
         /** La serie que reparte el numero de control; `null` si no aplica. */
         public ?int $controlSeriesId,
+        /** El CANAL fiscal de la tienda: el tipo de proveedor que emite. */
+        public ProviderKind $providerKind,
         public array $lines,
         public array $payments,
         public array $accounts,

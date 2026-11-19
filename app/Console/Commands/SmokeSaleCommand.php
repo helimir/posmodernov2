@@ -12,6 +12,7 @@ use App\Domain\Checkout\CheckoutResult;
 use App\Domain\Checkout\CheckoutService;
 use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Fiscal\ControlNumberGenerator;
+use App\Domain\Fiscal\FiscalProviderResolver;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Fiscal\TaxRateResolver;
 use App\Domain\Inventory\LotConsumer;
@@ -27,6 +28,7 @@ use Brick\Math\RoundingMode;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\DemoStoreSeeder;
 use Database\Seeders\FiscalProfileSeeder;
+use Database\Seeders\FiscalProviderSeeder;
 use Database\Seeders\TaxonomySeeder;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -214,6 +216,10 @@ class SmokeSaleCommand extends Command
                 customerId: $clienteId,
                 documentSeriesId: (int) $escenario['document_series']->id,
                 controlSeriesId: (int) $escenario['control_series']->id,
+                // EL CANAL FISCAL, RESUELTO: el checkout no busca el
+                // proveedor por su cuenta, y el comando tampoco.
+                providerKind: (new FiscalProviderResolver($this->connection))
+                    ->kind((int) $escenario['document_series']->id),
                 lines: [$linea],
                 payments: [
                     new CheckoutPaymentInput(
@@ -476,6 +482,13 @@ class SmokeSaleCommand extends Command
 
         if (! $tieneSeries) {
             (new FiscalProfileSeeder)->run();
+        }
+
+        // Y EL CANAL FISCAL: la venta necesita el canal por el que emite, y
+        // el canal necesita su entorno. Sin el, el numero de control no tiene
+        // quien lo asigne y la venta no se puede cobrar.
+        if (! $this->connection->table('fiscal_profile_environments')->exists()) {
+            (new FiscalProviderSeeder)->run();
         }
     }
 
