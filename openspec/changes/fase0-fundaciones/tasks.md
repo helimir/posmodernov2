@@ -137,6 +137,7 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 59 | `feat/fase2-03-credenciales` | F2-03 | las credenciales del proveedor fiscal, resueltas del entorno con un prefijo declarado | **567** | PR #123 - issue #122 | **fusionado** `3d58fa1` |
 | 60 | `feat/fase2-04-control-canal` | F2-04 | el numero de control se reserva solo cuando el emisor es tambien la imprenta | **587** | PR #125 - issue #124 | **fusionado** `bad7af5` |
 | 61 | `feat/fase2-05-ticket-cableado` | F2-05 | el ticket se encola al cobrar, y el comprobante lleva el numero completo | **1137** | PR #127 - issue #126 | **fusionado** `9dd8bd8` |
+| 62 | `feat/fase2-06-escritor-impresora` | F2-06 | el escritor directo: el servidor escribe los bytes congelados en la impresora de red o en la cola de Windows | **1751** | PR #129 - issue #128 | **fusionado** `c1d2638` |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
@@ -636,6 +637,17 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   `store_settings.auto_print`, que **nadie leia**, ahora se lee. Y el comprobante lleva el **numero
   completo** del documento (con el prefijo de la serie): un secuencial suelto **no identifica un
   documento** (hay cinco series con prefijos distintos por pais). Dep: 1.8, F2-04
+- [x] **F2-06** **El escritor directo a la impresora.** El transporte `server_socket` estaba en el
+  esquema y **no habia ni un `stream_socket_client` en `app/`**: un destino de ese tipo era un
+  trabajo que se encolaba y **nunca salia**. **Quien escribe lo decide el TRANSPORTE** (dato de la
+  fila): `server_socket` -> el servidor; `lan_agent` -> **el agente** (el servidor solo lo deja
+  encolado, o el ticket saldria **dos veces**); `browser` -> no hay destino fisico. Los bytes van
+  **exactamente** como se congelaron: el escritor comprueba el `sha256` **antes** de escribir, y si
+  no coinciden **no escribe nada**. El endpoint es explicito: `tcp://servidor:9100` con
+  `stream_socket_client`, `smb://` o un UNC por la **cola de Windows** con `fopen`; cualquier otra
+  cosa falla con mensaje util (**nada se escribe a ciegas**). El estado pasa por la **maquina de
+  estados que ya existia** (`claimByServer` se **anadio** a ella, con la misma puerta atomica): dos
+  bombeos no toman el mismo trabajo. `ops:print-pump` bombea **una vez y sale**. Dep: F2-05
 - [ ] **F2-06** **El escritor directo a la impresora.** El transporte `server_socket` esta en el
   esquema y **no hay ni un `stream_socket_client` en `app/`**: un destino `server_socket` es un
   trabajo que se encola y **nunca sale**. Escribir los bytes a `tcp://host:9100`, a `smb://` o a la

@@ -1573,16 +1573,34 @@ Ahora el trabajo se encola **despues** de T1, **fuera** de la transaccion, **en 
 
 **Y el defecto que el cableado destapo**: la respuesta del cobro decia `invoice_no: serie-0013` y el comprobante decia **`Nº 3`**. Un numero **crudo no identifica un documento**: hay cinco series en el catalogo y sus prefijos son distintos por pais (`serie-001`, `33`, `NMX`, `CFE`, `FE`), asi que *"Nº 3"* podria ser la tercera factura de cualquiera de ellas. El comprobante ahora compone el numero **completo**, y **el papel y la respuesta dicen exactamente el mismo numero**, porque son el mismo documento.
 
+### F2-06 — El escritor directo a la impresora (PR #129, `c1d2638`)
+
+El transporte `server_socket` estaba en el esquema de `print_targets` y **no habia ni un `stream_socket_client` en `app/`**: un destino de ese tipo era un trabajo que se encolaba y **nunca salia**. La F2-05 encolaba el ticket al cobrar; hacia falta alguien que lo escribiera.
+
+**Quien escribe lo decide el TRANSPORTE**, que es dato de la fila: `server_socket` -> **el servidor**; `lan_agent` -> **el agente** (el servidor solo lo deja encolado: si lo escribiera tambien, el ticket saldria **dos veces**); `browser` -> no hay destino fisico.
+
+Los bytes van **exactamente** como se congelaron: el escritor comprueba el `sha256` **antes** de escribir, y si no coinciden **no escribe nada** (eso es corrupcion). El endpoint es explicito: `tcp://servidor:9100` con `stream_socket_client`, y `smb://` o un UNC por la **cola de Windows** con `fopen`. Cualquier otra cosa falla con mensaje util: **nada se escribe a ciegas**.
+
+El estado pasa por la **maquina de estados que ya existia**: `claimByServer` se **anadio** a ella (el `claim` viejo exige un `agent_id`, y el servidor no es un agente), reutilizando el **mismo `transicionar()` privado** y la misma puerta atomica (`UPDATE ... WHERE status = 'queued'`). **Dos bombeos no toman el mismo trabajo**, y el `PrintAgentController` ya filtra por `transport = 'lan_agent'`.
+
+`ops:print-pump` bombea **una vez y sale**: el bucle es del scheduler (F2-14).
+
+### Dos cosas que conviene saber
+
+- **El CHECK del esquema solo admite el puerto 9100** (`endpoint ~ '^tcp://[A-Za-z0-9._-]+:9100$'`). Una impresora de red en otro puerto (9105, 515, 631) **no es admisible**: es una limitacion heredada del diseño y es una **decision del mantenedor** (aflojar el CHECK, o aceptar que la impresora de red siempre esta en el 9100). El caso de puerto arbitrario si esta cubierto en la regla pura de `PrintEndpoint`.
+- **El `heartbeat` del agente sobreestima su trabajo pendiente**: cuenta `pending_jobs` como *todos* los trabajos encolados de la tienda, incluidos los de `server_socket` que el agente nunca reclamara. Ningun test lo afirma; queda senalado.
+
 ### Deuda que queda
 
 - **La pantalla de la caja no enseña todavia el estado del ticket**: el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume. Sin destino, el cajero deberia ver *"el ticket queda pendiente"*.
-- **El **agente LAN en .NET** (fuera del corte 1), y el **escritor directo** (`server_socket`), que es la unidad siguiente: ahora el ticket se encola, pero **nadie lo escribe todavia en una impresora**.
+- **El **agente LAN en .NET** (fuera del corte 1), para las impresoras USB.
 - **El consumidor final sin identificativo** (el art. 8.6 pide cedula o pasaporte, y el mostrador no lo recoge).
-- `fiscal_series.assigned_by` (enum `issuer|authority|printer|psp`) es un dato **mas fino** que el canal para la regla del control: una tienda podria tener una serie de control asignada por la autoridad y otra por la imprenta. La regla actual (por `ProviderKind`) es correcta pero **gruesa**.
+- `fiscal_series.assigned_by` (enum `issuer|authority|printer|psp`) es un dato **mas fino** que el canal para la regla del control.
+- `releaseExpiredLeases()` sigue **sin consumidor**: el barrido es del scheduler (F2-14).
 
 ### Siguiente
 
-**F2-06**: el **escritor directo a la impresora** (`server_socket`, `smb://` o la cola de Windows). Hoy el esquema lo admite y **no hay ni un `stream_socket_client` en `app/`**: un destino `server_socket` es un trabajo que se encola y **nunca sale**. Con esta unidad el POS imprime **sin agente**, y el agente .NET queda para las impresoras USB.
+**F2-07**: los **destinos de impresion administrables** (CRUD de `printers` y `print_targets` por tienda, con perfil ESC/POS, codepagina, ancho, soporte de QR y limite del payload, y un **test de conexion** al endpoint). Y validar el **ancho contra el contenido**: hoy `escribirLinea()` no recorta ni ajusta, y el resultado es el **"ticket mudo"** (bytes que la impresora no soporta).
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 
