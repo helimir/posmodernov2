@@ -20,6 +20,7 @@ use RuntimeException;
  * | Metodo              | Estado de ORIGEN                  | Estado final |
  * |---------------------|-----------------------------------|--------------|
  * | `claim`             | `queued`                          | `claimed`    |
+ * | `claimByServer`     | `queued`                          | `claimed`    |
  * | `markPrinting`      | `claimed`                         | `printing`   |
  * | `markPrinted`       | `printing`                        | `printed`    |
  * | `markFailed`        | `claimed`, `printing`             | `failed`     |
@@ -51,6 +52,30 @@ final readonly class PrintJobStateMachine
     {
         $this->transicionar($jobId, ['queued'], 'claimed', [
             'agent_id' => $agentId,
+            'lease_expires_at' => now()->addSeconds($leaseSeconds),
+        ]);
+    }
+
+    /**
+     * El SERVIDOR TOMA el trabajo: de `queued` a `claimed`, sin agente.
+     *
+     * El servidor no es un agente: no hay terminal detrás ni token que
+     * autenticar. El trabajo pasa a `claimed` con su lease, y el lease lo
+     * devuelve a la cola si el servidor se muere en mitad de la escritura.
+     *
+     * REGLA que fija este método: *el reclamo es ATOMICO, igual que el del
+     * agente*. El estado de ORIGEN va en el `WHERE` de la sentencia, así que
+     * dos bombeos a la vez NO toman el mismo trabajo: el segundo `UPDATE` no
+     * encuentra la fila en `queued` y falla. No es una segunda regla: es la
+     * MISMA regla, con la misma puerta.
+     *
+     * @throws RuntimeException Si el trabajo no estaba encolado.
+     */
+    public function claimByServer(int $jobId, int $leaseSeconds): void
+    {
+        $this->transicionar($jobId, ['queued'], 'claimed', [
+            // El servidor no es un agente: no hay ninguno detrás del trabajo.
+            'agent_id' => null,
             'lease_expires_at' => now()->addSeconds($leaseSeconds),
         ]);
     }
