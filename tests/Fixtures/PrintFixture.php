@@ -17,6 +17,22 @@ use Illuminate\Support\Facades\DB;
 final class PrintFixture
 {
     /**
+     * El ANCHO de linea que declara el destino de PRUEBA.
+     *
+     * REGLA que fija esta constante: *un destino declara su ancho, y el
+     * sistema no lo adivina*. El destino de la prueba declara un ancho que
+     * cabe el comprobante de demostracion, que es largo: la referencia de la
+     * providencia del perfil venezolano es de 119 caracteres, y la unidad
+     * F2-07 exige que una linea que no cabe FALLE en vez de recortarse en
+     * silencio.
+     *
+     * Y UNA TIENDA REAL declara el ancho de SU impresora (42 o 48
+     * caracteres en una termica de 80 mm), no este numero: este es el ancho
+     * del DOBLE de prueba, no el de una impresora de verdad.
+     */
+    public const ANCHO_DE_DECLARACION = 120;
+
+    /**
      * Una tienda con su impresora y su destino.
      *
      * @return array{store_id: int, printer_id: int, target_id: int}
@@ -54,6 +70,9 @@ final class PrintFixture
             'name' => 'Destino de prueba',
             'transport' => $transport,
             'printer_profile' => 'default',
+            // El ANCHO lo DECLARA el destino: un destino sin ancho declarado
+            // no puede componer un ticket (F2-07).
+            'char_per_line' => self::ANCHO_DE_DECLARACION,
         ], $atributos);
 
         // El ENDPOINT lo DECIDE el TRANSPORTE: el `browser` no tiene endpoint

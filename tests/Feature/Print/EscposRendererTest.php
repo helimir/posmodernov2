@@ -39,6 +39,9 @@ test('test_un_qr_sobre_un_perfil_sin_soporte_falla_en_el_servidor_antes_de_envia
         'transport' => 'lan_agent',
         'endpoint' => 'tcp://192.168.1.50:9100',
         'printer_profile' => 'default',
+        // El destino DECLARA su ancho: sin el, no se puede componer un
+        // ticket (F2-07).
+        'char_per_line' => 42,
         'supports_qr' => false,
     ]);
 
@@ -71,6 +74,7 @@ test('test_un_qr_sobre_un_perfil_sin_soporte_falla_en_el_servidor_antes_de_envia
         'transport' => 'lan_agent',
         'endpoint' => 'tcp://192.168.1.51:9100',
         'printer_profile' => 'default',
+        'char_per_line' => 42,
         'supports_qr' => true,
     ]);
 
@@ -103,6 +107,7 @@ test('test_un_qr_sobre_un_perfil_sin_soporte_falla_en_el_servidor_antes_de_envia
         'transport' => 'lan_agent',
         'endpoint' => 'tcp://192.168.1.52:9100',
         'printer_profile' => 'default',
+        'char_per_line' => 42,
         'supports_qr' => true,
         'max_qr_payload_bytes' => 32,
     ]);
@@ -133,6 +138,7 @@ test('test_un_qr_sobre_un_perfil_sin_soporte_falla_en_el_servidor_antes_de_envia
         'transport' => 'lan_agent',
         'endpoint' => 'tcp://192.168.1.53:9100',
         'printer_profile' => 'default',
+        'char_per_line' => 42,
         'charset' => 'CP858',
     ]);
 
@@ -179,6 +185,7 @@ test('test_el_ticket_generado_corta_el_papel_al_final', function () {
         'transport' => 'lan_agent',
         'endpoint' => 'tcp://192.168.1.60:9100',
         'printer_profile' => 'default',
+        'char_per_line' => 42,
     ]);
 
     $renderizado = app(EscposRenderer::class)->render($target, new PrintPayload(

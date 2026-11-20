@@ -166,6 +166,9 @@ test('test_el_ticket_del_comprobante_se_puede_encolar_a_un_destino_de_impresion'
         'transport' => 'lan_agent',
         'endpoint' => 'tcp://192.168.1.70:9100',
         'printer_profile' => 'default',
+        // El destino DECLARA su ancho: sin el, no se puede componer un
+        // ticket (F2-07).
+        'char_per_line' => 42,
         'supports_qr' => true,
     ]);
 
@@ -218,6 +221,7 @@ test('test_un_destino_que_no_admite_el_qr_falla_con_un_error_util', function () 
         'transport' => 'lan_agent',
         'endpoint' => 'tcp://192.168.1.71:9100',
         'printer_profile' => 'default',
+        'char_per_line' => 42,
         'supports_qr' => false,
     ]);
 

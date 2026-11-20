@@ -4,7 +4,6 @@ namespace App\Print;
 
 use App\Models\PrintTarget;
 use Illuminate\Database\Connection;
-use InvalidArgumentException;
 use Mike42\Escpos\CapabilityProfile;
 use Mike42\Escpos\Printer;
 use RuntimeException;
@@ -15,22 +14,17 @@ use RuntimeException;
  * El agente LAN no sabe imprimir: recibe bytes ya generados y sólo los
  * escribe (design D11, ADR-0005). Por eso el servidor es el único que puede
  * decir "este ticket no es representable": si el destino no soporta QR, o si
- * el QR no cabe, el fallo ocurre AQUÍ, antes de enviar nada. Un ticket mudo
- * en el papel es un fallo del backoffice, no de la impresora.
+ * el QR no cabe, o si una linea no cabe en el ancho declarado, el fallo ocurre
+ * AQUÍ, antes de enviar nada. Un ticket mudo en el papel es un fallo del
+ * backoffice, no de la impresora.
  *
  * El PERFIL de impresora es DATO (design D5): el destino declara su
- * codepágina, su perfil ESC/POS y su soporte de QR, y el renderer consulta
- * las capacidades reales de la librería antes de componer nada.
+ * codepágina, su perfil ESC/POS, su soporte de QR y su ANCHO de linea, y el
+ * renderer consulta las capacidades reales de la librería antes de componer
+ * nada.
  */
 final readonly class EscposRenderer
 {
-    /**
-     * La codepágina por defecto. CP850 y no CP858 porque CP858 NO es
-     * codificable en la librería: la tabla 19 se declara, pero sin tabla de
-     * conversion, y el texto saldría con signos de interrogación.
-     */
-    private const DEFAULT_CHARSET = 'CP850';
-
     /**
      * Los estilos de línea que el renderer sabe aplicar. Cualquier otro
      * estilo es un error: un estilo desconocido no puede imprimir un ticket
@@ -57,10 +51,15 @@ final readonly class EscposRenderer
         // destino es DATO, y el dato que vale es el que esta guardado.
         $configuracion = $this->configuracion($target);
 
-        $perfil = $this->perfil($configuracion['printer_profile']);
-        $tabla = $this->tablaDeCodepagina($perfil, $configuracion['charset']);
+        $perfil = PrintProfiles::carga($configuracion['printer_profile']);
+        $tabla = PrintProfiles::tablaDeCodepagina($perfil, $configuracion['charset']);
 
         $this->verificarQr($configuracion, $perfil, $payload);
+
+        // El ANCHO se comprueba ANTES de escribir una sola letra: una linea
+        // que no cabe no se recorta en silencio, y un ticket recortado es un
+        // comprobante FALSO.
+        $this->verificarAncho($configuracion, $payload);
 
         $conector = new BufferPrintConnector;
 
@@ -113,7 +112,7 @@ final readonly class EscposRenderer
     /**
      * La configuracion guardada del destino.
      *
-     * @return array{printer_profile: string, charset: string, supports_qr: bool, max_qr_payload_bytes: int}
+     * @return array{name: string, printer_profile: string, charset: string, supports_qr: bool, max_qr_payload_bytes: int, char_per_line: int|null}
      */
     private function configuracion(PrintTarget $target): array
     {
@@ -124,69 +123,70 @@ final readonly class EscposRenderer
         }
 
         return [
+            'name' => (string) $fila->name,
             'printer_profile' => (string) $fila->printer_profile,
             'charset' => (string) $fila->charset,
             // PostgreSQL devuelve el booleano como `bool`; se acepta tambien
             // la forma textual por si el driver cambia.
             'supports_qr' => in_array($fila->supports_qr, [true, 1, '1', 't', 'true'], true),
             'max_qr_payload_bytes' => (int) $fila->max_qr_payload_bytes,
+            // El ANCHO lo declara el destino: es un DATO de la tienda, y sin
+            // el no se puede componer un ticket.
+            'char_per_line' => $fila->char_per_line === null ? null : (int) $fila->char_per_line,
         ];
     }
 
     /**
-     * El perfil ESC/POS de la libreria.
+     * El ANCHO se comprueba ANTES de escribir una sola letra.
+     *
+     * REGLA que fija este método: *una linea que no cabe en el ancho NO se
+     * recorta en silencio: el ticket falla con un mensaje que la nombre*.
+     *
+     * Y EL DESTINO TIENE QUE DECLARAR EL ANCHO: un destino sin ancho
+     * declarado no puede componer un ticket. El ancho es DATO de la tienda
+     * (que impresora tiene, y de que ancho), y el sistema no lo adivina: un
+     * ancho inventado produce un ticket que sale cortado en silencio.
+     *
+     * @param  array{name: string, printer_profile: string, charset: string, supports_qr: bool, max_qr_payload_bytes: int, char_per_line: int|null}  $configuracion
+     *
+     * @throws RuntimeException Si el destino no declara el ancho, o si una
+     *                          linea no cabe.
      */
-    private function perfil(string $nombre): CapabilityProfile
+    private function verificarAncho(array $configuracion, PrintPayload $payload): void
     {
-        try {
-            return CapabilityProfile::load($nombre);
-        } catch (InvalidArgumentException $error) {
+        $ancho = $configuracion['char_per_line'];
+
+        if ($ancho === null || $ancho < PrintWidth::ANCHO_MINIMO) {
             throw new RuntimeException(
-                "El perfil de impresora «{$nombre}» no existe en la libreria de impresion: ".$error->getMessage(),
-                previous: $error
+                "El destino de impresion «{$configuracion['name']}» no declara el ancho de linea: "
+                .'no se puede componer el ticket.'
             );
         }
-    }
 
-    /**
-     * El numero de tabla de la codepagina pedida, en el perfil dado.
-     *
-     * La codepagina es un DATO del destino y la tabla es un dato del perfil:
-     * la libreria relaciona ambas (`getCodePages()`), asi que no hay una
-     * tabla fija en el codigo.
-     */
-    private function tablaDeCodepagina(CapabilityProfile $perfil, string $codepagina): int
-    {
-        $codepagina = strtoupper(trim($codepagina));
-
-        if ($codepagina === '') {
-            $codepagina = self::DEFAULT_CHARSET;
+        // El TITULO es una linea mas: va en negrita, y la negrita no cambia
+        // el ancho (el doble ancho si).
+        if ($payload->title !== '' && PrintWidth::excede($payload->title, $ancho, 'bold')) {
+            throw new RuntimeException(
+                PrintWidth::mensaje($payload->title, $ancho, 'bold', $configuracion['name'])
+            );
         }
 
-        foreach ($perfil->getCodePages() as $tabla => $codePage) {
-            if (strtoupper($codePage->getId()) !== $codepagina) {
-                continue;
-            }
+        foreach ($payload->lines as $linea) {
+            $texto = (string) ($linea['text'] ?? '');
+            $estilo = isset($linea['style']) ? (string) $linea['style'] : null;
 
-            if (! $codePage->isEncodable()) {
+            if (PrintWidth::excede($texto, $ancho, $estilo)) {
                 throw new RuntimeException(
-                    "La codepagina {$codepagina} no es codificable en la libreria de impresion: "
-                    .'usa CP850 en su lugar.'
+                    PrintWidth::mensaje($texto, $ancho, $estilo, $configuracion['name'])
                 );
             }
-
-            return (int) $tabla;
         }
-
-        throw new RuntimeException(
-            "El perfil de impresora «{$perfil->getId()}» no declara la codepagina {$codepagina}."
-        );
     }
 
     /**
      * El QR se verifica ANTES de componer una sola letra.
      *
-     * @param  array{printer_profile: string, charset: string, supports_qr: bool, max_qr_payload_bytes: int}  $configuracion
+     * @param  array{name: string, printer_profile: string, charset: string, supports_qr: bool, max_qr_payload_bytes: int, char_per_line: int|null}  $configuracion
      */
     private function verificarQr(array $configuracion, CapabilityProfile $perfil, PrintPayload $payload): void
     {
