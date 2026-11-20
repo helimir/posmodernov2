@@ -1616,19 +1616,39 @@ La **cola de trabajos** es ahora una pantalla: estado, destino, intentos, motivo
 - **Los parametros nuevos del dispatcher no tienen consumidor de produccion todavia**: el unico camino que crea una reimpresion es el `PrintJobReprinter`, que **no pasa por el dispatcher** a proposito (el dispatcher compondria el ticket). estan por contrato, no porque algo los use hoy.
 - **SIN AUDITORIA**: la administracion de impresion audita sus cambios de configuracion, pero el **reintento y la reimpresion no** escriben en `audit_logs`. No lo pedia el encargo y no quedaba margen: es un hueco consciente para la unidad de auditoria.
 
+### F2-09 — El canal del agente endurecido (PR #135, `8758f67`)
+
+El token del agente LAN se guardaba en **SHA-256 plano** y el middleware **lo buscaba por el hash**. Eso no es un hash de contrasena: es un hash rapido, y el token es la credencial de una caja. Los seis defectos tenian que irse **antes** de escribir el agente .NET: un cliente que sale con el token en SHA-256 obliga a migrar despues a todos los agentes desplegados.
+
+- El token es un **hash de contrasena** (argon2id) verificado con `password_verify`. Y como argon2id **no se indexa**, el agente ya **no se localiza por su hash**: se localiza por su id (el `X-Agent-Id` que el research ya fijaba) y el token se verifica contra **esa** fila. Si falla, se prueba el hash previo **solo si** la ventana de gracia sigue abierta.
+- El **token en claro no se persiste**: ni en la fila, ni en el log, ni en la respuesta.
+- **Una instalacion es una fila**: registrarse con un `instance_id` que ya existe **reemplaza** la anterior y **mata el token viejo**. Sin eso, un terminal **reinstalado** dejaba vivo el token robado.
+- La **revocacion es definitiva** (`revoked_at`): `is_active` es un interruptor, esto es una sentencia.
+- La **rotacion tiene ventana de gracia**: si no, el agente deja de poder hablar en el instante en que se acuña el token nuevo, antes de que le llegue.
+- **TLS exigido**, con la peticion rechazada **ANTES de mirar el token**, en un middleware aparte: el registro es publico y **entrega el token en claro**, asi que tambien exige TLS.
+- El **latido por fin lee el cuerpo**: el agente declara `printers[]` y `capabilities[]`, el servidor los guarda y **avisa** de un destino no cubierto, **sin rechazar el trabajo** (una impresora puede estar apagada en ese momento, y rechazarlo perderia un ticket que si se podia imprimir).
+
+**Y una consecuencia operativa que hay que decir**: **los agentes desplegados hay que volver a registrarlos**. Un hash SHA-256 no se puede convertir a argon2id (falta el texto plano); la migracion invalida los tokens existentes y **no hay vuelta atras**.
+
+**El coste medido**: argon2id con los parametros por defecto de PHP son **~0,85 s por hash y ~0,95 s por verify** en esta maquina. Por eso el hash previo se comprueba **de forma perezosa** (solo si el vigente falla), y los parametros son configurables en `config/print.php`.
+
+**Una decision que hay que confirmar antes de escribir el cliente .NET**: el agente presenta `Authorization: Bearer` + `X-Agent-Id` (el **id de la fila**, como fija el research) y su `instance_id` **en el cuerpo**. Si el .NET prefiriera presentar el `instance_id` en la cabecera, el middleware cambia **antes** de escribirlo.
+
 ### Deuda que queda
 
-- **La pantalla de la caja no enseña el estado del ticket** (el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume).
+- **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API). Es lo unico de la unidad que no esta en la UI.
+- **La caja no enseña el estado del ticket** (el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume).
 - **El reintento y la reimpresion no se auditan** (hueco consciente de la F2-13).
 - **El `heartbeat` del agente sobreestima su trabajo pendiente** (cuenta tambien los trabajos de `server_socket`).
-- **El agente LAN en .NET** (fuera del corte 1), para las impresoras USB.
 - **El consumidor final sin identificativo** (el art. 8.6 pide cedula o pasaporte, y el mostrador no lo recoge).
 - `fiscal_series.assigned_by` es un dato **mas fino** que el canal para la regla del control.
 - **El limite del puerto 9100** del CHECK del esquema (decision del mantenedor).
 
 ### Siguiente
 
-**F2-09**: el **canal del agente endurecido**. Diez defectos del lado servidor: el token se guarda con **SHA-256 plano** (no argon2id), no hay `instance_id` (no se detecta un segundo agente con el mismo token), no hay revocacion, no se exige **TLS** (y el payload lleva datos fiscales), el **heartbeat ignora el cuerpo** (el agente no puede inventariar sus impresoras ni el servidor autorizar el destino) y la rotacion no tiene **ventana de gracia**. Esta unidad tiene que ir **antes** de que salga el agente .NET: si el cliente sale con un token en SHA-256, hay que migrar a todos.
+**F2-10**: el **asiento de apertura y el Z inmutable**. Es la mas valiosa de las que quedan por una razon concreta: **hoy el cierre de caja no cuadra con el libro**. La apertura **no deja asiento** (el tipo `opening_balance` existe en el catalogo y **nunca se escribe**), asi que el saldo de partida es un dato suelto en `cash_registers` y **la cuenta de efectivo del libro no cuadra con la caja**. Y el Z **no existe**: el descuadre se **calcula en vivo**, asi que si manana se corrige una venta de ayer, el "cierre" de ayer **cambia**.
+
+**El orden importa**: el asiento de apertura **antes** que el snapshot, y `esperado` pasa a ser **solo el saldo en curso**: si la partida entra al libro, `partida + en curso` cuadra dos veces (riesgo R3 de la exploracion).
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 

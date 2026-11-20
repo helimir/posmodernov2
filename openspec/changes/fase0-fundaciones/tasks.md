@@ -670,12 +670,21 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   es emitir otro documento fiscal. El **barrido es del SISTEMA, no de una tienda** (barrer solo la tienda
   del usuario dejaria los trabajos de las demas bloqueados para siempre). La **cola de trabajos** es una
   pantalla, con reintentar y reimprimir. Dep: F2-05, F2-06
-- [ ] **F2-09** **El canal del agente endurecido.** Diez defectos del lado servidor: el token se
-  guarda con **SHA-256 plano** (no argon2id), no hay `instance_id` (no se detecta un segundo agente
-  con el mismo token), no hay revocacion, no se exige **TLS** (y el payload lleva datos fiscales), el
-  **heartbeat ignora el cuerpo** (el agente no puede inventariar sus impresoras ni el servidor
-  autorizar el destino) y la rotacion no tiene **ventana de gracia**. **Va antes que el agente
-  .NET**: si el cliente sale con un token en SHA-256, hay que migrar a todos. Dep: F2-01
+- [x] **F2-09** **El canal del agente endurecido.** El token del agente LAN se guardaba en **SHA-256 plano**
+  y el middleware **lo buscaba por el hash**: eso no es un hash de contrasena, y el token es la credencial
+  de una caja. Seis defectos tenian que irse **antes** de escribir el agente .NET (un cliente que sale con
+  el token en SHA-256 obliga a migrar despues a todos los agentes desplegados): (a) el token es un **hash
+  de contrasena** (argon2id) verificado con `password_verify`, y como argon2id **no se indexa**, el agente
+  ya **no se localiza por su hash** sino por su id, verificando el token contra **esa** fila; (b) el **token
+  en claro no se persiste** en ninguna fila, ni en el log, ni en la respuesta; (c) **una instalacion es una
+  fila**: registrarse con un `instance_id` que ya existe **reemplaza** la anterior y **mata el token viejo**
+  (si no, un terminal reinstalado dejaba vivo el token robado); (d) la **revocacion es definitiva**
+  (`revoked_at`); (e) la **rotacion tiene ventana de gracia** (si no, el agente deja de poder hablar en
+  el instante en que se acuña el token nuevo); (f) **TLS exigido**, con la peticion rechazada **antes de
+  mirar el token**, en un middleware aparte porque el registro es publico y **entrega el token en claro**.
+  Ademas, el **latido por fin lee el cuerpo**: el agente declara sus impresoras y sus capacidades, y el
+  servidor **avisa** de un destino no cubierto (sin rechazar el trabajo: una impresora puede estar
+  apagada en ese momento). Dep: F2-06, F2-08
 - [ ] **F2-10** **El asiento de apertura y el Z inmutable.** Hoy la apertura **no deja asiento** (el
   tipo `opening_balance` existe en el catalogo y **nunca se escribe**): el saldo de partida es un
   dato suelto y **el libro no cuadra con la caja**. Y el Z **no existe**: el descuadre se **calcula
