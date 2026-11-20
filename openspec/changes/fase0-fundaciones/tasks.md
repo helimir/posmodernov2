@@ -636,24 +636,6 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   `store_settings.auto_print`, que **nadie leia**, ahora se lee. Y el comprobante lleva el **numero
   completo** del documento (con el prefijo de la serie): un secuencial suelto **no identifica un
   documento** (hay cinco series con prefijos distintos por pais). Dep: 1.8, F2-04
-- [ ] **F2-02** **Los tres tokens que faltan del perfil, y la inscripcion fiscal del emisor.**
-  El codigo ya lee `provision_reference` (sin el, el comprobante **no dice "conforme a la
-  providencia"**, art. 19), `final_consumer_name` (sin el, una venta **sin cliente no tiene
-  receptor**, art. 8.6) y `qr_required_tokens` (vacio = sin QR, que es lo correcto). Y sembrar la
-  `store_fiscal_registrations` de la tienda: hoy el comprobante sale con el RIF del emisor en
-  `null` (art. 8.4). Dep: -
-- [ ] **F2-03** **La resolucion de credenciales fiscales.** `fiscal_providers.credentials_ref` es
-  texto libre y **nadie lo resuelve**: no hay `Env::get()` equivalente. Anadir
-  `credential_env_prefix` a la tabla (como ya existe en `sms_providers`) y el metodo
-  `FiscalProvider::credential($variable)`, espejo de `SmsProvider::credential()`. Dep: -
-- [ ] **F2-04** **El modelo del control cuando el canal es externo.** Con el **Portal del SENIAT**
-  el control **lo asigna el SENIAT, no el emisor**: hoy `CheckoutService` reserva control local en
-  T1 y el proveedor reutiliza esa reserva. **Sin cambiar esto, el adaptador habria que rehacer el
-  checkout.** La reserva local de control se hace **solo** cuando el canal es local. Dep: 1.13
-- [ ] **F2-05** **El cableado del cobro al ticket.** `CheckoutService` **no toca `print_jobs`**: el
-  unico productor de trabajos es `ReceiptController::imprimir()`, que exige que un humano abra el
-  comprobante y pulse imprimir. `POST /caja/cobrar` encola el trabajo con los bytes **congelados**,
-  **fuera** de la transaccion de T1: **el fallo de impresora nunca puede perder una venta**. Dep: 1.8
 - [ ] **F2-06** **El escritor directo a la impresora.** El transporte `server_socket` esta en el
   esquema y **no hay ni un `stream_socket_client` en `app/`**: un destino `server_socket` es un
   trabajo que se encola y **nunca sale**. Escribir los bytes a `tcp://host:9100`, a `smb://` o a la
