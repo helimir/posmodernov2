@@ -1600,19 +1600,35 @@ Ahora la tienda los declara y el sistema **no adivina**: el endpoint lo valida e
 
 El **test de conexion** abre la conexion y la cierra, sin imprimir: la impresora de red responde, o no responde **y dice por que**. El `lan_agent` **no se puede probar desde el servidor** (quien conecta es el agente) y `browser` no tiene destino fisico: ambos lo dicen.
 
+### F2-08 — Reimpresion, reintento y barrido de leases (PR #133, `06bcec4`)
+
+Tres agujeros **encadenados**: `PrintJobReprinter` **no tenia ruta** (un ticket impreso mal no se podia volver a imprimir), el dispatcher **no admitia `reason` ni `reprint_of_job_id`** (nadie sabia por que se reimprimia ni cual) y `releaseExpiredLeases()` **no tenia consumidor** (un trabajo con el lease caducado quedaba **bloqueado para siempre**).
+
+**Una reimpresion reimprime los MISMOS bytes**: no vuelve a componer el ticket, porque los bytes congelados son la verdad del comprobante y recomponer puede dar un ticket **distinto** del emitido. **Un comprobante que cambia es un comprobante que miente.** Y **no reserva nada**: reimprimir no es emitir otro documento fiscal. El reintento hace lo mismo con los bytes que ya tenia, y la maquina de estados cuenta el intento.
+
+**El barrido es del SISTEMA, no de una tienda**: `releaseExpiredLeases($storeId)` es por tienda, asi que el comando itera por las tiendas con trabajos caducados. Barrer solo la tienda del usuario dejaria los trabajos de las demas bloqueados para siempre, que es justo el fallo que se arregla. El comando barre **una vez y sale**.
+
+La **cola de trabajos** es ahora una pantalla: estado, destino, intentos, motivo de fallo y motivo de reimpresion, con reintentar y reimprimir. Permisos nuevos **en el enum**: `printing.retry` y `printing.reprint`.
+
+### Dos cosas en las que el plan se equivoco, y un hueco
+
+- **NO hay migracion nueva: las columnas ya existian.** `print_jobs.reason` y `print_jobs.reprint_of_job_id` estan en `2026_11_01_000023_create_print_tables.php` (lineas 172-177) y en la base, verificado en `information_schema` (con la FK de `reprint_of_job_id`). La migracion que habia pedido el plan habria fallado con *"column already exists"*. Lo que **si** era real es lo segundo: el dispatcher no escribia esas columnas, y ahora si.
+- **Los parametros nuevos del dispatcher no tienen consumidor de produccion todavia**: el unico camino que crea una reimpresion es el `PrintJobReprinter`, que **no pasa por el dispatcher** a proposito (el dispatcher compondria el ticket). estan por contrato, no porque algo los use hoy.
+- **SIN AUDITORIA**: la administracion de impresion audita sus cambios de configuracion, pero el **reintento y la reimpresion no** escriben en `audit_logs`. No lo pedia el encargo y no quedaba margen: es un hueco consciente para la unidad de auditoria.
+
 ### Deuda que queda
 
-- **La pantalla de la caja no enseña todavia el estado del ticket**: el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume.
-- **El `heartbeat` del agente sobreestima su trabajo pendiente**: cuenta tambien los trabajos de `server_socket` que el agente nunca reclamara.
+- **La pantalla de la caja no enseña el estado del ticket** (el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume).
+- **El reintento y la reimpresion no se auditan** (hueco consciente de la F2-13).
+- **El `heartbeat` del agente sobreestima su trabajo pendiente** (cuenta tambien los trabajos de `server_socket`).
 - **El agente LAN en .NET** (fuera del corte 1), para las impresoras USB.
 - **El consumidor final sin identificativo** (el art. 8.6 pide cedula o pasaporte, y el mostrador no lo recoge).
-- `fiscal_series.assigned_by` (enum `issuer|authority|printer|psp`) es un dato **mas fino** que el canal para la regla del control.
-- `releaseExpiredLeases()` sigue **sin consumidor**: el barrido es del scheduler (F2-14).
+- `fiscal_series.assigned_by` es un dato **mas fino** que el canal para la regla del control.
 - **El limite del puerto 9100** del CHECK del esquema (decision del mantenedor).
 
 ### Siguiente
 
-**F2-08**: la **reimpresion, el reintento y el barrido de leases**. `PrintJobReprinter` **no tiene ruta HTTP**, `PrintJobDispatcher::dispatch()` **no admite `reason` ni `reprint_of_job_id`**, y `releaseExpiredLeases()` **no tiene consumidor**: un trabajo con el lease caducado queda bloqueado **para siempre**. Con esta unidad, un ticket que se imprimio mal **se puede volver a imprimir**, y el scheduler (F2-14) tiene la pieza que necesita.
+**F2-09**: el **canal del agente endurecido**. Diez defectos del lado servidor: el token se guarda con **SHA-256 plano** (no argon2id), no hay `instance_id` (no se detecta un segundo agente con el mismo token), no hay revocacion, no se exige **TLS** (y el payload lleva datos fiscales), el **heartbeat ignora el cuerpo** (el agente no puede inventariar sus impresoras ni el servidor autorizar el destino) y la rotacion no tiene **ventana de gracia**. Esta unidad tiene que ir **antes** de que salga el agente .NET: si el cliente sale con un token en SHA-256, hay que migrar a todos.
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 

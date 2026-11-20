@@ -660,11 +660,16 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   recortado ni le puede faltar una linea. Y el destino **tiene que declarar su ancho**: sin ancho
   declarado no se puede componer un ticket, porque un ancho inventado produce un ticket cortado en
   silencio (por eso el **default de 32 caracteres desaparece** de la columna). Dep: F2-06
-- [ ] **F2-08** **La reimpresion, el reintento y el barrido de leases.** `PrintJobReprinter` **no
-  tiene ruta HTTP**; `releaseExpiredLeases()` **no tiene consumidor** (un trabajo con lease caducado
-  queda bloqueado **para siempre**); y `PrintJobDispatcher::dispatch()` no admite `reason` ni
-  `reprint_of_job_id`. Ruta de reimpresion, comando programado `ops:print-lease-sweep` y pantalla de
-  la cola con reintento. Dep: F2-05
+- [x] **F2-08** **La reimpresion, el reintento y el barrido de leases.** Tres agujeros encadenados:
+  `PrintJobReprinter` **no tenia ruta** (un ticket impreso mal no se podia volver a imprimir), el dispatcher
+  **no admitia `reason` ni `reprint_of_job_id`** (nadie sabia por que se reimprimia ni cual) y
+  `releaseExpiredLeases()` **no tenia consumidor** (un trabajo con el lease caducado quedaba **bloqueado
+  para siempre**). **Una reimpresion reimprime los MISMOS bytes**: no vuelve a componer el ticket, porque
+  los bytes congelados son la verdad del comprobante y recomponer puede dar un ticket **distinto** del
+  emitido (**un comprobante que cambia es un comprobante que miente**). Y **no reserva nada**: reimprimir no
+  es emitir otro documento fiscal. El **barrido es del SISTEMA, no de una tienda** (barrer solo la tienda
+  del usuario dejaria los trabajos de las demas bloqueados para siempre). La **cola de trabajos** es una
+  pantalla, con reintentar y reimprimir. Dep: F2-05, F2-06
 - [ ] **F2-09** **El canal del agente endurecido.** Diez defectos del lado servidor: el token se
   guarda con **SHA-256 plano** (no argon2id), no hay `instance_id` (no se detecta un segundo agente
   con el mismo token), no hay revocacion, no se exige **TLS** (y el payload lleva datos fiscales), el
