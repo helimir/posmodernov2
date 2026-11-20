@@ -5,6 +5,7 @@ namespace Tests\Fixtures;
 use App\Models\Printer;
 use App\Models\PrintTarget;
 use App\Models\Store;
+use App\Print\PrintAgentToken;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -96,24 +97,41 @@ final class PrintFixture
     /**
      * Un AGENTE LAN de la tienda, con su token en claro y su hash guardado.
      *
-     * @return array{agent_id: int, token: string}
+     * El token se guarda como un HASH DE CONTRASENA (argon2id), no como una
+     * huella: el token es la credencial de una caja, y un hash rapido se
+     * rompe por fuerza bruta.
+     *
+     * @param  array<string, mixed>  $atributos
+     * @return array{agent_id: int, token: string, instance_id: string}
      */
-    public static function agente(int $storeId, string $name = 'Agente de prueba'): array
+    public static function agente(int $storeId, string $name = 'Agente de prueba', array $atributos = []): array
     {
         $token = bin2hex(random_bytes(32));
+        $instanceId = (string) ($atributos['instance_id'] ?? 'inst-'.bin2hex(random_bytes(8)));
 
-        $agentId = (int) DB::table('print_agents')->insertGetId([
+        $agentId = (int) DB::table('print_agents')->insertGetId(array_merge([
             'store_id' => $storeId,
             'name' => $name,
-            // Solo el hash: el token en claro no se persiste.
-            'token_hash' => hash('sha256', $token),
+            // El identificador ESTABLE de la instalacion.
+            'instance_id' => $instanceId,
+            // Solo el hash de contrasena: el token en claro no se persiste.
+            'token_hash' => app(PrintAgentToken::class)->hash($token),
+            'token_hash_previo' => null,
+            'token_previo_valido_hasta' => null,
             'last_heartbeat_at' => null,
+            'revoked_at' => null,
+            'printers' => null,
+            'capabilities' => null,
             'is_active' => true,
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ], $atributos));
 
-        return ['agent_id' => $agentId, 'token' => $token];
+        return [
+            'agent_id' => $agentId,
+            'token' => $token,
+            'instance_id' => $instanceId,
+        ];
     }
 
     /**

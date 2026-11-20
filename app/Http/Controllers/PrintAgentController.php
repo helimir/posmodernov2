@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PrintAgent;
 use App\Models\PrintJob;
+use App\Print\PrintAgentInventory;
 use App\Print\PrintAgentRegistrationSecret;
+use App\Print\PrintAgentToken;
 use App\Print\PrintJobStateMachine;
 use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
@@ -61,18 +64,26 @@ final class PrintAgentController extends Controller
         private Connection $connection,
         private PrintJobStateMachine $stateMachine,
         private PrintAgentRegistrationSecret $secrets,
+        private PrintAgentToken $tokens,
+        private PrintAgentInventory $inventory,
     ) {}
 
     /**
      * El REGISTRO del agente.
      *
-     * El agente declara su nombre y su tienda, y el servidor le devuelve su
-     * identificador y su token EN CLARO, una sola vez: en la tabla solo
-     * queda el hash.
+     * El agente declara su nombre, su tienda y su `instance_id`, y el
+     * servidor le devuelve su identificador y su token EN CLARO, una sola vez:
+     * en la tabla solo queda el hash.
      *
-     * El nombre es UNICO dentro de la tienda: si el agente ya existe, se
-     * ROTA su token en vez de crear un duplicado (dos cajas con el mismo
-     * nombre serian el mismo agente).
+     * El `instance_id` es el identificador ESTABLE de la INSTALACION, y es lo
+     * que hace que "una instalacion es una fila": si el agente se registra con
+     * un `instance_id` que ya existe en la tienda, la fila anterior se
+     * REEMPLAZA (token nuevo) y el token viejo deja de valer. Asi un terminal
+     * REINSTALADO no deja vivo el token anterior.
+     *
+     * El nombre tambien es UNICO dentro de la tienda: si el agente ya existe
+     * con ese nombre, la fila se reemplaza en vez de crear un duplicado (dos
+     * cajas con el mismo nombre serian el mismo agente).
      *
      * El REGISTRO es el unico endpoint PUBLICO de la API (no hay token
      * todavia: el token es lo que el registro entrega), asi que exige el
@@ -89,6 +100,7 @@ final class PrintAgentController extends Controller
 
         $name = trim((string) $request->input('name', ''));
         $storeId = $request->input('store_id');
+        $instanceId = trim((string) $request->input('instance_id', ''));
 
         if ($name === '') {
             return $this->error('El agente debe declarar su nombre.');
@@ -122,39 +134,87 @@ final class PrintAgentController extends Controller
             return $this->prohibido('El secreto de registro no coincide con el de la tienda.');
         }
 
+        // El `instance_id` se exige DESPUES del secreto: primero se sabe quien
+        // pregunta, y despues se le dice que tiene que declarar quien es.
+        if ($instanceId === '') {
+            return $this->error(
+                'El agente debe declarar su instance_id: es lo que permite reconocer un '
+                .'terminal reinstalado y matar el token anterior en vez de dejar dos agentes '
+                .'con el mismo nombre.'
+            );
+        }
+
+        // La fila: primero por `instance_id` (la instalacion), y si no hay
+        // ninguna, por nombre (el agente ya conocido).
         $agente = $this->connection->table('print_agents')
             ->where('store_id', $storeId)
-            ->where('name', $name)
+            ->where('instance_id', $instanceId)
             ->first();
 
+        if ($agente === null) {
+            $agente = $this->connection->table('print_agents')
+                ->where('store_id', $storeId)
+                ->where('name', $name)
+                ->first();
+        }
+
+        // La REVOCACION es definitiva: un agente revocado no se puede volver
+        // a registrar con su `instance_id` hasta que un operador la levante.
+        if ($agente !== null && $agente->revoked_at !== null) {
+            return $this->prohibido(
+                'El agente esta revocado: hay que levantar la revocacion del agente '
+                .$agente->id.' antes de volver a registrarlo.'
+            );
+        }
+
         $token = $this->nuevoToken();
+        $hash = $this->tokens->hash($token);
 
         if ($agente !== null) {
-            // El agente ya existe: se ROTA el token, no se duplica.
+            // La fila se REEMPLAZA: el token anterior muere aqui mismo.
             $this->connection->table('print_agents')
                 ->where('id', $agente->id)
                 ->update([
-                    'token_hash' => hash('sha256', $token),
+                    'name' => $name,
+                    'instance_id' => $instanceId,
+                    'token_hash' => $hash,
+                    // El token anterior NO sobrevive a un reemplazo: no hay
+                    // ventana de gracia para un reinstalado.
+                    'token_hash_previo' => null,
+                    'token_previo_valido_hasta' => null,
                     'is_active' => true,
                     'updated_at' => now(),
                 ]);
 
             $agentId = (int) $agente->id;
+            $reemplazado = true;
         } else {
             $agentId = (int) $this->connection->table('print_agents')->insertGetId([
                 'store_id' => $storeId,
                 'name' => $name,
-                'token_hash' => hash('sha256', $token),
+                'instance_id' => $instanceId,
+                'token_hash' => $hash,
+                'token_hash_previo' => null,
+                'token_previo_valido_hasta' => null,
                 'last_heartbeat_at' => null,
+                'revoked_at' => null,
+                'printers' => null,
+                'capabilities' => null,
                 'is_active' => true,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            $reemplazado = false;
         }
 
         return response()->json([
             'status' => 'registered',
             'agent_id' => $agentId,
+            'instance_id' => $instanceId,
+            // Si la fila se REEMPLAZO, el servidor lo dice: el agente sabe
+            // que su token anterior deja de valer.
+            'replaced' => $reemplazado,
             // El token EN CLARO, una sola vez: la tabla solo guarda el hash.
             'token' => $token,
             'server_time' => now()->toIso8601String(),
@@ -163,10 +223,15 @@ final class PrintAgentController extends Controller
     }
 
     /**
-     * El LATIDO del agente: dice que esta vivo.
+     * El LATIDO del agente: dice que esta vivo, y DECLARA lo que tiene.
      *
      * El latido se guarda en un solo campo (`last_heartbeat_at`), que
      * tambien refresca el long-poll: un campo, dos puntos de refresco.
+     *
+     * Y el cuerpo del latido vale: el agente declara su INVENTARIO de
+     * impresoras y sus CAPACIDADES, y el servidor los guarda y se los enseña.
+     * Asi el desajuste entre la impresora declarada y la impresora real es
+     * VISIBLE y no silencioso.
      */
     public function heartbeat(Request $request): JsonResponse
     {
@@ -177,12 +242,27 @@ final class PrintAgentController extends Controller
         $agentId = $this->agentId($request);
         $storeId = $this->storeId($request);
 
-        $this->connection->table('print_agents')
-            ->where('id', $agentId)
-            ->update([
-                'last_heartbeat_at' => now(),
-                'updated_at' => now(),
-            ]);
+        $agente = PrintAgent::query()->find($agentId);
+
+        if ($agente === null) {
+            return $this->error('El agente no existe.');
+        }
+
+        // El INVENTARIO y las CAPACIDADES solo se guardan si el agente los
+        // DECLARA: un agente que no los declara no borra lo que habia dicho.
+        if ($request->has('printers')) {
+            $agente->printers = $this->inventario($request->input('printers'));
+        }
+
+        if ($request->has('capabilities')) {
+            $agente->capabilities = $this->capacidades($request->input('capabilities'));
+        }
+
+        $agente->last_heartbeat_at = now();
+        $agente->save();
+
+        $inventario = $agente->printers ?? [];
+        $capacidades = $agente->capabilities ?? [];
 
         $pendientes = $this->connection->table('print_jobs')
             ->where('store_id', $storeId)
@@ -194,6 +274,15 @@ final class PrintAgentController extends Controller
             'pending_jobs' => $pendientes,
             'poll_after_ms' => self::POLL_AFTER_MS,
             'server_time' => now()->toIso8601String(),
+            // Lo que el servidor tiene guardado del agente: el agente ve su
+            // propio inventario y sus propias capacidades.
+            'printers' => $inventario,
+            'capabilities' => $capacidades,
+            // Los AVISOS: los destinos de la tienda que este inventario NO
+            // cubre. NO son un rechazo: una impresora puede estar apagada en
+            // ese momento, y rechazarlo seria perder un ticket que si se
+            // puede imprimir.
+            'warnings' => $this->destinosNoCubiertos($storeId, $inventario),
         ]);
     }
 
@@ -337,8 +426,10 @@ final class PrintAgentController extends Controller
     /**
      * La ROTACION del token.
      *
-     * Genera un token nuevo, lo devuelve en claro y deja invalido el hash
-     * viejo: el token anterior deja de funcionar desde este momento.
+     * Genera un token nuevo y lo devuelve en claro. El token ANTERIOR no muere
+     * en el acto: sigue valiendo hasta que se agote su VENTANA DE GRACIA
+     * (`config/print.php`), para que el token nuevo le llegue al agente sin
+     * dejar la caja muda mientras tanto.
      */
     public function rotate(Request $request): JsonResponse
     {
@@ -355,17 +446,28 @@ final class PrintAgentController extends Controller
         if (is_string($actual) && $actual !== '') {
             $bearer = (string) $request->bearerToken();
 
-            if (! hash_equals(hash('sha256', $actual), hash('sha256', $bearer))) {
+            if (! hash_equals($actual, $bearer)) {
                 return $this->prohibido('El token actual no coincide con el token de la cabecera.');
             }
         }
 
+        $agente = PrintAgent::query()->find($agentId);
+
+        if ($agente === null) {
+            return $this->error('El agente no existe.');
+        }
+
         $token = $this->nuevoToken();
+        $grace = max(0, (int) config('print.token_grace_period_seconds'));
+        $vence = now()->addSeconds($grace);
 
         $this->connection->table('print_agents')
             ->where('id', $agentId)
             ->update([
-                'token_hash' => hash('sha256', $token),
+                // El hash vigente pasa a "previo" CON su fecha.
+                'token_hash_previo' => $agente->token_hash,
+                'token_previo_valido_hasta' => $vence,
+                'token_hash' => $this->tokens->hash($token),
                 'updated_at' => now(),
             ]);
 
@@ -374,6 +476,8 @@ final class PrintAgentController extends Controller
             'agent_id' => $agentId,
             // El token EN CLARO, una sola vez.
             'token' => $token,
+            // Cuando deja de valer el token anterior.
+            'token_valid_until' => $vence->toIso8601String(),
             'server_time' => now()->toIso8601String(),
         ]);
     }
@@ -449,6 +553,57 @@ final class PrintAgentController extends Controller
             'charset' => (string) $destino->charset,
             'char_per_line' => (int) $destino->char_per_line,
         ];
+    }
+
+    /**
+     * El INVENTARIO que declara el agente, normalizado.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function inventario(mixed $declarado): array
+    {
+        return $this->inventory->normalizar($declarado);
+    }
+
+    /**
+     * Las CAPACIDADES que declara el agente.
+     *
+     * @return list<string>
+     */
+    private function capacidades(mixed $declarado): array
+    {
+        if (! is_array($declarado)) {
+            return [];
+        }
+
+        $capacidades = [];
+
+        foreach ($declarado as $capacidad) {
+            if (! is_string($capacidad)) {
+                continue;
+            }
+
+            $capacidad = trim($capacidad);
+
+            if ($capacidad === '') {
+                continue;
+            }
+
+            $capacidades[$capacidad] = true;
+        }
+
+        return array_keys($capacidades);
+    }
+
+    /**
+     * Los DESTINOS de la tienda que el inventario del agente NO cubre.
+     *
+     * @param  list<array<string, mixed>>  $inventario
+     * @return list<array<string, mixed>>
+     */
+    private function destinosNoCubiertos(int $storeId, array $inventario): array
+    {
+        return $this->inventory->destinosNoCubiertos($storeId, $inventario);
     }
 
     /**

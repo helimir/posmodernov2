@@ -57,11 +57,39 @@ export interface PrinterProfile {
     code_pages: string[];
 }
 
+/**
+ * A print agent of the store, with the inventory it declared in its
+ * heartbeat.
+ *
+ * An agent reports the printers it can reach. A destination that the
+ * inventory does not cover is NOT rejected: a printer may be off at that
+ * moment. The screen says so, because a silent mismatch is the wrong kind
+ * of mismatch.
+ */
+export interface PrintAgentRow {
+    id: number;
+    name: string;
+    instance_id: string | null;
+    is_active: boolean;
+    revoked: boolean;
+    last_heartbeat_at: string | null;
+    printers: { code: string; name: string }[];
+    capabilities: string[];
+    uncovered_targets: {
+        target_id: number;
+        name: string;
+        printer_code: string;
+        printer_name: string;
+        reason: string;
+    }[];
+}
+
 export interface PrintTargetsIndexProps {
     targets: PrintTargetRow[];
     printers: PrinterOption[];
     profiles: PrinterProfile[];
     store: { id: number; name: string; code_name: string | null };
+    agents: PrintAgentRow[];
 }
 
 /**
@@ -83,7 +111,7 @@ const NONE = 'none';
  * one active destination the ticket goes there, and with more than one the
  * ticket stays pending, because choosing for the cashier is guessing.
  */
-export default function PrintTargetsIndex({ targets, printers, profiles, store }: PrintTargetsIndexProps) {
+export default function PrintTargetsIndex({ targets, printers, profiles, store, agents }: PrintTargetsIndexProps) {
     const { can } = usePermissions();
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -397,6 +425,43 @@ export default function PrintTargetsIndex({ targets, printers, profiles, store }
                                     )}
                                 </div>
                             </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {agents.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">
+                                Print agents
+                                <span className="text-muted-foreground ml-2 text-sm font-normal">in {store.name}</span>
+                            </CardTitle>
+                        </CardHeader>
+
+                        <CardContent>
+                            {agents.map((agent) => (
+                                <div key={agent.id} className="text-sm">
+                                    <div className="font-medium">
+                                        {agent.name}
+                                        {agent.revoked ? ' — revoked' : ''}
+                                        {!agent.revoked && !agent.is_active ? ' — inactive' : ''}
+                                    </div>
+
+                                    {agent.uncovered_targets.length > 0 ? (
+                                        <ul className="text-muted-foreground list-disc pl-5">
+                                            {agent.uncovered_targets.map((target) => (
+                                                <li key={target.target_id}>
+                                                    {target.name} ({target.printer_code}) is not in the agent inventory.
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-muted-foreground">
+                                            Every LAN destination of this store is in the agent inventory.
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
                         </CardContent>
                     </Card>
                 )}

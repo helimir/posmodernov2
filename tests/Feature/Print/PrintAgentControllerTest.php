@@ -43,6 +43,7 @@ test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_
     $registro = $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda A',
         'store_id' => $tiendaA['store_id'],
+        'instance_id' => 'inst-tienda-a',
     ], ['X-Registration-Secret' => $secretoA]);
 
     $registro->assertCreated()->assertJsonPath('status', 'registered');
@@ -53,11 +54,13 @@ test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_
     expect($agentId)->toBeGreaterThan(0)
         ->and($token)->not->toBe('');
 
-    // La tabla guarda SOLO el hash: el token en claro no se persiste.
+    // La tabla guarda SOLO el hash: el token en claro no se persiste. Y el
+    // hash es de CONTRASENA (argon2id), no una huella rapida.
     $hashGuardado = (string) DB::table('print_agents')->where('id', $agentId)->value('token_hash');
 
     expect($hashGuardado)->not->toBe($token)
-        ->and($hashGuardado)->toBe(hash('sha256', $token));
+        ->and($hashGuardado)->not->toBe(hash('sha256', $token))
+        ->and(password_verify($token, $hashGuardado))->toBeTrue();
 
     // 3. El agente TIRA de la conexion: con su token y su `X-Agent-Id`
     //    recibe los trabajos de SU tienda, y solo de su tienda.
@@ -105,11 +108,18 @@ test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_
         ->and($ids)->not->toContain($trabajoB1)
         ->and(DB::table('print_jobs')->where('id', $trabajoB1)->value('status'))->toBe('queued');
 
-    // 5. El token de la tienda A contra el `X-Agent-Id` de la tienda B: 403,
+    // 5. El token de la tienda A contra el `X-Agent-Id` de la tienda B: 401,
     //    y el trabajo de B no se entrega.
+    //
+    //    Antes era 403: el servidor buscaba el agente POR EL HASH del token y
+    //    luego comparaba el `X-Agent-Id`. Ahora el hash es argon2id y no se
+    //    indexa: la fila se busca por el `X-Agent-Id` y el token se verifica
+    //    contra SU hash. Un token que no es de ese agente es, sencillamente,
+    //    un token que no vale.
     $registroB = $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda B',
         'store_id' => $tiendaB['store_id'],
+        'instance_id' => 'inst-tienda-b',
     ], ['X-Registration-Secret' => $secretoB]);
 
     $registroB->assertCreated();
@@ -119,7 +129,7 @@ test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_
     $this->withHeaders([
         'Authorization' => 'Bearer '.$token,
         'X-Agent-Id' => (string) $agentBId,
-    ])->getJson('/api/print-agents/jobs?wait=0')->assertForbidden();
+    ])->getJson('/api/print-agents/jobs?wait=0')->assertUnauthorized();
 
     expect(DB::table('print_jobs')->where('id', $trabajoB1)->value('status'))->toBe('queued');
 
@@ -151,8 +161,10 @@ test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_
 
     expect(DB::table('print_jobs')->where('id', $trabajoA1)->value('status'))->toBe('printed');
 
-    // 8. La ROTACION invalida el token viejo: el anterior da 401 y el nuevo
-    //    funciona.
+    // 8. La ROTACION: el token NUEVO funciona, y el ANTERIOR sigue valiendo
+    //    DENTRO de su ventana de gracia (para que al agente le llegue el
+    //    nuevo sin dejar la caja muda). Pasada la ventana, el anterior ya no
+    //    vale: lo comprueba `AgentTokenSecurityTest`.
     $rotacion = $this->withHeaders($cabeceras)->postJson('/api/print-agents/rotate');
 
     $rotacion->assertOk()->assertJsonPath('status', 'ok');
@@ -162,23 +174,32 @@ test('test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_
     expect($tokenNuevo)->not->toBe($token)
         ->and($tokenNuevo)->not->toBe('');
 
-    $this->withHeaders($cabeceras)
-        ->getJson('/api/print-agents/jobs?wait=0')
-        ->assertUnauthorized();
-
     $this->withHeaders([
         'Authorization' => 'Bearer '.$tokenNuevo,
         'X-Agent-Id' => (string) $agentId,
     ])->getJson('/api/print-agents/jobs?wait=0')->assertOk();
 
-    // 9. Registrar el MISMO nombre en la MISMA tienda ROTA el token: no crea
-    //    un agente duplicado.
+    // Y el token ANTERIOR todavia vale: esta dentro de la ventana de gracia.
+    $this->withHeaders($cabeceras)
+        ->getJson('/api/print-agents/jobs?wait=0')
+        ->assertOk();
+
+    // 9. Registrar el MISMO `instance_id` en la MISMA tienda REEMPLAZA la
+    //    fila: no crea un agente duplicado, y el token anterior deja de
+    //    valer.
     $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda A',
         'store_id' => $tiendaA['store_id'],
+        'instance_id' => 'inst-tienda-a',
     ], ['X-Registration-Secret' => $secretoA])->assertCreated()->assertJsonPath('agent_id', $agentId);
 
     expect(DB::table('print_agents')->where('store_id', $tiendaA['store_id'])->count())->toBe(1);
+
+    // El token que se acaba de invalidar ya no habla.
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.$tokenNuevo,
+        'X-Agent-Id' => (string) $agentId,
+    ])->getJson('/api/print-agents/jobs?wait=0')->assertUnauthorized();
 });
 
 /**
@@ -248,6 +269,7 @@ test('test_el_token_del_agente_se_guarda_solo_como_hash', function () {
     $registroA = $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda A',
         'store_id' => $tiendaA['store_id'],
+        'instance_id' => 'inst-tienda-a',
     ], ['X-Registration-Secret' => $secretoA]);
 
     $registroA->assertCreated()->assertJsonPath('status', 'registered');
@@ -255,6 +277,7 @@ test('test_el_token_del_agente_se_guarda_solo_como_hash', function () {
     $registroB = $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda B',
         'store_id' => $tiendaB['store_id'],
+        'instance_id' => 'inst-tienda-b',
     ], ['X-Registration-Secret' => $secretoB]);
 
     $registroB->assertCreated();
@@ -272,11 +295,15 @@ test('test_el_token_del_agente_se_guarda_solo_como_hash', function () {
     expect($columnas)->toContain('token_hash')
         ->and($columnas)->not->toContain('token');
 
-    // 3. El valor guardado es el HASH del token entregado, no el token.
+    // 3. El valor guardado es el HASH DE CONTRASENA del token entregado: un
+    //    argon2id (con su sal y sus parametros), no una huella rapida.
     $hashGuardado = (string) DB::table('print_agents')->where('id', $agentId)->value('token_hash');
 
     expect($hashGuardado)->not->toBe($token)
-        ->and($hashGuardado)->toBe(hash('sha256', $token));
+        ->and($hashGuardado)->not->toBe(hash('sha256', $token))
+        ->and($hashGuardado)->toStartWith('$argon2id$')
+        ->and(password_verify($token, $hashGuardado))->toBeTrue()
+        ->and(password_verify('otro-token', $hashGuardado))->toBeFalse();
 
     // 4. Y el token en claro NO aparece en NINGUN valor de NINGUNA fila de
     //    la tabla: ni en la del agente que lo recibio, ni en la del otro.
