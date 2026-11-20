@@ -648,10 +648,6 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   cosa falla con mensaje util (**nada se escribe a ciegas**). El estado pasa por la **maquina de
   estados que ya existia** (`claimByServer` se **anadio** a ella, con la misma puerta atomica): dos
   bombeos no toman el mismo trabajo. `ops:print-pump` bombea **una vez y sale**. Dep: F2-05
-- [ ] **F2-06** **El escritor directo a la impresora.** El transporte `server_socket` esta en el
-  esquema y **no hay ni un `stream_socket_client` en `app/`**: un destino `server_socket` es un
-  trabajo que se encola y **nunca sale**. Escribir los bytes a `tcp://host:9100`, a `smb://` o a la
-  cola de Windows, con cola y reintento. Con esto el POS imprime **sin agente**. Dep: F2-05
 - [ ] **F2-07** **Los destinos de impresion administrables.** CRUD de `printers` y `print_targets`
   por tienda: perfil ESC/POS, codepagina, **ancho** (`char_per_line`), soporte de QR y limite del
   payload del QR, con un **test de conexion** al endpoint. Y validar el **ancho contra el
