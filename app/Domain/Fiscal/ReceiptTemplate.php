@@ -97,6 +97,28 @@ final readonly class ReceiptTemplate
             ->where('fiscal_document_id', $documentId)
             ->first();
 
+        // El NUMERO del documento, COMPLETO: el prefijo de su serie mas el
+        // secuencial, exactamente como lo compone la venta en su
+        // `invoice_no`.
+        //
+        // REGLA que fija esto: *el comprobante y la respuesta del cobro son
+        // el MISMO documento, asi que dicen el MISMO numero*. Y el numero
+        // tiene que ser el completo: hay cinco series en el catalogo y sus
+        // prefijos son distintos por pais, asi que un secuencial suelto ("Nº
+        // 3") no identifica un documento fiscal.
+        $numero = (string) $document->number;
+        $prefijo = null;
+
+        if ($document->series_id !== null) {
+            $prefijo = $connection->table('fiscal_series')
+                ->where('id', $document->series_id)
+                ->value('prefix');
+        }
+
+        $documentNumber = ($prefijo === null || trim((string) $prefijo) === '')
+            ? $numero
+            : trim((string) $prefijo).$numero;
+
         $profileId = (int) $document->fiscal_profile_id;
 
         // La moneda es un DATO: se lee de la tabla de monedas, nunca se
@@ -116,7 +138,7 @@ final readonly class ReceiptTemplate
             // mejor que no tener nada.
             denomination: self::token($connection, $profileId, 'document_denomination')
                 ?? (string) $document->document_type,
-            documentNumber: (string) $document->number,
+            documentNumber: $documentNumber,
             controlNumber: $control === null ? null : (string) $control->control_number,
             issuedAt: self::instanteDeEmision($connection, $document),
             currencyCode: $currencyCode,
