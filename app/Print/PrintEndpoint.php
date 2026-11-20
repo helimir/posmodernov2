@@ -97,6 +97,68 @@ final readonly class PrintEndpoint
     }
 
     /**
+     * El ENDPOINT de un destino, PARA SU TRANSPORTE, o un error con mensaje
+     * útil.
+     *
+     * REGLA que fija este método: *el endpoint lo decide el TRANSPORTE*.
+     *
+     *  - el `browser` NO tiene endpoint: el navegador ES el destino, y el
+     *    servidor lo que hace es renderizar el comprobante en HTML/PDF desde
+     *    el mismo modelo de plantilla. Un endpoint en un destino del
+     *    navegador es un destino que no existe;
+     *  - los transportes FISICOS lo tienen SIEMPRE: sin endpoint no hay
+     *    donde escribir los bytes.
+     *
+     * Y LA VALIDACION ES DEL DOMINIO, no de PostgreSQL: el CHECK del esquema
+     * (`print_targets_endpoint_admitted`) es la red de seguridad, no el
+     * mensaje. El que falla tiene que leer QUE endpoint es, QUE transportes
+     * admiten endpoint y QUE formas se aceptan.
+     *
+     * @return string|null El endpoint normalizado, o `null` en el `browser`.
+     *
+     * @throws RuntimeException Si el endpoint no es admisible en su transporte.
+     */
+    public static function paraTransporte(PrintTransport $transporte, ?string $texto): ?string
+    {
+        $endpoint = trim((string) $texto);
+
+        if ($transporte === PrintTransport::Browser) {
+            if ($endpoint !== '') {
+                throw new RuntimeException(
+                    'El transporte «browser» no declara endpoint: el navegador ES el destino, '
+                    .'y el comprobante se sirve como HTML/PDF. Los transportes «lan_agent» y '
+                    .'«server_socket» si declaran endpoint.'
+                );
+            }
+
+            return null;
+        }
+
+        if ($endpoint === '') {
+            throw new RuntimeException(
+                "El destino de impresion con el transporte «{$transporte->value}» no declara endpoint: "
+                .'no hay donde escribir los bytes. Las formas admitidas son: '.self::formas().'.'
+            );
+        }
+
+        // La FORMA se valida con la misma puerta que usa el escritor: el
+        // destino que se declara tiene que ser un destino que se pueda
+        // escribir.
+        self::deTexto($endpoint);
+
+        return $endpoint;
+    }
+
+    /**
+     * Las FORMAS de endpoint que se admiten, para los mensajes.
+     */
+    public static function formas(): string
+    {
+        return 'tcp://servidor:'.self::PUERTO_RAW.' (la impresora de red), '
+            .'smb://servidor/impresora o \\\\servidor\\impresora (la impresora compartida de Windows)';
+    }
+
+    /**
      * ¿El destino es una impresora de RED?
      */
     public function esSocket(): bool
@@ -168,8 +230,9 @@ final readonly class PrintEndpoint
      */
     private static function noAdmitido(string $endpoint): string
     {
-        return "El endpoint «{$endpoint}» no es un destino admitido: solo se escriben la impresora de red "
-            .'(tcp://servidor:'.self::PUERTO_RAW.') y la impresora compartida de Windows '
-            .'(smb://servidor/impresora o \\\\servidor\\impresora).';
+        return "El endpoint «{$endpoint}» no es un destino admitido: los transportes «lan_agent» y "
+            .'«server_socket» escriben en la impresora de red (tcp://servidor:'.self::PUERTO_RAW.') '
+            .'o en la impresora compartida de Windows (smb://servidor/impresora o '
+            .'\\\\servidor\\impresora). El transporte «browser» no declara endpoint: el navegador es el destino.';
     }
 }

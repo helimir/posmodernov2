@@ -20,4 +20,15 @@ return [
      */
     'agent_disconnect_threshold_seconds' => (int) env('PRINT_AGENT_DISCONNECT_THRESHOLD_SECONDS', 60),
 
+    /*
+     * How long the connection TEST waits for the printer to answer.
+     *
+     * This is a PARAMETER and not a column: it changes with the network, not
+     * with the schema. The test only opens the connection and closes it
+     * again, so it does not need the writer's margin (which is the one of a
+     * whole ticket): it needs a short one, because the person waiting for the
+     * answer is in front of the screen.
+     */
+    'connection_test_timeout_seconds' => (int) env('PRINT_CONNECTION_TEST_TIMEOUT_SECONDS', 2),
+
 ];

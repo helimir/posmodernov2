@@ -110,6 +110,18 @@ enum Permission: string
     /** Ver los roles y sus permisos. */
     case RoleRead = 'role.read';
 
+    /** Ver el catalogo de impresoras y los destinos de impresion. */
+    case PrintingRead = 'printing.read';
+
+    /** Dar de alta una impresora o un destino de impresion. */
+    case PrintingCreate = 'printing.create';
+
+    /** Editar una impresora o un destino de impresion. */
+    case PrintingUpdate = 'printing.update';
+
+    /** Probar la conexion de un destino de impresion. */
+    case PrintingTest = 'printing.test';
+
     /** Cambiar los permisos o el ambito de tiendas de un rol. */
     case RoleUpdate = 'role.update';
 
@@ -175,6 +187,10 @@ enum Permission: string
             self::UserUpdate => 'Assign user roles',
             self::RoleRead => 'View roles',
             self::RoleUpdate => 'Update role permissions',
+            self::PrintingRead => 'View the printers and the print destinations',
+            self::PrintingCreate => 'Create printers and print destinations',
+            self::PrintingUpdate => 'Update printers and print destinations',
+            self::PrintingTest => 'Test the connection of a print destination',
         };
     }
 
