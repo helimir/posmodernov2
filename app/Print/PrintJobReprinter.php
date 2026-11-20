@@ -28,10 +28,15 @@ final readonly class PrintJobReprinter
     /**
      * Crea el trabajo de reimpresion y devuelve su identificador.
      *
+     * REGLA que fija este metodo: *solo se reimprime lo que YA SALIO*. Un
+     * trabajo en cola todavia no ha salido de la impresora: reimprimirlo no
+     * significaria nada y duplicaria el ticket. Y un trabajo cancelado no se
+     * reimprime: el operador lo descarto.
+     *
      * @param  int|null  $actorId  Quien pidio la reimpresion (auditoria).
      *
-     * @throws RuntimeException Si el trabajo original no existe o no tiene
-     *                          bytes congelados.
+     * @throws RuntimeException Si el trabajo original no existe, no ha salido
+     *                          o no tiene bytes congelados.
      */
     public function reprint(int $originalJobId, ?int $actorId = null): int
     {
@@ -39,6 +44,16 @@ final readonly class PrintJobReprinter
 
         if ($original === null) {
             throw new RuntimeException("El trabajo de impresion {$originalJobId} no existe.");
+        }
+
+        $estado = (string) $original->status;
+
+        if (! in_array($estado, ['printed', 'failed'], true)) {
+            throw new RuntimeException(
+                "El trabajo de impresion {$originalJobId} no se puede reimprimir desde «{$estado}»: "
+                .'solo se reimprime un trabajo ya IMPRESO o FALLIDO. '
+                .'Un trabajo en cola todavia no ha salido, y reimprimirlo duplicaria el ticket.'
+            );
         }
 
         $bytes = $original->payload_bytes;

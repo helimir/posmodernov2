@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\PrintAdministrationController;
+use App\Http\Controllers\PrintJobQueueController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -34,6 +35,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('impresion/destinos', [PrintAdministrationController::class, 'targets'])
         ->middleware('permission:printing.read')
         ->name('impresion.destinos.index');
+
+    // La COLA de trabajos de impresion de la tienda activa.
+    Route::get('impresion/trabajos', [PrintJobQueueController::class, 'jobs'])
+        ->middleware('permission:printing.read')
+        ->name('impresion.trabajos.index');
 
     Route::prefix('api')->group(function () {
         // El CATALOGO de impresoras, en JSON.
@@ -70,5 +76,24 @@ Route::middleware(['auth'])->group(function () {
             ->whereNumber('target')
             ->middleware('permission:printing.test')
             ->name('api.impresion.destinos.probar');
+
+        // La COLA de trabajos de impresion, en JSON.
+        Route::get('print-jobs', [PrintJobQueueController::class, 'index'])
+            ->middleware('permission:printing.read')
+            ->name('api.print-jobs.index');
+
+        // El REINTENTO: un trabajo fallido vuelve a la cola, con un intento
+        // mas y con los MISMOS bytes.
+        Route::post('print-jobs/{id}/reintentar', [PrintJobQueueController::class, 'retry'])
+            ->whereNumber('id')
+            ->middleware('permission:printing.retry')
+            ->name('api.print-jobs.retry');
+
+        // La REIMPRESION: los MISMOS bytes congelados, otra vez. Y CERO
+        // reservas: reimprimir no es reemitir.
+        Route::post('print-jobs/{id}/reimprimir', [PrintJobQueueController::class, 'reprint'])
+            ->whereNumber('id')
+            ->middleware('permission:printing.reprint')
+            ->name('api.print-jobs.reprint');
     });
 });

@@ -122,6 +122,12 @@ enum Permission: string
     /** Probar la conexion de un destino de impresion. */
     case PrintingTest = 'printing.test';
 
+    /** Reimprimir un comprobante que ya salio. */
+    case PrintingReprint = 'printing.reprint';
+
+    /** Reintentar un trabajo de impresion que fallo. */
+    case PrintingRetry = 'printing.retry';
+
     /** Cambiar los permisos o el ambito de tiendas de un rol. */
     case RoleUpdate = 'role.update';
 
@@ -191,6 +197,8 @@ enum Permission: string
             self::PrintingCreate => 'Create printers and print destinations',
             self::PrintingUpdate => 'Update printers and print destinations',
             self::PrintingTest => 'Test the connection of a print destination',
+            self::PrintingReprint => 'Reprint a ticket that already went out',
+            self::PrintingRetry => 'Retry a print job that failed',
         };
     }
 
