@@ -27,10 +27,21 @@ final readonly class PrintJobDispatcher
     /**
      * Genera los bytes y encola el trabajo.
      *
+     * @param  string|null  $reason  POR QUE existe el trabajo: `reprint` para
+     *                               una reimpresion. Es DATO, no codigo.
+     * @param  int|null  $reprintOfJobId  El trabajo ORIGINAL, cuando este
+     *                                    trabajo es una reimpresion.
+     *
      * @throws RuntimeException Si el ticket no es representable en el destino.
      */
-    public function dispatch(int $storeId, int $printTargetId, PrintPayload $payload, ?int $actorId = null): int
-    {
+    public function dispatch(
+        int $storeId,
+        int $printTargetId,
+        PrintPayload $payload,
+        ?int $actorId = null,
+        ?string $reason = null,
+        ?int $reprintOfJobId = null,
+    ): int {
         $target = PrintTarget::find($printTargetId);
 
         if ($target === null) {
@@ -53,8 +64,9 @@ final readonly class PrintJobDispatcher
         $trabajo = $this->connection->selectOne(
             <<<'SQL'
                 INSERT INTO print_jobs
-                    (store_id, print_target_id, agent_id, status, payload, payload_bytes, payload_sha256, attempts, created_by, created_at, updated_at)
-                VALUES (?, ?, NULL, ?, CAST(? AS jsonb), decode(?, 'hex'), ?, 0, ?, ?, ?)
+                    (store_id, print_target_id, agent_id, status, payload, payload_bytes, payload_sha256,
+                     reason, reprint_of_job_id, attempts, created_by, created_at, updated_at)
+                VALUES (?, ?, NULL, ?, CAST(? AS jsonb), decode(?, 'hex'), ?, ?, ?, 0, ?, ?, ?)
                 RETURNING id
             SQL,
             [
@@ -64,6 +76,8 @@ final readonly class PrintJobDispatcher
                 $this->modelo($payload),
                 bin2hex($renderizado->bytes),
                 $renderizado->sha256,
+                $reason,
+                $reprintOfJobId,
                 $actorId,
                 now(),
                 now(),
