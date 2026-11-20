@@ -522,8 +522,15 @@ test('test_el_comprobante_renderizado_lleva_el_numero_el_control_el_total_y_la_b
 
     $html = (new ReceiptRenderer)->render(ReceiptTemplate::fromDocument(DB::connection(), $documentId));
 
-    // 1. El numero de documento y el de control.
-    expect($html)->toContain('N&#186; 100')
+    // 1. El numero de documento y el de control. El numero es el COMPLETO:
+    //    el prefijo de la serie mas el secuencial, como en la respuesta del
+    //    cobro. Un secuencial suelto no identifica un documento: hay cinco
+    //    series en el catalogo y sus prefijos son distintos por pais.
+    $documento = DB::table('fiscal_documents')->where('id', $documentId)->first();
+    $serie = DB::table('fiscal_series')->where('id', $documento->series_id)->first();
+    $numero = trim((string) $serie->prefix).(string) $documento->number;
+
+    expect($html)->toContain('N&#186; '.$numero)
         ->and($html)->toContain('N&#186; Control 00-00000001');
 
     // 2. La base imponible y el impuesto, discriminados por alicuota.

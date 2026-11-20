@@ -34,23 +34,39 @@ final class PrintFixture
     /**
      * La impresora y el destino de una tienda que ya existe.
      *
+     * Los ATRIBUTOS se aplican encima de los del destino: los usa quien
+     * necesita un destino con otro NOMBRE (el nombre es UNIQUE por tienda) o
+     * con otra codepagina.
+     *
+     * @param  array<string, mixed>  $atributos
      * @return array{printer_id: int, target_id: int}
      */
-    public static function destino(int $storeId, string $transport = 'lan_agent'): array
+    public static function destino(int $storeId, string $transport = 'lan_agent', array $atributos = []): array
     {
         $printer = Printer::create([
             'code' => 'IMP-'.strtoupper(substr(md5(uniqid('', true)), 0, 10)),
             'name' => 'Impresora de prueba',
         ]);
 
-        $target = PrintTarget::create([
+        $destino = array_merge([
             'printer_id' => $printer->id,
             'store_id' => $storeId,
             'name' => 'Destino de prueba',
             'transport' => $transport,
-            'endpoint' => $transport === 'browser' ? null : 'tcp://192.168.1.50:9100',
             'printer_profile' => 'default',
-        ]);
+        ], $atributos);
+
+        // El ENDPOINT lo DECIDE el TRANSPORTE: el `browser` no tiene endpoint
+        // (el navegador es el destino) y los fisicos lo tienen. Un destino
+        // con un endpoint que no corresponde a su transporte lo rechaza el
+        // CHECK del esquema.
+        if (! array_key_exists('endpoint', $atributos)) {
+            $destino['endpoint'] = $destino['transport'] === 'browser'
+                ? null
+                : 'tcp://192.168.1.50:9100';
+        }
+
+        $target = PrintTarget::create($destino);
 
         return [
             'printer_id' => (int) $printer->id,

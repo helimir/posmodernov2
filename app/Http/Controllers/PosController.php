@@ -13,6 +13,7 @@ use App\Domain\Fiscal\FiscalIssuanceRunner;
 use App\Domain\Fiscal\ValueObjects\FiscalIssuanceOutcome;
 use App\Models\PaymentMethod;
 use App\Models\Store;
+use App\Print\CheckoutPrintQueue;
 use App\Support\Pos\PosAmount;
 use App\Support\Pos\PosBudget;
 use App\Support\Pos\PosCatalog;
@@ -48,6 +49,9 @@ use RuntimeException;
  *    dominio.
  *  - ORQUESTA la imputacion del credito del cliente, que el checkout del
  *    dominio NO hace (el cobro de una deuda es del credito, no de la venta).
+ *  - ORQUESTA el encolado del TICKET de la venta, que ocurre FUERA de la
+ *    transaccion de la venta (como el disparo fiscal) y cuyo fallo NUNCA
+ *    puede hacer perder una venta: la venta ya esta confirmada.
  *
  * LO QUE NO HACE, Y POR QUE:
  *
@@ -74,6 +78,7 @@ class PosController extends Controller
         private readonly PosBudget $budget,
         private readonly CashRegisterService $registers,
         private readonly FiscalIssuanceRunner $emision,
+        private readonly CheckoutPrintQueue $tickets,
     ) {
         $this->catalog = new PosCatalog($connection);
     }
@@ -240,12 +245,21 @@ class PosController extends Controller
      * venta tampoco.
      *
      * Responde 201 con `{ sale_id, invoice_no, control_number, grand_total,
-     * status, change, fiscal }`. Los importes son TEXTO decimal.
+     * status, change, fiscal, print }`. Los importes son TEXTO decimal.
      *
      * El campo `fiscal` es el ESTADO FISCAL de la venta: `{ status,
      * document_id, control_number, message }`, con `status` en `issued`
      * (emitido), `failed` (fallido, con su motivo) o `not_emitted` (el
      * interruptor de emision esta apagado).
+     *
+     * El campo `print` es el ESTADO DEL TICKET: `{ status, job_id, reason,
+     * message }`, con `status` en `queued` (encolado, con el identificador
+     * del trabajo) o `not_queued` (no encolado, con el motivo: el
+     * interruptor de la tienda apagado, sin destino, con destino ambiguo, sin
+     * comprobante, con el comprobante sin emitir, o el fallo del destino).
+     *
+     * NINGUNO de los dos falla el cobro: la venta esta confirmada y el
+     * papel se persigue despues.
      *
      * NO SE COBRA SIN CAJA DEL DIA ABIERTA.
      *
@@ -366,7 +380,34 @@ class PosController extends Controller
         // comprobante pendiente.
         $fiscal = $this->estadoFiscal((int) $resultado['sale_id'], $actorId);
 
-        return response()->json(array_merge($resultado, ['fiscal' => $fiscal]), 201);
+        // EL TICKET DE LA VENTA, FUERA de la transaccion de T1 y DESPUES de
+        // T2.
+        //
+        // REGLA que fija este metodo: *el ticket se encola DESPUES de que la
+        // venta este confirmada, y el fallo de la impresora NUNCA puede
+        // hacer perder una venta*.
+        //
+        // POR QUE FUERA DE LA TRANSACCION: los BYTES se congelan ANTES de
+        // escribir el trabajo (eso hace el despachador, para que el trabajo
+        // no se cree a medias), y generar bytes es TRABAJO, no una escritura:
+        // dentro de la transaccion alargaria el bloqueo de la venta.
+        //
+        // Y POR QUE DESPUES DE T2: el ticket es el comprobante en otro papel.
+        // Sin un comprobante EMITIDO no hay ticket, porque sus datos son los
+        // del comprobante.
+        //
+        // Y SI EL TICKET NO SALE, LA VENTA NO SE PIERDE: la cola devuelve un
+        // RESULTADO (encolado, o el motivo por que no se encolo), nunca una
+        // excepcion. El cobro responde 201 con el aviso y el ticket queda
+        // pendiente de que alguien lo imprima.
+        $print = $this->tickets
+            ->encolar((int) $resultado['sale_id'], $actorId)
+            ->aArray();
+
+        return response()->json(
+            array_merge($resultado, ['fiscal' => $fiscal, 'print' => $print]),
+            201
+        );
     }
 
     /**
