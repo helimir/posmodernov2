@@ -1551,9 +1551,38 @@ Ahora la fila declara el **prefijo** de sus variables de entorno (`credential_en
 
 **Tres mensajes distintos**, y ninguno dice el valor: el canal local **no necesita** credenciales (su prefijo en `null` es **legitimo**, y el seeder lo dice), una fila sin prefijo usada por un canal que las necesita es un error de **configuracion**, y el secreto que no esta en el entorno es una tercera cosa. **El secreto no se escribe en ningun sitio**: ni en la fila, ni en el log, ni en la respuesta.
 
+### F2-04 — El control cuando el canal es externo (PR #125, `bad7af5`)
+
+Con el **Portal del SENIAT**, el **numero de control lo asigna la AUTORIDAD, no el emisor** (el research lo dice literal: *"el control lo asigna la imprenta, no el emisor"*). Hoy el modelo era el contrario: T1 reservaba **las dos series** y el proveedor local reutilizaba la reserva de control. Ese modelo **solo vale** si el sistema es tambien la imprenta (el **rol dual**). **Sin cambiarlo, el adaptador habria obligado a rehacer el checkout** (riesgo R2 de la exploracion).
+
+La pregunta **"¿quien asigna el control?"** es ahora una propiedad del **canal**, y por tanto del **dominio**: **`ProviderKind::issuerReservesControl()`**. **Un metodo, en el enum**: ni un literal en el checkout, ni un flag en la base. `printer` reserva; `pac` y `portal` no.
+
+El checkout **pregunta antes de reservar**, y el canal le llega **como dato** en la entrada: el contexto lo resuelve con el `FiscalProviderResolver` (que se detiene **antes** de instanciar, porque preguntar por un `portal` sin adaptador no es un fallo) y **el checkout no resuelve el proveedor por su cuenta**.
+
+**Hoy no cambia nada observable**: la tienda de demostracion usa el canal local. Es un **adelanto**, no un cambio. Y una diferencia observable, y la correcta: **una tienda sin entorno de emision configurado ya no puede cobrar** (422). Sin serie no hay venta, y **asumir** el canal local en silencio habria roto la regla de *"nada se adivina"*.
+
+### F2-05 — El ticket sale al cobrar (PR #127, `9dd8bd8`)
+
+`CheckoutService::checkout()` **no tocaba `print_jobs`**. El unico productor era `ReceiptController::imprimir()`, que exige que **un humano** abra el comprobante, pulse imprimir y elija destino. **Una caja que depende de la pantalla para dar el ticket es una caja que se queda sin ticket.**
+
+Ahora el trabajo se encola **despues** de T1, **fuera** de la transaccion, **en el mismo sitio** que el disparo del T2 fiscal: los bytes se congelan antes de escribir la fila, y **congelar bytes es trabajo, no escritura** (dentro de la transaccion alargaria el bloqueo de la venta). Y va **despues de T2**, porque el ticket **es** el comprobante en otro papel: sin documento emitido no hay ticket.
+
+**Un fallo de la impresora NUNCA pierde la venta**: la venta ya esta confirmada, el fallo se dice en la respuesta y en el log, y la respuesta sigue siendo **201**. El resultado es un **vocabulario cerrado de ocho estados** (`queued`, `not_queued`, y los seis motivos: `auto_print_disabled`, `no_destination`, `ambiguous_destination`, `no_document`, `document_not_issued`, `dispatch_failed`).
+
+**El sistema no adivina**: sin destino activo, o con mas de uno, lo dice y el ticket queda pendiente de que alguien lo imprima. Y `store_settings.auto_print`, que **nadie leia** desde M04, ahora se lee.
+
+**Y el defecto que el cableado destapo**: la respuesta del cobro decia `invoice_no: serie-0013` y el comprobante decia **`Nº 3`**. Un numero **crudo no identifica un documento**: hay cinco series en el catalogo y sus prefijos son distintos por pais (`serie-001`, `33`, `NMX`, `CFE`, `FE`), asi que *"Nº 3"* podria ser la tercera factura de cualquiera de ellas. El comprobante ahora compone el numero **completo**, y **el papel y la respuesta dicen exactamente el mismo numero**, porque son el mismo documento.
+
+### Deuda que queda
+
+- **La pantalla de la caja no enseña todavia el estado del ticket**: el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume. Sin destino, el cajero deberia ver *"el ticket queda pendiente"*.
+- **El **agente LAN en .NET** (fuera del corte 1), y el **escritor directo** (`server_socket`), que es la unidad siguiente: ahora el ticket se encola, pero **nadie lo escribe todavia en una impresora**.
+- **El consumidor final sin identificativo** (el art. 8.6 pide cedula o pasaporte, y el mostrador no lo recoge).
+- `fiscal_series.assigned_by` (enum `issuer|authority|printer|psp`) es un dato **mas fino** que el canal para la regla del control: una tienda podria tener una serie de control asignada por la autoridad y otra por la imprenta. La regla actual (por `ProviderKind`) es correcta pero **gruesa**.
+
 ### Siguiente
 
-**F2-04**: **el modelo del control cuando el canal es externo**. Con el **Portal del SENIAT**, el control **lo asigna la autoridad, no el emisor**: hoy `CheckoutService` reserva control localmente en T1 y el proveedor reutiliza esa reserva. **Sin cambiar esto, el adaptador obligaria a rehacer el checkout** (riesgo R2 de la exploracion).
+**F2-06**: el **escritor directo a la impresora** (`server_socket`, `smb://` o la cola de Windows). Hoy el esquema lo admite y **no hay ni un `stream_socket_client` en `app/`**: un destino `server_socket` es un trabajo que se encola y **nunca sale**. Con esta unidad el POS imprime **sin agente**, y el agente .NET queda para las impresoras USB.
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 

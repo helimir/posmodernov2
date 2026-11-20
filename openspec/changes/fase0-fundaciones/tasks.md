@@ -135,6 +135,8 @@ Migraciones y seeders cuadraban. El desvío global es de **+30%**, y es la causa
 | 57 | `feat/fase2-01-permisos` | F2-01 | los permisos y los roles aplicados: el catalogo cerrado, la matriz de roles y el permiso por ruta | **3931** | PR #118 - issue #117 | **fusionado** `9ee2533` |
 | 58 | `feat/fase2-02-tokens-perfil` | F2-02 | los tokens que faltaban del perfil (la providencia y el consumidor final) y la inscripcion fiscal del emisor | **665** | PR #121 - issue #120 | **fusionado** `eaff1c0` |
 | 59 | `feat/fase2-03-credenciales` | F2-03 | las credenciales del proveedor fiscal, resueltas del entorno con un prefijo declarado | **567** | PR #123 - issue #122 | **fusionado** `3d58fa1` |
+| 60 | `feat/fase2-04-control-canal` | F2-04 | el numero de control se reserva solo cuando el emisor es tambien la imprenta | **587** | PR #125 - issue #124 | **fusionado** `bad7af5` |
+| 61 | `feat/fase2-05-ticket-cableado` | F2-05 | el ticket se encola al cobrar, y el comprobante lleva el numero completo | **1137** | PR #127 - issue #126 | **fusionado** `9dd8bd8` |
 | 40 | `feat/fase0-22-suite` | 9b | `NoCountryLiteralsTest` + tests canonicos | **550** | - - - | pendiente |
 | 41 | `feat/fase0-23-ci-docs` | 9c | workflow CI + `README.md` + meta-tests | **340** | - - - | pendiente |
 
@@ -613,6 +615,27 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   necesita credenciales (su prefijo en `null` es legitimo), una fila sin prefijo usada por un canal
   que las necesita es un error de **configuracion**, y el secreto ausente del entorno es una tercera
   cosa. **El secreto no se escribe en ningun sitio**. Dep: 1.7
+- [x] **F2-04** **El modelo del control cuando el canal es externo.** Con el **Portal del SENIAT**, el
+  control **lo asigna la autoridad, no el emisor**. Hoy T1 reservaba las dos series y el proveedor local
+  reutilizaba la reserva de control: ese modelo **solo vale** si el sistema es tambien la imprenta (el
+  rol dual). La pregunta **"¿quien asigna el control?"** es ahora una propiedad del **canal**, y por
+  tanto del **dominio**: `ProviderKind::issuerReservesControl()`. **Un metodo, en el enum**: ni un
+  literal en el checkout, ni un flag en la base. El checkout **pregunta antes de reservar**, y el canal
+  le llega **como dato** en la entrada. **Hoy no cambia nada observable**: la tienda de demostracion usa
+  el canal local. Una diferencia observable, y la correcta: una tienda **sin entorno de emision
+  configurado ya no puede cobrar** (sin serie no hay venta, y **asumir** el canal local en silencio
+  habria roto la regla de "nada se adivina"). Dep: 1.7, 1.13
+- [x] **F2-05** **El ticket se encola al cobrar.** `CheckoutService::checkout()` **no tocaba
+  `print_jobs`**: el unico productor era `ReceiptController::imprimir()`, que exige que **un humano**
+  abra el comprobante, pulse imprimir y elija destino. **Una caja que depende de la pantalla para dar
+  el ticket es una caja que se queda sin ticket.** Ahora se encola **despues** de T1, **fuera** de la
+  transaccion y **en el mismo sitio** que el disparo del T2 fiscal (los bytes se congelan antes de
+  escribir la fila, y congelar bytes es trabajo, no escritura). **Un fallo de la impresora NUNCA pierde
+  la venta**: se dice en la respuesta y en el log, y la respuesta sigue siendo 201. El resultado es un
+  **vocabulario cerrado de ocho estados**, y **el sistema no adivina** el destino.
+  `store_settings.auto_print`, que **nadie leia**, ahora se lee. Y el comprobante lleva el **numero
+  completo** del documento (con el prefijo de la serie): un secuencial suelto **no identifica un
+  documento** (hay cinco series con prefijos distintos por pais). Dep: 1.8, F2-04
 - [ ] **F2-02** **Los tres tokens que faltan del perfil, y la inscripcion fiscal del emisor.**
   El codigo ya lee `provision_reference` (sin el, el comprobante **no dice "conforme a la
   providencia"**, art. 19), `final_consumer_name` (sin el, una venta **sin cliente no tiene
