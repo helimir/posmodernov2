@@ -3,6 +3,7 @@
 use App\Http\Controllers\LegacySyncController;
 use App\Http\Controllers\PrintAgentController;
 use App\Http\Middleware\PrintAgentAuthenticate;
+use App\Http\Middleware\PrintAgentRequireTls;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,15 +25,21 @@ use Illuminate\Support\Facades\Route;
 | guarda su hash. Es la segunda capa: el interruptor
 | `PRINT_LAN_AGENT_ENABLED` es la puerta maestra.
 |
+| Y TODO el canal exige TLS (`PrintAgentRequireTls`): el token viaja en la
+| cabecera `Authorization` y el trabajo lleva datos fiscales. El TLS va ANTES
+| que la autenticacion, para que un token no llegue nunca en claro.
+|
 */
 
-Route::post('/print-agents/register', [PrintAgentController::class, 'register']);
+Route::middleware(PrintAgentRequireTls::class)->group(function () {
+    Route::post('/print-agents/register', [PrintAgentController::class, 'register']);
 
-Route::middleware(PrintAgentAuthenticate::class)->group(function () {
-    Route::post('/print-agents/heartbeat', [PrintAgentController::class, 'heartbeat']);
-    Route::get('/print-agents/jobs', [PrintAgentController::class, 'jobs']);
-    Route::post('/print-jobs/{id}/result', [PrintAgentController::class, 'result']);
-    Route::post('/print-agents/rotate', [PrintAgentController::class, 'rotate']);
+    Route::middleware(PrintAgentAuthenticate::class)->group(function () {
+        Route::post('/print-agents/heartbeat', [PrintAgentController::class, 'heartbeat']);
+        Route::get('/print-agents/jobs', [PrintAgentController::class, 'jobs']);
+        Route::post('/print-jobs/{id}/result', [PrintAgentController::class, 'result']);
+        Route::post('/print-agents/rotate', [PrintAgentController::class, 'rotate']);
+    });
 });
 
 /*

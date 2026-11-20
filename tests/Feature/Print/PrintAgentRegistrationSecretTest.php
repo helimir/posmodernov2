@@ -54,6 +54,7 @@ test('test_el_registro_de_un_agente_exige_el_secreto_de_la_tienda', function () 
     $registro = $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda A',
         'store_id' => $tiendaA['store_id'],
+        'instance_id' => 'inst-tienda-a',
     ], ['X-Registration-Secret' => $secretoA]);
 
     $registro->assertCreated()->assertJsonPath('status', 'registered');
@@ -121,6 +122,7 @@ test('test_el_secreto_de_registro_se_guarda_solo_como_hash_y_se_muestra_una_sola
     $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda',
         'store_id' => $tienda['store_id'],
+        'instance_id' => 'inst-tienda',
     ], ['X-Registration-Secret' => $secreto])->assertCreated();
 
     // 4. El comando ROTA: el secreto anterior deja de valer y el nuevo vale.
@@ -142,6 +144,7 @@ test('test_el_secreto_de_registro_se_guarda_solo_como_hash_y_se_muestra_una_sola
     $this->postJson('/api/print-agents/register', [
         'name' => 'Caja de la tienda',
         'store_id' => $tienda['store_id'],
+        'instance_id' => 'inst-tienda',
     ], ['X-Registration-Secret' => $secretoNuevo])->assertCreated();
 
     // 5. Una tienda que NO existe: error claro y codigo de salida distinto de

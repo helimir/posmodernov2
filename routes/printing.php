@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\PrintAdministrationController;
+use App\Http\Controllers\PrintAgentAdministrationController;
 use App\Http\Controllers\PrintJobQueueController;
 use Illuminate\Support\Facades\Route;
 
@@ -95,5 +96,19 @@ Route::middleware(['auth'])->group(function () {
             ->whereNumber('id')
             ->middleware('permission:printing.reprint')
             ->name('api.print-jobs.reprint');
+
+        // La REVOCACION del agente LAN: es DEFINITIVA, y solo un operador la
+        // levanta. Un agente revocado no habla, aunque su token sea correcto,
+        // y no se puede volver a registrar con su `instance_id` hasta que la
+        // revocacion se levante a mano.
+        Route::post('print-agents/{agent}/revoke', [PrintAgentAdministrationController::class, 'revoke'])
+            ->whereNumber('agent')
+            ->middleware('permission:printing.update')
+            ->name('api.print-agents.revoke');
+
+        Route::post('print-agents/{agent}/restore', [PrintAgentAdministrationController::class, 'restore'])
+            ->whereNumber('agent')
+            ->middleware('permission:printing.update')
+            ->name('api.print-agents.restore');
     });
 });
