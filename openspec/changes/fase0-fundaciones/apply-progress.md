@@ -1590,17 +1590,29 @@ El estado pasa por la **maquina de estados que ya existia**: `claimByServer` se 
 - **El CHECK del esquema solo admite el puerto 9100** (`endpoint ~ '^tcp://[A-Za-z0-9._-]+:9100$'`). Una impresora de red en otro puerto (9105, 515, 631) **no es admisible**: es una limitacion heredada del diseño y es una **decision del mantenedor** (aflojar el CHECK, o aceptar que la impresora de red siempre esta en el 9100). El caso de puerto arbitrario si esta cubierto en la regla pura de `PrintEndpoint`.
 - **El `heartbeat` del agente sobreestima su trabajo pendiente**: cuenta `pending_jobs` como *todos* los trabajos encolados de la tienda, incluidos los de `server_socket` que el agente nunca reclamara. Ningun test lo afirma; queda senalado.
 
+### F2-07 — Los destinos de impresion administrables (PR #131, `ccd0443`)
+
+`printers` y `print_targets` **no los administraba nadie**: hoy un destino se plantaba en la base a mano. Una tienda **no podia decir** que impresora tiene, ni con que perfil, ni de que ancho, ni si admite QR. Y `char_per_line` **no lo leia nadie**: una linea mas larga que la impresora salia cortada, o no salia. El **TICKET MUDO**.
+
+Ahora la tienda los declara y el sistema **no adivina**: el endpoint lo valida el **dominio** (`PrintEndpoint::paraTransporte`), que dice **que endpoint es**, **que transportes admiten endpoint** y **que formas se aceptan**, en vez de un "violacion de restriccion" de PostgreSQL. `browser` no lleva endpoint, y eso tambien se dice. Todo cambio **queda auditado**.
+
+**Y el ancho se comprueba ANTES de escribir una sola letra**: una linea que no cabe **no se recorta en silencio**, el ticket **falla** con un mensaje que la nombra, cuanto mide y cuanto admite. Un comprobante fiscal **no puede ir recortado** (la linea diria una cosa y el papel otra) **ni le puede faltar una linea**. Y el destino **tiene que declarar su ancho**: sin ancho declarado no se puede componer un ticket, porque un ancho inventado produce un ticket cortado en silencio. **Por eso el default de 32 caracteres desaparece de la columna**: con un default, `char_per_line` nunca seria nulo y la regla no tendria con que dispararse.
+
+El **test de conexion** abre la conexion y la cierra, sin imprimir: la impresora de red responde, o no responde **y dice por que**. El `lan_agent` **no se puede probar desde el servidor** (quien conecta es el agente) y `browser` no tiene destino fisico: ambos lo dicen.
+
 ### Deuda que queda
 
-- **La pantalla de la caja no enseña todavia el estado del ticket**: el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume. Sin destino, el cajero deberia ver *"el ticket queda pendiente"*.
-- **El **agente LAN en .NET** (fuera del corte 1), para las impresoras USB.
+- **La pantalla de la caja no enseña todavia el estado del ticket**: el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume.
+- **El `heartbeat` del agente sobreestima su trabajo pendiente**: cuenta tambien los trabajos de `server_socket` que el agente nunca reclamara.
+- **El agente LAN en .NET** (fuera del corte 1), para las impresoras USB.
 - **El consumidor final sin identificativo** (el art. 8.6 pide cedula o pasaporte, y el mostrador no lo recoge).
 - `fiscal_series.assigned_by` (enum `issuer|authority|printer|psp`) es un dato **mas fino** que el canal para la regla del control.
 - `releaseExpiredLeases()` sigue **sin consumidor**: el barrido es del scheduler (F2-14).
+- **El limite del puerto 9100** del CHECK del esquema (decision del mantenedor).
 
 ### Siguiente
 
-**F2-07**: los **destinos de impresion administrables** (CRUD de `printers` y `print_targets` por tienda, con perfil ESC/POS, codepagina, ancho, soporte de QR y limite del payload, y un **test de conexion** al endpoint). Y validar el **ancho contra el contenido**: hoy `escribirLinea()` no recorta ni ajusta, y el resultado es el **"ticket mudo"** (bytes que la impresora no soporta).
+**F2-08**: la **reimpresion, el reintento y el barrido de leases**. `PrintJobReprinter` **no tiene ruta HTTP**, `PrintJobDispatcher::dispatch()` **no admite `reason` ni `reprint_of_job_id`**, y `releaseExpiredLeases()` **no tiene consumidor**: un trabajo con el lease caducado queda bloqueado **para siempre**. Con esta unidad, un ticket que se imprimio mal **se puede volver a imprimir**, y el scheduler (F2-14) tiene la pieza que necesita.
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 

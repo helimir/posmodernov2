@@ -648,11 +648,18 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   cosa falla con mensaje util (**nada se escribe a ciegas**). El estado pasa por la **maquina de
   estados que ya existia** (`claimByServer` se **anadio** a ella, con la misma puerta atomica): dos
   bombeos no toman el mismo trabajo. `ops:print-pump` bombea **una vez y sale**. Dep: F2-05
-- [ ] **F2-07** **Los destinos de impresion administrables.** CRUD de `printers` y `print_targets`
-  por tienda: perfil ESC/POS, codepagina, **ancho** (`char_per_line`), soporte de QR y limite del
-  payload del QR, con un **test de conexion** al endpoint. Y validar el **ancho contra el
-  contenido**: hoy `escribirLinea()` no recorta ni ajusta, y el resultado es el **"ticket mudo"**
-  (bytes que la impresora no soporta). Dep: F2-06
+- [x] **F2-07** **Los destinos de impresion administrables.** `printers` y `print_targets` **no los
+  administraba nadie**: una tienda **no podia decir** que impresora tiene, ni con que perfil, ni de que
+  ancho, ni si admite QR. Y `char_per_line` **no lo leia nadie**: una linea mas larga que la
+  impresora salia cortada, o no salia: el **TICKET MUDO**. Ahora la tienda los declara y el sistema
+  **no adivina**: el endpoint lo valida el **dominio** (que dice que endpoint es, que transportes
+  admiten endpoint y que formas se aceptan, en vez de un "violacion de restriccion" de PostgreSQL),
+  `browser` no lleva endpoint, y todo cambio **queda auditado**. Y **el ancho se comprueba ANTES de
+  escribir una sola letra**: una linea que no cabe **no se recorta en silencio**, el ticket **falla**
+  con un mensaje que la nombra, cuanto mide y cuanto admite. Un comprobante fiscal no puede ir
+  recortado ni le puede faltar una linea. Y el destino **tiene que declarar su ancho**: sin ancho
+  declarado no se puede componer un ticket, porque un ancho inventado produce un ticket cortado en
+  silencio (por eso el **default de 32 caracteres desaparece** de la columna). Dep: F2-06
 - [ ] **F2-08** **La reimpresion, el reintento y el barrido de leases.** `PrintJobReprinter` **no
   tiene ruta HTTP**; `releaseExpiredLeases()` **no tiene consumidor** (un trabajo con lease caducado
   queda bloqueado **para siempre**); y `PrintJobDispatcher::dispatch()` no admite `reason` ni
