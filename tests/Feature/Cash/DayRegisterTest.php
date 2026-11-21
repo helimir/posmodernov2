@@ -240,8 +240,14 @@ test('test_el_saldo_en_curso_se_deriva_de_los_asientos_de_la_fecha_de_negocio', 
 
     // Y el DERIVADO es el de los asientos, no el de un contador: el cambio de
     // la cuenta de efectivo tambien cuenta.
+    //
+    // Se mira la linea de la VENTA, no la primera: desde la unidad F2-10 la
+    // cuenta de efectivo tiene tambien el asiento de APERTURA (que debita
+    // la partida), y esa linea va antes.
     $movimiento = DB::table('ledger_lines')
         ->join('ledger_entries', 'ledger_entries.id', '=', 'ledger_lines.ledger_entry_id')
+        ->join('ledger_entry_types', 'ledger_entry_types.id', '=', 'ledger_entries.entry_type_id')
+        ->where('ledger_entry_types.code', 'sale')
         ->where('ledger_entries.store_id', $escenario['store_id'])
         ->where('ledger_entries.business_date', caja_dia_de_negocio((int) $usuario->id))
         ->where('ledger_lines.account_code', '1100000')
@@ -249,6 +255,20 @@ test('test_el_saldo_en_curso_se_deriva_de_los_asientos_de_la_fecha_de_negocio', 
 
     expect($movimiento)->not->toBeNull()
         ->and((string) $movimiento->debit)->toBe('58.0000');
+
+    // Y el asiento de APERTURA esta ahi, debitando la partida: es lo que
+    // hace que el saldo en curso la incluya, y por eso el esperado es solo
+    // el saldo en curso.
+    $apertura = DB::table('ledger_lines')
+        ->join('ledger_entries', 'ledger_entries.id', '=', 'ledger_lines.ledger_entry_id')
+        ->join('ledger_entry_types', 'ledger_entry_types.id', '=', 'ledger_entries.entry_type_id')
+        ->where('ledger_entry_types.code', 'opening_balance')
+        ->where('ledger_entries.store_id', $escenario['store_id'])
+        ->where('ledger_lines.account_code', '1100000')
+        ->first();
+
+    expect($apertura)->not->toBeNull()
+        ->and((string) $apertura->debit)->toBe('100.0000');
 });
 
 /**
