@@ -62,6 +62,58 @@ export interface CashDayPayment {
  */
 export type CashDayState = 'not_opened' | 'open' | 'closed';
 
+/**
+ * The SEALED Z: the closing of the day as a FACT.
+ *
+ * It is `null` when the day is not closed: there is nothing sealed to read.
+ *
+ * `verified` is the CHECK of the signature: when it is `false`, somebody
+ * altered a sealed Z, and the screen has to say so.
+ */
+export interface CashDayZ {
+    id: number;
+    closed_at: string | null;
+    closed_by: CashDayActor | null;
+    content_hash: string;
+    verified: boolean;
+    opening_balance: string;
+    expected_balance: string;
+    counted_balance: string;
+    difference: string;
+    subtotal: string;
+    tax_total: string;
+    grand_total: string;
+    sales_count: number;
+    first_document_number: string | null;
+    last_document_number: string | null;
+    first_control_number: string | null;
+    last_control_number: string | null;
+    payments: CashDayPayment[];
+    reopened_at: string | null;
+    reopened_by: CashDayActor | null;
+    reopen_reason: string | null;
+}
+
+/**
+ * A CLOSING in the history of the day.
+ *
+ * The history is why the Z is a row and not a calculation: a day that was
+ * reopened keeps its first Z, marked.
+ */
+export interface CashDayZHistoryEntry {
+    id: number;
+    closed_at: string | null;
+    closed_by: CashDayActor | null;
+    content_hash: string;
+    verified: boolean;
+    expected_balance: string;
+    counted_balance: string;
+    difference: string;
+    reopened_at: string | null;
+    reopened_by: CashDayActor | null;
+    reopen_reason: string | null;
+}
+
 export interface CashDayProps {
     state: CashDayState;
     store: { id: number; name: string; code_name: string | null };
@@ -75,6 +127,8 @@ export interface CashDayProps {
     difference: string | null;
     payments: CashDayPayment[];
     cash_total: string;
+    z: CashDayZ | null;
+    z_history: CashDayZHistoryEntry[];
 }
 
 /**
@@ -115,10 +169,13 @@ export default function CashDay({
     difference,
     payments,
     cash_total,
+    z,
+    z_history,
 }: CashDayProps) {
     const { can } = usePermissions();
     const [openingBalance, setOpeningBalance] = useState('0.0000');
     const [countedBalance, setCountedBalance] = useState('');
+    const [reopenReason, setReopenReason] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -163,12 +220,38 @@ export default function CashDay({
     };
 
     /**
+     * The REOPENING: undoing a closing needs a REASON, and the previous Z
+     * stays in the history, marked.
+     */
+    const reabrir = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+
+        setSaving(true);
+        setError(null);
+
+        try {
+            await postJson('/caja/dia/reabrir', { reason: reopenReason });
+
+            router.reload();
+        } catch (fallo) {
+            setError((fallo as Error).message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
      * The DIFFERENCE, with its sign. A difference of zero is a BALANCED
      * register, and anything else is shown: the cashier has to see it.
      */
     const descuadre = difference === null ? null : difference === '0.0000' || difference === '-0.0000';
     const sobra = difference !== null && !descuadre && !difference.startsWith('-');
     const absoluto = difference === null ? null : difference.replace('-', '');
+
+    /**
+     * The CLOSINGS that were undone: the day was reopened at least once.
+     */
+    const reabiertas = z_history.filter((cierre) => cierre.reopened_at !== null);
 
     const breadcrumbs: BreadcrumbItem[] = [
         {
@@ -228,26 +311,51 @@ export default function CashDay({
 
                     {state === 'open' && (
                         <CardContent className="grid gap-6 sm:grid-cols-3">
-                            <Figure label="Opening balance" value={opening_balance} currency={currency} />
+                            <Figure
+                                label="Opening balance"
+                                value={opening_balance}
+                                currency={currency}
+                                note="The money counted by hand in the drawer."
+                            />
 
                             <Figure
                                 label="Running balance"
                                 value={running_balance}
                                 currency={currency}
-                                note="Derived from the entries of this business day."
+                                note="The book: the entries of this business day, the opening one included."
                             />
 
-                            <Figure label="Expected" value={expected_balance} currency={currency} note="Opening balance plus the running balance." />
+                            <Figure
+                                label="Expected"
+                                value={expected_balance}
+                                currency={currency}
+                                note="The running balance: the opening balance is already in the book."
+                            />
                         </CardContent>
                     )}
 
                     {state === 'closed' && (
                         <CardContent className="grid gap-6 sm:grid-cols-5">
-                            <Figure label="Opening balance" value={opening_balance} currency={currency} />
+                            <Figure
+                                label="Opening balance"
+                                value={opening_balance}
+                                currency={currency}
+                                note="The money counted by hand in the drawer."
+                            />
 
-                            <Figure label="Running balance" value={running_balance} currency={currency} />
+                            <Figure
+                                label="Running balance"
+                                value={running_balance}
+                                currency={currency}
+                                note="The book right now: the opening one included."
+                            />
 
-                            <Figure label="Expected" value={expected_balance} currency={currency} />
+                            <Figure
+                                label="Expected"
+                                value={expected_balance}
+                                currency={currency}
+                                note="The running balance: the opening balance is already in the book."
+                            />
 
                             <Figure label="Counted" value={counted_balance ?? '0.0000'} currency={currency} />
 
@@ -264,6 +372,163 @@ export default function CashDay({
                         </CardContent>
                     )}
                 </Card>
+
+                {z !== null && (
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between gap-3">
+                            <CardTitle className="text-base">Sealed closing (Z)</CardTitle>
+                            {z.verified ? (
+                                <Badge variant="secondary">Sealed</Badge>
+                            ) : (
+                                <Badge variant="destructive">Signature does not match</Badge>
+                            )}
+                        </CardHeader>
+
+                        <CardContent className="space-y-6">
+                            {z.verified === false && (
+                                <p className="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-sm">
+                                    The signature of this Z does not match its content: somebody altered a sealed closing. Its
+                                    figures cannot be trusted.
+                                </p>
+                            )}
+
+                            <div className="grid gap-6 sm:grid-cols-4">
+                                <Figure label="Subtotal" value={z.subtotal} currency={currency} />
+
+                                <Figure label="Tax" value={z.tax_total} currency={currency} />
+
+                                <Figure label="Total" value={z.grand_total} currency={currency} />
+
+                                <div className="space-y-1">
+                                    <p className="text-muted-foreground text-xs">Sales</p>
+                                    <p className="text-xl font-semibold tabular-nums">{z.sales_count}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-6 sm:grid-cols-3">
+                                <Figure label="Expected" value={z.expected_balance} currency={currency} />
+
+                                <Figure label="Counted" value={z.counted_balance} currency={currency} />
+
+                                <Figure label="Difference" value={z.difference} currency={currency} />
+                            </div>
+
+                            <dl className="grid gap-4 text-sm sm:grid-cols-2">
+                                <div className="space-y-1">
+                                    <dt className="text-muted-foreground text-xs">Closed by</dt>
+                                    <dd className="font-medium">{z.closed_by?.name ?? '—'}</dd>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <dt className="text-muted-foreground text-xs">Closed at</dt>
+                                    <dd className="font-medium">{z.closed_at ?? '—'}</dd>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <dt className="text-muted-foreground text-xs">Documents</dt>
+                                    <dd className="font-medium">
+                                        {z.first_document_number ?? '—'}
+                                        {z.last_document_number !== null && z.last_document_number !== z.first_document_number
+                                            ? ` → ${z.last_document_number}`
+                                            : ''}
+                                    </dd>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <dt className="text-muted-foreground text-xs">Controls</dt>
+                                    <dd className="font-medium">
+                                        {z.first_control_number ?? '—'}
+                                        {z.last_control_number !== null && z.last_control_number !== z.first_control_number
+                                            ? ` → ${z.last_control_number}`
+                                            : ''}
+                                    </dd>
+                                </div>
+
+                                <div className="space-y-1 sm:col-span-2">
+                                    <dt className="text-muted-foreground text-xs">Signature</dt>
+                                    <dd className="font-mono text-xs break-all">{z.content_hash}</dd>
+                                </div>
+                            </dl>
+
+                            {z.payments.length > 0 && (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b">
+                                                <th className="px-2 py-2 text-left font-medium">Payment method</th>
+                                                <th className="px-2 py-2 text-left font-medium">Type</th>
+                                                <th className="px-2 py-2 text-right font-medium">Amount</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            {z.payments.map((payment, index) => (
+                                                <tr key={payment.id ?? index} className="border-b last:border-0">
+                                                    <td className="px-2 py-2">{payment.name ?? '—'}</td>
+                                                    <td className="px-2 py-2">{payment.type}</td>
+                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                        {formatAmount(payment.amount, currency)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {reabiertas.length > 0 && (
+                                <p className="text-muted-foreground text-xs">
+                                    This day was reopened {reabiertas.length} time(s): the closures below keep the reason.
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {z_history.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Closings of this day</CardTitle>
+                        </CardHeader>
+
+                        <CardContent className="space-y-3">
+                            {z_history.map((cierre) => (
+                                <div key={cierre.id} className="rounded-md border px-3 py-2 text-sm">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <p className="font-medium">
+                                            Closed by {cierre.closed_by?.name ?? '—'} · {cierre.closed_at ?? '—'}
+                                        </p>
+
+                                        {cierre.reopened_at === null ? (
+                                            <Badge variant="secondary">In force</Badge>
+                                        ) : (
+                                            <Badge variant="outline">Reopened</Badge>
+                                        )}
+                                    </div>
+
+                                    <p className="text-muted-foreground text-xs">
+                                        Expected {formatAmount(cierre.expected_balance, currency)} · Counted{' '}
+                                        {formatAmount(cierre.counted_balance, currency)} · Difference{' '}
+                                        {formatAmount(cierre.difference, currency)}
+                                    </p>
+
+                                    {cierre.reopened_at !== null && (
+                                        <p className="text-muted-foreground text-xs">
+                                            Reopened by {cierre.reopened_by?.name ?? '—'} · {cierre.reopened_at} ·{' '}
+                                            {cierre.reopen_reason ?? '—'}
+                                        </p>
+                                    )}
+
+                                    {cierre.verified === false && (
+                                        <p className="text-destructive text-xs">
+                                            The signature of this closing does not match its content: somebody altered it.
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                )}
 
                 {(state !== 'not_opened' || payments.length > 0) && (
                     <Card>
@@ -366,6 +631,39 @@ export default function CashDay({
                                 <p className="text-muted-foreground text-xs">Closed by</p>
                                 <p className="text-sm font-medium">{register.closed_by?.name ?? '—'}</p>
                             </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {state === 'closed' && can('cash_day.reopen') && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Reopen the cash day</CardTitle>
+                        </CardHeader>
+
+                        <CardContent>
+                            <p className="text-muted-foreground mb-4 text-sm">
+                                Reopening undoes the sealed closing and needs a reason. The previous Z stays in the history,
+                                marked. Correcting a sale of a closed day requires reopening the day first.
+                            </p>
+
+                            <form onSubmit={reabrir} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="reopen_reason">Reason</Label>
+                                    <Input
+                                        id="reopen_reason"
+                                        value={reopenReason}
+                                        onChange={(event) => setReopenReason(event.target.value)}
+                                        placeholder="Why is this day reopened?"
+                                        required
+                                    />
+                                    <p className="text-muted-foreground text-xs">The reason is kept with the closing.</p>
+                                </div>
+
+                                <Button type="submit" disabled={saving}>
+                                    {saving ? 'Reopening…' : 'Reopen cash day'}
+                                </Button>
+                            </form>
                         </CardContent>
                     </Card>
                 )}

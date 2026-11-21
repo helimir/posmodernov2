@@ -93,6 +93,7 @@ dataset('rutas protegidas', [
     'caja del dia' => ['get', '/caja/dia', 'cash_day.read'],
     'apertura de la caja del dia' => ['post', '/caja/dia/abrir', 'cash_day.open'],
     'cierre de la caja del dia' => ['post', '/caja/dia/cerrar', 'cash_day.close'],
+    'reapertura de la caja del dia' => ['post', '/caja/dia/reabrir', 'cash_day.reopen'],
     'reporte de stock' => ['get', '/reportes/stock', 'report.read'],
     'lista de clientes' => ['get', '/clientes', 'customer.read'],
     'alta de cliente' => ['get', '/clientes/nuevo', 'customer.create'],

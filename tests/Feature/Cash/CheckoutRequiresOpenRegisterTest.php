@@ -96,10 +96,16 @@ test('test_el_cobro_con_la_caja_cerrada_falla_igual', function () {
 
     expect($respuesta->json('errorMsg'))->toContain('caja del dia no esta abierta');
 
-    // Y tampoco queda venta.
+    // Y tampoco queda venta: ni cabecera, ni pagos, ni **asiento de la
+    // VENTA**. El asiento de APERTURA si esta, y es lo correcto: la caja se
+    // abrio (es lo que hace al cobro fallar), y el fallo del cobro no lo
+    // deshace.
     expect(DB::table('sales')->count())->toBe(0)
         ->and(DB::table('sale_payments')->count())->toBe(0)
-        ->and(DB::table('ledger_entries')->count())->toBe(0);
+        ->and(DB::table('ledger_entries')
+            ->join('ledger_entry_types', 'ledger_entry_types.id', '=', 'ledger_entries.entry_type_id')
+            ->where('ledger_entry_types.code', 'sale')
+            ->count())->toBe(0);
 });
 
 /**

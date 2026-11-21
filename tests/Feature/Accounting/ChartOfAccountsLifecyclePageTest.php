@@ -44,8 +44,8 @@ test('test_la_pantalla_del_plan_de_cuentas_responde_con_su_contrato', function (
             // El CATALOGO, con el rol que cada cuenta cumple en la tienda.
             ->has('accounts')
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1100000')['role'] === 'cash')
-            // Los CUATRO roles, con el tipo que cada uno exige.
-            ->has('roles', 4)
+            // Los CINCO roles, con el tipo que cada uno exige.
+            ->has('roles', 5)
             // Los CINCO TIPOS: el ALTA ofrece el conjunto cerrado del dominio,
             // y no una lista escrita a mano en la pantalla.
             ->has('types', 5)

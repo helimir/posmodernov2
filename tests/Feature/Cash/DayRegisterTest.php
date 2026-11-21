@@ -21,9 +21,10 @@ use Tests\Fixtures\PosFixture;
  *    mano) y con QUIEN ABRE, y abrir dos veces la misma fecha de negocio
  *    falla con 422;
  *  - el SALDO EN CURSO se DERIVA de los asientos de ESA fecha de negocio: es
- *    la suma de los debitos menos los creditos de la cuenta de efectivo de
- *    la tienda, no un contador almacenado. Y el ESPERADO es el saldo de
- *    partida mas ese saldo en curso;
+ *    la suma de los debitos menos los creditos de la cuenta de efectivo de la
+ *    tienda, no un contador almacenado. Y el ESPERADO es ese saldo en curso, y
+ *    SOLO ese saldo en curso: el saldo de partida se asienta al abrir la caja,
+ *    asi que el libro ya lo tiene y sumarlo otra vez lo contaria dos veces;
  *  - el CIERRE guarda el SALDO CONTADO (otro DATO, el conteo de una caja es un
  *    hecho fisico) y el DESCUADRE es la diferencia entre el contado y el
  *    esperado, CON SU SIGNO;
@@ -183,8 +184,11 @@ test('test_la_pagina_de_la_caja_del_dia_muestra_el_estado_de_la_caja_abierta', f
             ->where('register.opened_by.id', (int) $usuario->id)
             ->where('register.closed_by', null)
             // El saldo de partida, el en curso y el esperado.
+            // El EN CURSO ya es la partida: al abrir la caja, el saldo de
+            // partida se ASIENTA, y el libro ya lo tiene. Y el esperado es el
+            // saldo en curso, y solo el saldo en curso.
             ->where('opening_balance', '100.0000')
-            ->where('running_balance', '0.0000')
+            ->where('running_balance', '100.0000')
             ->where('expected_balance', '100.0000')
             // Todavia no hay nada contado: la caja esta abierta.
             ->where('counted_balance', null)
@@ -194,8 +198,7 @@ test('test_la_pagina_de_la_caja_del_dia_muestra_el_estado_de_la_caja_abierta', f
 
 /**
  * El SALDO EN CURSO se DERIVA de los asientos de la fecha de negocio: una
- * venta de la caja lo sube, y el esperado es el saldo de partida mas ese
- * saldo en curso.
+ * venta de la caja lo sube, y el esperado es ese saldo en curso.
  */
 test('test_el_saldo_en_curso_se_deriva_de_los_asientos_de_la_fecha_de_negocio', function () {
     $escenario = PosFixture::escenario();
@@ -211,8 +214,11 @@ test('test_el_saldo_en_curso_se_deriva_de_los_asientos_de_la_fecha_de_negocio', 
         ->assertCreated()
         ->assertJsonPath('grand_total', '58.0000');
 
-    // El SALDO EN CURSO es el DERIVADO del asiento: el efectivo de la tienda
-    // debitado por el total de la venta. Y el esperado es la partida mas el.
+    // El SALDO EN CURSO es el DERIVADO del asiento: la partida (100, con su
+    // asiento de apertura) MAS la venta, que debita la cuenta de efectivo de
+    // la tienda. Y el esperado es el saldo en curso, y SOLO el saldo en
+    // curso: la partida ya esta dentro, y sumarla otra vez contaria ese
+    // dinero dos veces.
     $this->actingAs($usuario)
         ->get('/caja/dia')
         ->assertOk()
@@ -220,7 +226,7 @@ test('test_el_saldo_en_curso_se_deriva_de_los_asientos_de_la_fecha_de_negocio', 
             ->component('cash/day')
             ->where('state', 'open')
             ->where('opening_balance', '100.0000')
-            ->where('running_balance', '58.0000')
+            ->where('running_balance', '158.0000')
             ->where('expected_balance', '158.0000')
             // Y el desglose por medio de pago: lo que entro en la caja.
             ->has('payments', 1)
@@ -234,8 +240,14 @@ test('test_el_saldo_en_curso_se_deriva_de_los_asientos_de_la_fecha_de_negocio', 
 
     // Y el DERIVADO es el de los asientos, no el de un contador: el cambio de
     // la cuenta de efectivo tambien cuenta.
+    //
+    // Se mira la linea de la VENTA, no la primera: desde la unidad F2-10 la
+    // cuenta de efectivo tiene tambien el asiento de APERTURA (que debita
+    // la partida), y esa linea va antes.
     $movimiento = DB::table('ledger_lines')
         ->join('ledger_entries', 'ledger_entries.id', '=', 'ledger_lines.ledger_entry_id')
+        ->join('ledger_entry_types', 'ledger_entry_types.id', '=', 'ledger_entries.entry_type_id')
+        ->where('ledger_entry_types.code', 'sale')
         ->where('ledger_entries.store_id', $escenario['store_id'])
         ->where('ledger_entries.business_date', caja_dia_de_negocio((int) $usuario->id))
         ->where('ledger_lines.account_code', '1100000')
@@ -243,6 +255,20 @@ test('test_el_saldo_en_curso_se_deriva_de_los_asientos_de_la_fecha_de_negocio', 
 
     expect($movimiento)->not->toBeNull()
         ->and((string) $movimiento->debit)->toBe('58.0000');
+
+    // Y el asiento de APERTURA esta ahi, debitando la partida: es lo que
+    // hace que el saldo en curso la incluya, y por eso el esperado es solo
+    // el saldo en curso.
+    $apertura = DB::table('ledger_lines')
+        ->join('ledger_entries', 'ledger_entries.id', '=', 'ledger_lines.ledger_entry_id')
+        ->join('ledger_entry_types', 'ledger_entry_types.id', '=', 'ledger_entries.entry_type_id')
+        ->where('ledger_entry_types.code', 'opening_balance')
+        ->where('ledger_entries.store_id', $escenario['store_id'])
+        ->where('ledger_lines.account_code', '1100000')
+        ->first();
+
+    expect($apertura)->not->toBeNull()
+        ->and((string) $apertura->debit)->toBe('100.0000');
 });
 
 /**
@@ -274,7 +300,7 @@ test('test_una_venta_con_cliente_pagada_en_efectivo_sube_el_esperado_de_la_caja_
         ->assertJsonPath('grand_total', '58.0000');
 
     // El SALDO EN CURSO sube: el efectivo de la venta esta en la cuenta de
-    // efectivo de la tienda, y el esperado es la partida mas ese saldo.
+    // efectivo de la tienda, y el esperado es ese saldo en curso.
     $this->actingAs($usuario)
         ->get('/caja/dia')
         ->assertOk()
@@ -363,7 +389,7 @@ test('test_la_pagina_de_la_caja_del_dia_muestra_el_resumen_del_dia_cuando_esta_c
             ->where('register.opened_by.id', (int) $usuario->id)
             ->where('register.closed_by.id', (int) $usuario->id)
             ->where('opening_balance', '100.0000')
-            ->where('running_balance', '58.0000')
+            ->where('running_balance', '158.0000')
             ->where('expected_balance', '158.0000')
             ->where('counted_balance', '155.0000')
             // El DESCUADRE: el contado menos el esperado, con su signo.
@@ -423,7 +449,9 @@ test('test_una_caja_cerrada_ya_no_admite_movimientos', function () {
     expect(DB::table('sales')->count())->toBe(0)
         ->and(DB::table('sale_items')->count())->toBe(0)
         ->and(DB::table('sale_payments')->count())->toBe(0)
-        ->and(DB::table('ledger_entries')->count())->toBe(0)
+        // Y el libro tiene UN asiento: el de la apertura, con el saldo de
+        // partida. La venta posterior al cierre NO escribio nada.
+        ->and(DB::table('ledger_entries')->count())->toBe(1)
         ->and((string) DB::table('inventory_lots')->value('available'))->toBe('10.0000');
 });
 

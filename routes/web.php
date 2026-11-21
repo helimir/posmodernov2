@@ -124,6 +124,12 @@ Route::middleware(['auth'])->group(function () {
     Route::post('caja/dia/cerrar', [CashDayController::class, 'cerrar'])
         ->middleware('permission:cash_day.close')
         ->name('caja.dia.cerrar');
+    // REABRIR un dia cerrado: deshacer un cierre exige un MOTIVO, y deja el
+    // Z anterior en el historial, marcado. No es lo mismo que cerrar: por
+    // eso tiene su propio permiso.
+    Route::post('caja/dia/reabrir', [CashDayController::class, 'reabrir'])
+        ->middleware('permission:cash_day.reopen')
+        ->name('caja.dia.reabrir');
 
     // El REPORTE DE STOCK BAJO: los productos de la tienda que se estan
     // acabando, con su stock REAL.

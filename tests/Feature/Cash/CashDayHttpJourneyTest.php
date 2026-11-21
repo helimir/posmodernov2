@@ -134,6 +134,9 @@ test('test_el_camino_de_la_caja_del_dia_por_http_abre_cobra_ve_el_saldo_y_cierra
             ->and($apertura->json('opening_balance'))->toBe('100.0000');
 
         // 6. GET /caja/dia: la caja esta ABIERTA y el esperado es la partida.
+        //    Y el saldo en curso ya es la partida: al abrir la caja, el saldo
+        //    de partida se ASIENTA, asi que el libro ya lo tiene. El esperado
+        //    es el saldo en curso, y solo el saldo en curso.
         $abierta = $servidor->cliente($jar)
             ->get($servidor->url('/caja/dia'));
 
@@ -142,7 +145,7 @@ test('test_el_camino_de_la_caja_del_dia_por_http_abre_cobra_ve_el_saldo_y_cierra
         expect($abierta->status())->toBe(200)
             ->and($props['state'] ?? null)->toBe('open')
             ->and($props['opening_balance'] ?? null)->toBe('100.0000')
-            ->and($props['running_balance'] ?? null)->toBe('0.0000')
+            ->and($props['running_balance'] ?? null)->toBe('100.0000')
             ->and($props['expected_balance'] ?? null)->toBe('100.0000');
 
         // 7. POST /caja/cobrar: la venta se escribe de verdad, y la caja del
@@ -174,8 +177,9 @@ test('test_el_camino_de_la_caja_del_dia_por_http_abre_cobra_ve_el_saldo_y_cierra
             ->and($cobro->json('status'))->toBe('paid');
 
         // 8. GET /caja/dia: el SALDO EN CURSO se ve ACTUALIZADO. Es un
-        //    derivado de los asientos: la venta debita la cuenta de efectivo
-        //    de la tienda.
+        //    derivado de los asientos: la partida (100, con su asiento de
+        //    apertura) MAS la venta, que debita la cuenta de efectivo de la
+        //    tienda.
         $trasLaVenta = $servidor->cliente($jar)
             ->get($servidor->url('/caja/dia'));
 
@@ -183,7 +187,7 @@ test('test_el_camino_de_la_caja_del_dia_por_http_abre_cobra_ve_el_saldo_y_cierra
 
         expect($trasLaVenta->status())->toBe(200)
             ->and($props['state'] ?? null)->toBe('open')
-            ->and($props['running_balance'] ?? null)->toBe('58.0000')
+            ->and($props['running_balance'] ?? null)->toBe('158.0000')
             ->and($props['expected_balance'] ?? null)->toBe('158.0000')
             ->and($props['payments'][0]['amount'] ?? null)->toBe('58.0000')
             ->and($props['cash_total'] ?? null)->toBe('58.0000');
@@ -216,10 +220,14 @@ test('test_el_camino_de_la_caja_del_dia_por_http_abre_cobra_ve_el_saldo_y_cierra
         expect($cerrada->status())->toBe(200)
             ->and($props['state'] ?? null)->toBe('closed')
             ->and($props['opening_balance'] ?? null)->toBe('100.0000')
-            ->and($props['running_balance'] ?? null)->toBe('58.0000')
+            ->and($props['running_balance'] ?? null)->toBe('158.0000')
             ->and($props['expected_balance'] ?? null)->toBe('158.0000')
             ->and($props['counted_balance'] ?? null)->toBe('160.0000')
             ->and($props['difference'] ?? null)->toBe('2.0000')
+            // Y el dia esta SELLADO: el Z es el cierre hecho hecho.
+            ->and($props['z'] ?? null)->not->toBeNull()
+            ->and($props['z']['verified'] ?? null)->toBeTrue()
+            ->and($props['z']['counted_balance'] ?? null)->toBe('160.0000')
             ->and($props['register']['opened_by']['name'] ?? null)->not->toBeNull()
             ->and($props['register']['closed_by']['name'] ?? null)->not->toBeNull();
     } finally {

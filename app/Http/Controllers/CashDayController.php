@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Accounting\CashClose;
 use App\Domain\Accounting\CashDay;
 use App\Domain\Accounting\CashRegisterService;
 use App\Models\CashRegister;
 use App\Models\User;
+use App\Support\Audit\AuditWriter;
 use App\Support\Pos\PosAmount;
 use App\Support\Pos\PosContext;
 use DateTimeImmutable;
 use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -39,6 +42,9 @@ use RuntimeException;
  *  - QUIEN ABRE y QUIEN CIERRA son los RESPONSABLES de los dos extremos:
  *    el usuario de la sesion. Y si no se sabe, la columna queda en `null` y
  *    la pantalla ensena un hueco: no se inventa un valor.
+ *  - EL Z SELLADO es un HECHO: cuando el dia esta cerrado, sus cifras se
+ *    LEEN, no se recalculan. Y REABRIR un dia exige un MOTIVO y deja el Z
+ *    anterior en el historial, marcado.
  *
  * Los importes viajan como TEXTO decimal (`'120.0000'`), nunca como `float`.
  */
@@ -68,7 +74,9 @@ class CashDayController extends Controller
      *  - `opening_balance`: el saldo de PARTIDA (un dato). Texto decimal.
      *  - `running_balance`: el saldo EN CURSO (un derivado de los asientos).
      *    Texto decimal.
-     *  - `expected_balance`: la partida mas el en curso. Texto decimal.
+     *  - `expected_balance`: el saldo en curso, y SOLO el saldo en curso: el
+     *    saldo de partida ya esta en el libro, con su asiento de apertura.
+     *    Texto decimal.
      *  - `counted_balance`: el saldo CONTADO (un dato), o `null` si la caja
      *    todavia no se ha cerrado. Texto decimal.
      *  - `difference`: el DESCUADRE (el contado menos el esperado, con su
@@ -78,6 +86,11 @@ class CashDayController extends Controller
      *    decimal.
      *  - `cash_total`: lo que es dinero de la caja (todo lo que no es un
      *    pago a credito). Texto decimal.
+     *  - `z`: el Z SELLADO del dia, o `null` si el dia no esta cerrado. Trae
+     *    su contenido, quien lo cerro, cuando, su firma (`content_hash`) y si
+     *    su firma SIGUE CUADRANDO (`verified`).
+     *  - `z_history`: el historial de Z del dia: cada cierre, con su firma y
+     *    con la marca de si se reabrió (y por que).
      */
     public function index(Request $request): Response
     {
@@ -186,23 +199,25 @@ class CashDayController extends Controller
                 $request->user()?->id
             );
         } catch (RuntimeException $fallo) {
-            // La caja ya esta cerrada: el cierre es de UNA unidad.
+            // La caja ya esta cerrada (el cierre es de UNA unidad), o el Z no
+            // se pudo sellar: en los dos casos el cierre NO ha pasado, porque
+            // el Z se sella en la misma transaccion.
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
 
         $cerrada = CashRegister::query()->findOrFail((int) $caja->id);
 
-        try {
-            $cifras = $this->cifras(
-                (int) $store->id,
-                $fecha,
-                $this->cuentaDeEfectivo($contexto),
-                $cerrada
-            );
-        } catch (RuntimeException $fallo) {
-            // El plan de cuentas de la tienda esta incompleto: el cierre no
-            // puede contrastar un saldo que no existe.
-            return response()->json(['errorMsg' => $fallo->getMessage()], 422);
+        // EL Z SELLADO: el cierre HECHO, con su contenido y su firma. Las
+        // cifras del cierre son las del Z, no un recalculo.
+        $z = $this->day->zSellado((int) $store->id, $fecha);
+
+        if ($z === null) {
+            // El cierre sin Z no deberia pasar: el Z se sella en la misma
+            // transaccion del cierre. Si no esta, se dice.
+            return response()->json([
+                'errorMsg' => 'La caja se cerro, pero su Z no se sello: el cierre de la tienda '
+                    .$store->id.' para la fecha de negocio '.$fecha->format('Y-m-d').' no tiene Z.',
+            ], 500);
         }
 
         return response()->json([
@@ -210,10 +225,84 @@ class CashDayController extends Controller
             'status' => (string) $cerrada->status,
             'business_date' => $fecha->format('Y-m-d'),
             'closing_balance' => PosAmount::text($cerrada->closing_balance),
-            'expected_balance' => $cifras['expected_balance'],
-            'difference' => $cifras['difference'],
+            'expected_balance' => PosAmount::text($z->expected_balance),
+            'difference' => PosAmount::text($z->difference),
             'closed_by' => $this->responsable($cerrada->closedBy),
+            'z' => $this->zProps($z),
         ], 201);
+    }
+
+    /**
+     * REABRE la caja del dia, con un MOTIVO.
+     *
+     * REGLA que fija esta clase: *un cierre se puede deshacer, pero solo con
+     * un motivo y queda en el historial*. El Z anterior NO se borra: se queda,
+     * marcado, con quien lo reabrio y por que.
+     *
+     * Y CORREGIR UNA VENTA DE UN DIA CERRADO EXIGE REABRIR EL DIA: el flujo
+     * de las ventas es de otra unidad, y esta pantalla no lo hace.
+     */
+    public function reabrir(Request $request): JsonResponse
+    {
+        $datos = $request->all();
+
+        $motivo = trim((string) ($datos['reason'] ?? ''));
+
+        if ($motivo === '') {
+            return response()->json([
+                'errorMsg' => 'Un cierre se puede deshacer, pero solo con un MOTIVO: '
+                    .'un dia reabierto sin motivo es un dia que nadie sabe por que se toco.',
+            ], 422);
+        }
+
+        $contexto = new PosContext($this->connection, $request->user()?->id);
+
+        try {
+            $store = $contexto->store();
+            $fecha = $contexto->businessDate();
+        } catch (RuntimeException $fallo) {
+            return response()->json(['errorMsg' => $fallo->getMessage()], 422);
+        }
+
+        $caja = CashRegister::query()
+            ->where('store_id', (int) $store->id)
+            ->where('business_date', $fecha->format('Y-m-d'))
+            ->first();
+
+        if ($caja === null) {
+            return response()->json([
+                'errorMsg' => 'La tienda '.$store->id.' no tiene caja para la fecha de negocio '
+                    .$fecha->format('Y-m-d').': no hay nada que reabrir.',
+            ], 422);
+        }
+
+        try {
+            $this->registers->reopen((int) $caja->id, $motivo, $request->user()?->id);
+        } catch (RuntimeException $fallo) {
+            // La caja no estaba cerrada, o no tiene un Z que reabrir.
+            return response()->json(['errorMsg' => $fallo->getMessage()], 422);
+        }
+
+        // LA AUDITORIA: quien deshizo un cierre, y por que. Un cierre que se
+        // deshace sin dejar rastro es un cierre que nadie puede defender.
+        (new AuditWriter($this->connection))->record(
+            $request,
+            'cash_register.reopened',
+            'cash_register',
+            (int) $caja->id,
+            [
+                'store_id' => (int) $store->id,
+                'business_date' => $fecha->format('Y-m-d'),
+                'reason' => $motivo,
+            ],
+        );
+
+        return response()->json([
+            'id' => (int) $caja->id,
+            'status' => 'open',
+            'business_date' => $fecha->format('Y-m-d'),
+            'reopen_reason' => $motivo,
+        ], 200);
     }
 
     /**
@@ -253,6 +342,11 @@ class CashDayController extends Controller
 
         $pagos = $this->day->receivedByPaymentMethod($storeId, $fecha);
 
+        // EL Z SELLADO: si el dia esta cerrado, el cierre es un HECHO, con su
+        // contenido y su firma. Y el HISTORIAL: lo que se cerro ese dia se
+        // queda, aunque el dia se reabra.
+        $z = $this->day->zSellado($storeId, $fecha);
+
         return [
             'state' => $this->estado($caja),
             'store' => [
@@ -266,12 +360,139 @@ class CashDayController extends Controller
             ...$cifras,
             'payments' => $pagos,
             'cash_total' => $this->day->cashTotal($pagos),
+            'z' => $z === null ? null : $this->zProps($z),
+            'z_history' => $this->historialDeZ($storeId, $fecha),
         ];
+    }
+
+    /**
+     * EL Z, tal y como lo ensena la pantalla.
+     *
+     * @return array<string, mixed>
+     */
+    private function zProps(object $z): array
+    {
+        return [
+            'id' => (int) $z->id,
+            'closed_at' => $z->closed_at === null
+                ? null
+                : Carbon::parse((string) $z->closed_at)->toIso8601String(),
+            'closed_by' => $this->responsablePorId($z->closed_by),
+            // LA FIRMA: si el hash no cuadra, alguien altero un Z sellado.
+            'content_hash' => (string) $z->content_hash,
+            'verified' => CashClose::verify($z),
+            'opening_balance' => PosAmount::text($z->opening_balance),
+            'expected_balance' => PosAmount::text($z->expected_balance),
+            'counted_balance' => PosAmount::text($z->counted_balance),
+            'difference' => PosAmount::text($z->difference),
+            'subtotal' => PosAmount::text($z->subtotal),
+            'tax_total' => PosAmount::text($z->tax_total),
+            'grand_total' => PosAmount::text($z->grand_total),
+            'sales_count' => (int) $z->sales_count,
+            'first_document_number' => $z->first_document_number,
+            'last_document_number' => $z->last_document_number,
+            'first_control_number' => $z->first_control_number,
+            'last_control_number' => $z->last_control_number,
+            'payments' => $this->pagosDelZ($z),
+            // SI SE REABRIO: cuando, quien y por que.
+            'reopened_at' => $z->reopened_at === null
+                ? null
+                : Carbon::parse((string) $z->reopened_at)->toIso8601String(),
+            'reopened_by' => $this->responsablePorId($z->reopened_by),
+            'reopen_reason' => $z->reopen_reason,
+        ];
+    }
+
+    /**
+     * EL HISTORIAL de Z del dia: cada cierre, con su firma y con la marca de
+     * si se reabrió.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function historialDeZ(int $storeId, DateTimeImmutable $fecha): array
+    {
+        $historial = [];
+
+        foreach ((new CashClose($this->connection))->history($storeId, $fecha->format('Y-m-d')) as $z) {
+            $historial[] = [
+                'id' => (int) $z->id,
+                'closed_at' => Carbon::parse((string) $z->closed_at)->toIso8601String(),
+                'closed_by' => $this->responsablePorId($z->closed_by),
+                'content_hash' => (string) $z->content_hash,
+                'verified' => CashClose::verify($z),
+                'expected_balance' => PosAmount::text($z->expected_balance),
+                'counted_balance' => PosAmount::text($z->counted_balance),
+                'difference' => PosAmount::text($z->difference),
+                'reopened_at' => $z->reopened_at === null
+                    ? null
+                    : Carbon::parse((string) $z->reopened_at)->toIso8601String(),
+                'reopened_by' => $this->responsablePorId($z->reopened_by),
+                'reopen_reason' => $z->reopen_reason,
+            ];
+        }
+
+        return $historial;
+    }
+
+    /**
+     * EL DESGLOSE del Z: lo que entro en la caja y por donde.
+     *
+     * @return list<array{id: int|null, name: string|null, type: string, amount: string, is_cash: bool}>
+     */
+    private function pagosDelZ(object $z): array
+    {
+        $crudos = $z->payments ?? null;
+
+        if (is_string($crudos)) {
+            $crudos = json_decode($crudos, true);
+        }
+
+        if (! is_array($crudos)) {
+            return [];
+        }
+
+        $pagos = [];
+
+        foreach ($crudos as $pago) {
+            $pagos[] = [
+                'id' => isset($pago['id']) && $pago['id'] !== null ? (int) $pago['id'] : null,
+                'name' => $pago['name'] === null ? null : (string) $pago['name'],
+                'type' => (string) ($pago['type'] ?? 'cash'),
+                'amount' => PosAmount::text($pago['amount'] ?? '0'),
+                'is_cash' => (bool) ($pago['is_cash'] ?? false),
+            ];
+        }
+
+        return $pagos;
+    }
+
+    /**
+     * Un RESPONSABLE por su id: quien cerro y quien reabrio.
+     *
+     * @return array{id: int, name: string}|null
+     */
+    private function responsablePorId(mixed $userId): ?array
+    {
+        if ($userId === null) {
+            return null;
+        }
+
+        $usuario = User::query()->find((int) $userId);
+
+        return $usuario === null ? null : $this->responsable($usuario);
     }
 
     /**
      * LAS CIFRAS del dia: la partida, el en curso, el esperado, el contado y
      * el descuadre.
+     *
+     * REGLA que fija este metodo: *el esperado es el saldo en curso, y solo
+     * el saldo en curso*. El saldo de partida ya esta en el libro, con su
+     * asiento de apertura, asi que sumarlo otra vez contaria ese dinero dos
+     * veces.
+     *
+     * Y UN DIA CERRADO NO SE RECALCULA: si hay un Z sellado, sus cifras son
+     * las del dia, aunque despues se corrija una venta de ayer.
      *
      * @return array{opening_balance: string, running_balance: string, expected_balance: string, counted_balance: string|null, difference: string|null}
      */
@@ -288,8 +509,22 @@ class CashDayController extends Controller
         // El SALDO DE PARTIDA: un DATO, el que se conto a mano.
         $partida = $caja === null ? '0.0000' : PosAmount::text($caja->opening_balance);
 
-        // El ESPERADO: la partida mas el en curso.
-        $esperado = $this->day->expected($partida, $enCurso);
+        // El Z SELLADO: si el dia esta cerrado, el cierre es un HECHO y se
+        // LEE, no se recalcula.
+        $z = $this->day->zSellado($storeId, $fecha);
+
+        if ($z !== null) {
+            return [
+                'opening_balance' => $partida,
+                'running_balance' => $enCurso,
+                'expected_balance' => PosAmount::text($z->expected_balance),
+                'counted_balance' => PosAmount::text($z->counted_balance),
+                'difference' => PosAmount::text($z->difference),
+            ];
+        }
+
+        // El ESPERADO: el saldo en curso.
+        $esperado = $this->day->expected($enCurso);
 
         // El CONTADO y el DESCUADRE: solo hay counted cuando la caja esta
         // cerrada, porque antes no hay nada que contar.
