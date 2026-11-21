@@ -72,6 +72,9 @@ class ChartOfAccountsSeeder extends Seeder
         'receivable' => '1200000',
         'revenue' => '4010000',
         'tax_payable' => '2110000',
+        // El CAPITAL: la contrapartida del saldo de partida de la caja. Sin
+        // el, al abrir la caja el saldo de partida no tiene donde abonarse.
+        'equity' => '3100000',
     ];
 
     /**

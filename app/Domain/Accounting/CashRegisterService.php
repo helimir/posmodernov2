@@ -34,6 +34,19 @@ use RuntimeException;
  * OBSERVADO al cerrar (el conteo de una caja es un hecho fisico): los dos son
  * DATOS, no cuentas.
  *
+ * LAS TRES REGLAS QUE FIJA ESTE SERVICIO:
+ *
+ *  1. ABRIR DEJA ASIENTO. El saldo de partida es un HECHO CONTABLE, no un
+ *     dato suelto: al abrir la caja se escribe un asiento de tipo
+ *     `opening_balance` por ese importe, con la cuenta de efectivo de la
+ *     tienda y la de capital, y en la MISMA transaccion que la apertura. Si el
+ *     asiento falla, la caja NO queda abierta: una caja sin reflejo en el
+ *     libro es una caja que no cuadra con nadie.
+ *  2. CERRAR SELLA EL Z. El cierre escribe el Z en la MISMA transaccion: si
+ *     el snapshot falla, el cierre falla. No hay un dia cerrado sin Z.
+ *  3. REABRIR ES UN DESHACER CON MOTIVO. Solo sobre una caja cerrada, con
+ *     el motivo obligatorio, y el Z anterior NO se borra: se queda, marcado.
+ *
  * Quien abre la caja y quien la cierra son los RESPONSABLES de los dos
  * extremos: `opened_by` y `closed_by`. Los dos pueden faltar, y cuando
  * faltan el hueco se ve, porque no se inventa un valor.
@@ -56,6 +69,11 @@ final readonly class CashRegisterService
      *  4. Quien ABRE la caja queda en `opened_by`, igual que quien la cierra
      *     queda en `closed_by`: los dos son responsables del mismo hecho. Si
      *     no se sabe quien abre, la columna queda en `null`: el hueco se ve.
+     *  5. ABRIR DEJA ASIENTO. El saldo de partida se asienta en la cuenta de
+     *     efectivo de la tienda, con la de capital como contrapartida, y en la
+     *     MISMA transaccion que la apertura. Una tienda sin plan de cuentas
+     *     NO puede abrir la caja: una caja sin cuenta donde asentar no es una
+     *     caja.
      *
      * @param  int  $storeId  Tienda que abre la caja.
      * @param  DateTimeImmutable  $businessDate  Fecha de negocio: un dato del llamante.
@@ -67,7 +85,8 @@ final readonly class CashRegisterService
      *                             es `null`, la columna queda en `null`: no se
      *                             inventa un valor.
      *
-     * @throws RuntimeException Cuando la tienda ya tiene caja para esa fecha.
+     * @throws RuntimeException Cuando la tienda ya tiene caja para esa fecha,
+     *                          o cuando no tiene plan de cuentas.
      */
     public function open(
         int $storeId,
@@ -85,31 +104,56 @@ final readonly class CashRegisterService
             );
         }
 
-        try {
-            $id = $this->connection->table('cash_registers')->insertGetId([
-                'store_id' => $storeId,
-                'business_date' => $fecha,
-                'bank_account_id' => $bankAccountId,
-                'opened_at' => $this->instante(),
-                'opening_balance' => $saldo,
-                'status' => 'open',
-                'opened_by' => $actorId,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } catch (UniqueConstraintViolationException) {
-            // Dos cajas se abrieron a la vez: la UNIQUE lo impide, pero el
-            // mensaje sigue siendo el del dominio, no el de PostgreSQL.
-            throw new RuntimeException(
-                "La tienda {$storeId} ya tiene una caja abierta para la fecha de negocio {$fecha}."
-            );
-        }
+        // Las CUENTAS del plan se resuelven ANTES de abrir: una tienda sin
+        // cuenta donde asentar no abre caja.
+        $cuentas = $this->cuentasDelPlan($storeId);
 
-        return (int) $id;
+        return $this->connection->transaction(function () use (
+            $storeId,
+            $fecha,
+            $saldo,
+            $bankAccountId,
+            $actorId,
+            $businessDate,
+            $cuentas
+        ): int {
+            try {
+                $id = $this->connection->table('cash_registers')->insertGetId([
+                    'store_id' => $storeId,
+                    'business_date' => $fecha,
+                    'bank_account_id' => $bankAccountId,
+                    'opened_at' => $this->instante(),
+                    'opening_balance' => $saldo,
+                    'status' => 'open',
+                    'opened_by' => $actorId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                // Dos cajas se abrieron a la vez: la UNIQUE lo impide, pero el
+                // mensaje sigue siendo el del dominio, no el de PostgreSQL.
+                throw new RuntimeException(
+                    "La tienda {$storeId} ya tiene una caja abierta para la fecha de negocio {$fecha}."
+                );
+            }
+
+            // EL ASIENTO DE APERTURA: en la MISMA transaccion que la caja. Si
+            // el asiento falla, la caja NO queda abierta.
+            $this->asientaLaPartida(
+                $storeId,
+                $businessDate,
+                (int) $id,
+                $saldo,
+                $cuentas,
+                $actorId
+            );
+
+            return (int) $id;
+        });
     }
 
     /**
-     * Cierra la caja de una tienda.
+     * Cierra la caja de una tienda Y SELLA SU Z.
      *
      * REGLAS que fija este metodo:
      *
@@ -118,12 +162,16 @@ final readonly class CashRegisterService
      *  2. Una caja que NO existe no se cierra en silencio: es un error.
      *  3. Una caja CERRADA no se vuelve a cerrar. El cierre es de UNA unidad:
      *     la actualizacion solo aplica mientras la caja siga ABIERTA.
+     *  4. EL Z SE SELLA EN LA MISMA TRANSACCION. El Z es el cierre hecho
+     *     HECHO: si el snapshot falla, el cierre falla. No hay un dia cerrado
+     *     sin Z.
      *
      * @param  int  $registerId  Caja que se cierra.
      * @param  string  $closingBalance  Saldo observado al contar. Texto decimal.
      * @param  int|null  $actorId  Quien cierra la caja.
      *
-     * @throws RuntimeException Cuando la caja no existe o ya esta cerrada.
+     * @throws RuntimeException Cuando la caja no existe, ya esta cerrada, o
+     *                          el Z no se puede sellar.
      */
     public function close(int $registerId, string $closingBalance, ?int $actorId = null): void
     {
@@ -139,22 +187,132 @@ final readonly class CashRegisterService
             throw new RuntimeException("La caja {$registerId} ya esta cerrada.");
         }
 
-        $afectadas = $this->connection->table('cash_registers')
-            ->where('id', $registerId)
-            ->where('status', 'open')
-            ->update([
-                'status' => 'closed',
-                'closed_at' => $this->instante(),
-                'closing_balance' => $saldo,
-                'closed_by' => $actorId,
-                'updated_at' => now(),
-            ]);
+        $storeId = (int) $caja->store_id;
+        $fecha = (string) $caja->business_date;
 
-        // Otra caja se cerro entre la lectura y la escritura: el cierre sigue
-        // siendo de una sola vez.
-        if ($afectadas === 0) {
-            throw new RuntimeException("La caja {$registerId} ya esta cerrada.");
+        $this->connection->transaction(function () use (
+            $registerId,
+            $saldo,
+            $actorId,
+            $storeId,
+            $fecha,
+            $caja
+        ): void {
+            $afectadas = $this->connection->table('cash_registers')
+                ->where('id', $registerId)
+                ->where('status', 'open')
+                ->update([
+                    'status' => 'closed',
+                    'closed_at' => $this->instante(),
+                    'closing_balance' => $saldo,
+                    'closed_by' => $actorId,
+                    'updated_at' => now(),
+                ]);
+
+            // Otra caja se cerro entre la lectura y la escritura: el cierre sigue
+            // siendo de una sola vez.
+            if ($afectadas === 0) {
+                throw new RuntimeException("La caja {$registerId} ya esta cerrada.");
+            }
+
+            // EL Z: el cierre HECHO, escrito en la misma transaccion. Si el
+            // snapshot falla, el cierre falla con el: no hay un dia cerrado
+            // sin Z.
+            (new CashClose($this->connection))->seal(
+                $storeId,
+                $fecha,
+                $registerId,
+                $this->contenidoDelZ(
+                    $storeId,
+                    $fecha,
+                    (string) $caja->opening_balance,
+                    $saldo
+                ),
+                $actorId
+            );
+        });
+    }
+
+    /**
+     * REABRE una caja cerrada, con un MOTIVO.
+     *
+     * REGLA que fija este metodo: *un cierre se puede deshacer, pero solo con
+     * un motivo y queda en el historial*. El motivo es OBLIGATORIO: un dia
+     * reabierto sin motivo es un dia que nadie sabe por que se toco.
+     *
+     * Al reabrir, la fila del Z pasa a REABIERTA (con su motivo y quien) y la
+     * caja vuelve a `open`. EL Z ANTERIOR NO SE BORRA: se queda, marcado. Al
+     * volver a cerrar se escribe OTRA fila de Z, y la vigente es la ultima
+     * fila no reabierta.
+     *
+     * @param  int  $registerId  Caja que se reabre.
+     * @param  string  $motivo  POR QUE se reabre. Obligatorio.
+     * @param  int|null  $actorId  Quien reabre.
+     *
+     * @throws RuntimeException Cuando el motivo falta, la caja no existe, no
+     *                          esta cerrada, o no tiene un Z que reabrir.
+     */
+    public function reopen(int $registerId, string $motivo, ?int $actorId = null): void
+    {
+        $razon = trim($motivo);
+
+        if ($razon === '') {
+            throw new RuntimeException(
+                'Un cierre se puede deshacer, pero solo con un MOTIVO: '
+                .'un dia reabierto sin motivo es un dia que nadie sabe por que se toco.'
+            );
         }
+
+        $caja = $this->connection->table('cash_registers')->where('id', $registerId)->first();
+
+        if ($caja === null) {
+            throw new RuntimeException("La caja {$registerId} no existe.");
+        }
+
+        if ((string) $caja->status !== 'closed') {
+            throw new RuntimeException(
+                "La caja {$registerId} no esta cerrada: no hay un cierre que deshacer."
+            );
+        }
+
+        $storeId = (int) $caja->store_id;
+        $fecha = (string) $caja->business_date;
+
+        $this->connection->transaction(function () use (
+            $registerId,
+            $razon,
+            $actorId,
+            $storeId,
+            $fecha
+        ): void {
+            $z = (new CashClose($this->connection))->current($storeId, $fecha);
+
+            if ($z === null) {
+                throw new RuntimeException(
+                    "La caja {$registerId} no tiene un Z sellado que reabrir."
+                );
+            }
+
+            // EL Z ANTERIOR NO SE BORRA: se marca. El historial es lo que deja
+            // ver que el dia se toco.
+            (new CashClose($this->connection))->markReopened((int) $z->id, $razon, $actorId);
+
+            // Y la caja vuelve a estar ABIERTA.
+            $afectadas = $this->connection->table('cash_registers')
+                ->where('id', $registerId)
+                ->where('status', 'closed')
+                ->update([
+                    'status' => 'open',
+                    'closed_at' => null,
+                    'closed_by' => null,
+                    'closing_balance' => null,
+                    'updated_at' => now(),
+                ]);
+
+            if ($afectadas === 0) {
+                throw new RuntimeException("La caja {$registerId} ya esta cerrada.");
+            }
+        });
     }
 
     /**
@@ -200,6 +358,231 @@ final readonly class CashRegisterService
     }
 
     /**
+     * Las CUENTAS del plan que la caja necesita: la de efectivo y la de
+     * capital.
+     *
+     * REGLA que fija este metodo: *el plan de cuentas es un DATO del negocio y
+     * no hay un plan por defecto*. Si a la tienda le falta la cuenta donde
+     * asentar el saldo de partida, la apertura falla con un mensaje util: una
+     * caja sin cuenta donde asentar no es una caja.
+     *
+     * @return array{cash: string, equity: string}
+     *
+     * @throws RuntimeException Cuando al plan le falta el rol de la caja o el
+     *                          del capital.
+     */
+    private function cuentasDelPlan(int $storeId): array
+    {
+        $roles = (new ChartOfAccounts($this->connection))->roles($storeId);
+
+        $efectivo = trim((string) ($roles['cash'] ?? ''));
+        $capital = trim((string) ($roles['equity'] ?? ''));
+
+        if ($efectivo === '') {
+            throw new RuntimeException(
+                "La tienda {$storeId} no tiene cuenta de efectivo en su plan de cuentas: "
+                .'una caja sin cuenta donde asentar no es una caja.'
+            );
+        }
+
+        if ($capital === '') {
+            throw new RuntimeException(
+                "La tienda {$storeId} no tiene cuenta de capital (el rol 'equity') en su plan de cuentas: "
+                .'el saldo de partida necesita su contrapartida en el libro.'
+            );
+        }
+
+        return ['cash' => $efectivo, 'equity' => $capital];
+    }
+
+    /**
+     * EL ASIENTO DE APERTURA: el saldo de partida, en el libro.
+     *
+     * REGLA que fija este metodo: *el saldo de partida es un HECHO CONTABLE*.
+     * Se carga a la cuenta de efectivo de la tienda (es un ACTIVO: lo que hay
+     * en el cajon) y se abona a la de capital (de donde viene ese dinero), y
+     * el importe del asiento es el del dato: si difieren, es un bug.
+     *
+     * Y UNA PARTIDA DE CERO NO SE ASIENTA: un asiento sin importe no es un
+     * asiento, y el libro no admite lineas a cero en los dos sentidos.
+     *
+     * @param  array{cash: string, equity: string}  $cuentas
+     */
+    private function asientaLaPartida(
+        int $storeId,
+        DateTimeImmutable $businessDate,
+        int $registerId,
+        string $saldo,
+        array $cuentas,
+        ?int $actorId = null
+    ): void {
+        if (BigDecimal::of($saldo)->isZero()) {
+            return;
+        }
+
+        (new LedgerWriter($this->connection))->write(
+            entryType: 'opening_balance',
+            storeId: $storeId,
+            occurredAt: $this->momento(),
+            businessDate: $businessDate,
+            lines: [
+                ['account' => $cuentas['cash'], 'debit' => $saldo, 'credit' => '0'],
+                ['account' => $cuentas['equity'], 'debit' => '0', 'credit' => $saldo],
+            ],
+            referenceType: 'cash_register',
+            referenceId: $registerId,
+            actorId: $actorId,
+            description: 'Saldo de partida de la caja',
+        );
+    }
+
+    /**
+     * EL CONTENIDO del Z: lo que se cerro ese dia.
+     *
+     * @return array<string, mixed>
+     */
+    private function contenidoDelZ(
+        int $storeId,
+        string $fecha,
+        string $partida,
+        string $contado
+    ): array {
+        $cuentas = $this->cuentasDelPlan($storeId);
+        $dia = new CashDay($this->connection);
+        $negocio = new DateTimeImmutable($fecha);
+
+        // El ESPERADO es el saldo EN CURSO: el saldo de partida ya esta en el
+        // libro, con su asiento de apertura.
+        $enCurso = $dia->runningBalance($storeId, $negocio, $cuentas['cash']);
+        $esperado = $dia->expected($enCurso);
+
+        $totales = $this->totalesDelDia($storeId, $fecha);
+        $correlativos = $this->correlativosDelDia($storeId, $fecha);
+
+        return [
+            'business_date' => $fecha,
+            'opening_balance' => $partida,
+            'expected_balance' => $esperado,
+            'counted_balance' => $contado,
+            'difference' => $dia->difference($contado, $esperado),
+            'subtotal' => $totales['subtotal'],
+            'tax_total' => $totales['tax_total'],
+            'grand_total' => $totales['grand_total'],
+            'sales_count' => $totales['sales_count'],
+            'first_document_number' => $correlativos['first_document_number'],
+            'last_document_number' => $correlativos['last_document_number'],
+            'first_control_number' => $correlativos['first_control_number'],
+            'last_control_number' => $correlativos['last_control_number'],
+            'payments' => $dia->receivedByPaymentMethod($storeId, $negocio),
+        ];
+    }
+
+    /**
+     * Los TOTALES del dia y el numero de ventas.
+     *
+     * @return array{subtotal: string, tax_total: string, grand_total: string, sales_count: int}
+     */
+    private function totalesDelDia(int $storeId, string $fecha): array
+    {
+        $totales = $this->connection->table('sales')
+            ->leftJoin('sale_totals', 'sale_totals.sale_id', '=', 'sales.id')
+            ->where('sales.store_id', $storeId)
+            ->where('sales.sale_date', $fecha)
+            // Una venta ANULADA no es una venta del dia: no cuenta ni para el
+            // total ni para el numero de ventas.
+            ->where('sales.status', '!=', 'cancelled')
+            ->selectRaw(
+                'COUNT(sales.id) as ventas, '
+                .'COALESCE(SUM(sale_totals.sub_total), 0) as subtotal, '
+                .'COALESCE(SUM(sale_totals.tax_total), 0) as tax_total, '
+                .'COALESCE(SUM(sale_totals.grand_total), 0) as grand_total'
+            )
+            ->first();
+
+        return [
+            'subtotal' => (string) ($totales->subtotal ?? '0'),
+            'tax_total' => (string) ($totales->tax_total ?? '0'),
+            'grand_total' => (string) ($totales->grand_total ?? '0'),
+            'sales_count' => (int) ($totales->ventas ?? 0),
+        ];
+    }
+
+    /**
+     * LOS CORRELATIVOS del dia: el primer y el ultimo documento, y el primer
+     * y el ultimo control.
+     *
+     * El DOCUMENTO es el numero de la venta (`sales.invoice_no`), y el CONTROL
+     * es el numero compuesto de la serie de control: el identificador de dos
+     * digitos y el secuencial. Los dos salen de las FILAS: el Z no inventa un
+     * correlativo.
+     *
+     * @return array{first_document_number: string|null, last_document_number: string|null, first_control_number: string|null, last_control_number: string|null}
+     */
+    private function correlativosDelDia(int $storeId, string $fecha): array
+    {
+        $documentos = $this->connection->table('sales')
+            ->where('sales.store_id', $storeId)
+            ->where('sales.sale_date', $fecha)
+            ->where('sales.status', '!=', 'cancelled')
+            ->orderBy('sales.id')
+            ->pluck('sales.invoice_no');
+
+        $controles = $this->connection->table('fiscal_document_reservations')
+            ->join('fiscal_series', 'fiscal_series.id', '=', 'fiscal_document_reservations.series_id')
+            ->join('sales', function ($join): void {
+                $join->on('sales.id', '=', 'fiscal_document_reservations.reference_id')
+                    ->where('fiscal_document_reservations.reference_type', '=', 'sale');
+            })
+            ->where('fiscal_document_reservations.series_role', 'control')
+            ->where('sales.store_id', $storeId)
+            ->where('sales.sale_date', $fecha)
+            ->where('sales.status', '!=', 'cancelled')
+            ->orderBy('sales.id')
+            ->selectRaw(
+                "COALESCE(fiscal_series.control_identifier, '00') || '-' || "
+                ."lpad(fiscal_document_reservations.number::text, COALESCE(fiscal_series.sequence_length, 8), '0') "
+                .'as control_number'
+            )
+            ->pluck('control_number');
+
+        return [
+            'first_document_number' => $this->primeroYUltimo($documentos)[0],
+            'last_document_number' => $this->primeroYUltimo($documentos)[1],
+            'first_control_number' => $this->primeroYUltimo($controles)[0],
+            'last_control_number' => $this->primeroYUltimo($controles)[1],
+        ];
+    }
+
+    /**
+     * El PRIMERO y el ULTIMO valor de una lista de correlativos.
+     *
+     * @param  iterable<mixed>  $valores
+     * @return array{0: string|null, 1: string|null}
+     */
+    private function primeroYUltimo(iterable $valores): array
+    {
+        $primero = null;
+        $ultimo = null;
+
+        foreach ($valores as $valor) {
+            if ($valor === null) {
+                continue;
+            }
+
+            $texto = trim((string) $valor);
+
+            if ($texto === '') {
+                continue;
+            }
+
+            $primero ??= $texto;
+            $ultimo = $texto;
+        }
+
+        return [$primero, $ultimo];
+    }
+
+    /**
      * Si la tienda ya tiene caja para esa fecha de negocio.
      */
     private function existeCaja(int $storeId, string $fecha): bool
@@ -217,6 +600,15 @@ final readonly class CashRegisterService
     private function instante(): string
     {
         return now()->format('Y-m-d H:i:sP');
+    }
+
+    /**
+     * El instante como `DateTimeImmutable`: lo que pide el escritor de
+     * asientos.
+     */
+    private function momento(): DateTimeImmutable
+    {
+        return DateTimeImmutable::createFromInterface(now());
     }
 
     /**

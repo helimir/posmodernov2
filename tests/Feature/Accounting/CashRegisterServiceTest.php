@@ -7,6 +7,7 @@ use App\Models\Store;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Tests\Fixtures\PosFixture;
 
 /**
  * 0.7.5-T / 0.7.5 — la caja por FECHA DE NEGOCIO.
@@ -27,6 +28,10 @@ test('test_el_movimiento_cerca_del_cambio_de_dia_queda_en_el_registro_de_caja_de
     $servicio = new CashRegisterService(DB::connection());
     $escritor = new LedgerWriter(DB::connection());
     $tienda = Store::create(['name' => 'Tienda del cambio de dia']);
+
+    // El PLAN DE CUENTAS: al abrir la caja, el saldo de partida se asienta,
+    // y un asiento necesita dos cuentas.
+    PosFixture::planDeCaja((int) $tienda->id);
 
     // Las DOS cajas se abren en el MISMO instante: lo que las distingue no es
     // la apertura, es la FECHA DE NEGOCIO.
@@ -99,6 +104,10 @@ test('test_una_tienda_no_abre_dos_cajas_para_la_misma_fecha_de_negocio', functio
     $servicio = new CashRegisterService(DB::connection());
     $tienda = Store::create(['name' => 'Tienda de una caja por dia']);
 
+    // El PLAN DE CUENTAS: al abrir la caja, el saldo de partida se asienta,
+    // y un asiento necesita dos cuentas.
+    PosFixture::planDeCaja((int) $tienda->id);
+
     $primera = $servicio->open($tienda->id, new DateTimeImmutable('2026-11-04'), '100.0000');
 
     // La segunda apertura de la MISMA fecha es un error con mensaje util, no
@@ -120,6 +129,10 @@ test('test_una_tienda_no_abre_dos_cajas_para_la_misma_fecha_de_negocio', functio
 test('test_una_caja_cerrada_no_admite_mas_movimientos', function () {
     $servicio = new CashRegisterService(DB::connection());
     $tienda = Store::create(['name' => 'Tienda que cierra caja']);
+
+    // El PLAN DE CUENTAS: al abrir la caja, el saldo de partida se asienta,
+    // y un asiento necesita dos cuentas.
+    PosFixture::planDeCaja((int) $tienda->id);
 
     $caja = $servicio->open($tienda->id, new DateTimeImmutable('2026-11-04'), '100.0000');
 
@@ -151,6 +164,10 @@ test('test_una_caja_cerrada_no_admite_mas_movimientos', function () {
 test('test_la_caja_guarda_quien_la_abrio_y_quien_la_cerro', function () {
     $servicio = new CashRegisterService(DB::connection());
     $tienda = Store::create(['name' => 'Tienda con responsables']);
+
+    // El PLAN DE CUENTAS: al abrir la caja, el saldo de partida se asienta,
+    // y un asiento necesita dos cuentas.
+    PosFixture::planDeCaja((int) $tienda->id);
 
     $quienAbre = User::factory()->create(['name' => 'Cajero que abre']);
     $quienCierra = User::factory()->create(['name' => 'Supervisor que cierra']);

@@ -62,6 +62,9 @@ enum Permission: string
     /** Cerrar la caja del dia. */
     case CashDayClose = 'cash_day.close';
 
+    /** Reabrir un dia cerrado: deshacer un cierre sellado. */
+    case CashDayReopen = 'cash_day.reopen';
+
     /** Ver los clientes y su credito. */
     case CustomerRead = 'customer.read';
 
@@ -176,6 +179,7 @@ enum Permission: string
             self::CashDayRead => 'View the cash day',
             self::CashDayOpen => 'Open the cash day',
             self::CashDayClose => 'Close the cash day',
+            self::CashDayReopen => 'Reopen a closed cash day',
             self::CustomerRead => 'View customers',
             self::CustomerCreate => 'Create customers',
             self::CustomerUpdate => 'Update customers',

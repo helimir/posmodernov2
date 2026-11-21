@@ -429,7 +429,7 @@ class ChartOfAccountsController extends Controller
     }
 
     /**
-     * Los CUATRO roles, con el tipo que cada uno exige.
+     * Los roles del plan, con el tipo que cada uno exige.
      *
      * @return list<array{value: string, label: string, required_type: string}>
      */
@@ -440,6 +440,7 @@ class ChartOfAccountsController extends Controller
             AccountRole::Receivable->value => 'Receivable',
             AccountRole::Revenue->value => 'Revenue',
             AccountRole::TaxPayable->value => 'Tax payable',
+            AccountRole::Equity->value => 'Equity',
         ];
 
         $roles = [];

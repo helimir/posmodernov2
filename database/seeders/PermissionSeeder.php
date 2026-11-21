@@ -169,13 +169,16 @@ class PermissionSeeder extends Seeder
             ],
 
             // EL CONTADOR: lee. Las ventas y los clientes en lectura, la
-            // contabilidad en lectura y los reportes.
+            // contabilidad en lectura y los reportes. Y REABRE un dia
+            // cerrado: deshacer un cierre sellado es una supervision, y el
+            // que lo hizo el cajero no es quien lo deshace.
             self::SLUG_ACCOUNTANT => [
                 Permission::DashboardRead,
                 Permission::SalesRead,
                 Permission::ReceiptRead,
                 Permission::CustomerRead,
                 Permission::CashDayRead,
+                Permission::CashDayReopen,
                 Permission::AccountingRead,
                 Permission::ReportRead,
             ],

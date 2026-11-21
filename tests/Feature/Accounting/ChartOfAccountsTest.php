@@ -83,6 +83,8 @@ test('test_la_resolucion_devuelve_el_mapa_de_rol_a_codigo_de_la_tienda', functio
         'receivable' => '1200000',
         'revenue' => '4010000',
         'tax_payable' => '2110000',
+        // El CAPITAL: la contrapartida del saldo de partida de la caja.
+        'equity' => '3100000',
     ]);
 });
 

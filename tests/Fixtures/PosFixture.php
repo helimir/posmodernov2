@@ -241,6 +241,58 @@ final class PosFixture
     }
 
     /**
+     * EL PLAN DE CUENTAS de una tienda que no es la de demostracion.
+     *
+     * Es el plan MINIMO que la caja necesita: la cuenta donde asentar el
+     * saldo de partida (la de efectivo) y su CONTRAPARTIDA (la de capital).
+     * Las cuentas se crean si no estan, por su codigo, que es su clave
+     * natural, y el vinculo se escribe si no esta.
+     *
+     * Y POR QUE EXISTE: al abrir la caja, el saldo de partida se asienta, y
+     * un asiento necesita dos cuentas. Una tienda sin plan NO puede abrir la
+     * caja: una caja sin cuenta donde asentar no es una caja.
+     */
+    public static function planDeCaja(int $storeId): void
+    {
+        $cuentas = [
+            ['1100000', 'Efectivo y caja', 'asset', 'cash'],
+            ['3100000', 'Capital social', 'equity', 'equity'],
+        ];
+
+        foreach ($cuentas as [$codigo, $nombre, $tipo, $rol]) {
+            $cuentaId = DB::table('accounts')->where('code', $codigo)->value('id');
+
+            if ($cuentaId === null) {
+                $cuentaId = DB::table('accounts')->insertGetId([
+                    'code' => $codigo,
+                    'name' => $nombre,
+                    'type' => $tipo,
+                    'is_active' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            $vinculo = DB::table('store_accounts')
+                ->where('store_id', $storeId)
+                ->where('role', $rol)
+                ->value('id');
+
+            if ($vinculo === null) {
+                DB::table('store_accounts')->insert([
+                    'account_id' => $cuentaId,
+                    'store_id' => $storeId,
+                    'role' => $rol,
+                    'status' => 'active',
+                    'sort_order' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+    }
+
+    /**
      * Un SEGUNDO producto, con su ficha en la tienda, para el que no hay
      * stock.
      */

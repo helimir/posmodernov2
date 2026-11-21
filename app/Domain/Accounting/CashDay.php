@@ -26,12 +26,18 @@ use Illuminate\Database\Connection;
  *     creditos de la cuenta de efectivo de la tienda, en los asientos de esa
  *     fecha de negocio. Una cuenta de efectivo es un ACTIVO, y su saldo es
  *     debito menos credito.
- *  3. EL ESPERADO: el saldo de partida MAS el saldo en curso. Es lo que
- *     deberia haber en la caja si nadie se equivoca.
+ *  3. EL ESPERADO: el saldo EN CURSO. Y SOLO el saldo en curso: el saldo de
+ *     partida ya esta en el libro, con su asiento de apertura, asi que
+ *     sumarlo otra vez contaria el dinero dos veces. El esperado es lo que
+ *     deberia haber en la caja si nadie se equivoca, y el libro ya lo dice.
  *  4. EL SALDO CONTADO (`closing_balance`): otro DATO. El conteo de una caja
  *     es un hecho fisico. Y el DESCUADRE es el contado menos el esperado, CON
  *     SU SIGNO: un descuadre de cero es una caja cuadrada, y cualquier otra
  *     cosa se ve.
+ *
+ * Y EL Z SELLADO: cuando el dia esta cerrado, el cierre es un HECHO y se
+ * LEE de `cash_closes`, no se recalcula. Un dia abierto se sigue calculando
+ * en vivo, como siempre.
  *
  * LA FECHA DE NEGOCIO es un DATO del llamante (`DateTimeImmutable`), nunca un
  * `DAY()/MONTH()/YEAR()` calculado: el legacy filtraba asi (trampa 62), y
@@ -80,16 +86,36 @@ final readonly class CashDay
     }
 
     /**
-     * El ESPERADO: el saldo de partida MAS el saldo en curso.
+     * El ESPERADO: el saldo EN CURSO, y solo el saldo en curso.
      *
-     * @param  string  $openingBalance  El saldo de partida. Texto decimal.
+     * REGLA que fija este metodo: *el saldo de partida ya esta en el libro*.
+     * Al abrir la caja se asienta, con un asiento de tipo
+     * `opening_balance`, y por eso el saldo en curso YA lo incluye. Sumarle
+     * otra vez la partida contaria ese dinero DOS VECES, y el arqueo
+     * compararia el conteo contra una cifra que no es de nadie.
+     *
      * @param  string  $runningBalance  El saldo en curso. Texto decimal.
      */
-    public function expected(string $openingBalance, string $runningBalance): string
+    public function expected(string $runningBalance): string
     {
-        return (string) PosAmount::decimal($openingBalance)
-            ->plus(PosAmount::decimal($runningBalance))
+        return (string) PosAmount::decimal($runningBalance)
             ->toScale(PosAmount::SCALE, RoundingMode::HALF_UP);
+    }
+
+    /**
+     * El Z SELLADO del dia, si lo hay.
+     *
+     * REGLA que fija este metodo: *un dia cerrado NO se recalcula*. El Z es el
+     * cierre HECHO, con su contenido y su firma, y se lee: aunque se corrija
+     * una venta de ayer, el Z de ayer no cambia.
+     *
+     * Y SI NO HAY Z, la caja esta abierta: no hay nada sellado y se sigue
+     * calculando en vivo.
+     */
+    public function zSellado(int $storeId, DateTimeImmutable $businessDate): ?object
+    {
+        return (new CashClose($this->connection))
+            ->current($storeId, $businessDate->format('Y-m-d'));
     }
 
     /**

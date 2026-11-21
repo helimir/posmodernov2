@@ -37,18 +37,20 @@ test('test_el_listado_del_plan_de_cuentas_responde_con_su_contrato_de_props', fu
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
             ->component('accounting/accounts')
-            // Las CUATRO cuentas que el sistema usa, con su rol en la tienda.
+            // Las CUENTAS que el sistema usa, con su rol en la tienda.
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1100000') !== null
                 && collect($cuentas)->firstWhere('code', '1100000')['role'] === 'cash'
                 && collect($cuentas)->firstWhere('code', '1200000')['role'] === 'receivable'
                 && collect($cuentas)->firstWhere('code', '4010000')['role'] === 'revenue'
-                && collect($cuentas)->firstWhere('code', '2110000')['role'] === 'tax_payable')
+                && collect($cuentas)->firstWhere('code', '2110000')['role'] === 'tax_payable'
+                // Y el CAPITAL: la contrapartida del saldo de partida de la caja.
+                && collect($cuentas)->firstWhere('code', '3100000')['role'] === 'equity')
             // Y una cuenta que NO cumple ningun rol: lo dice con `null`.
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1300000')['role'] === null)
             // El TIPO de cada cuenta, que es lo que el rol exige.
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '4010000')['type'] === 'income')
-            // Los CUATRO roles, con el tipo que cada uno exige.
-            ->has('roles', 4)
+            // Los CINCO roles, con el tipo que cada uno exige.
+            ->has('roles', 5)
             ->where('roles', fn ($roles): bool => collect($roles)->firstWhere('value', 'cash')['required_type'] === 'asset'
                 && collect($roles)->firstWhere('value', 'tax_payable')['required_type'] === 'liability'
                 && collect($roles)->firstWhere('value', 'revenue')['required_type'] === 'income')
