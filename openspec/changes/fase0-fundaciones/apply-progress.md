@@ -1634,21 +1634,49 @@ El token del agente LAN se guardaba en **SHA-256 plano** y el middleware **lo bu
 
 **Una decision que hay que confirmar antes de escribir el cliente .NET**: el agente presenta `Authorization: Bearer` + `X-Agent-Id` (el **id de la fila**, como fija el research) y su `instance_id` **en el cuerpo**. Si el .NET prefiriera presentar el `instance_id` en la cabecera, el middleware cambia **antes** de escribirlo.
 
+### F2-10 — El asiento de apertura y el Z sellado (PR #137, `9653452`)
+
+Dos agujeros contables, y los dos son de verdad.
+
+**La apertura NO dejaba asiento.** El tipo `opening_balance` estaba en el catalogo desde la Fase 0 y **nunca se escribio**: el saldo de partida era un dato suelto en `cash_registers`, asi que **la cuenta de efectivo del libro no cuadraba con la caja**. Ahora al abrir se escribe el asiento, en la **misma transaccion**, debitando efectivo y acreditando capital (un asiento que no cuadra no es un asiento), y **el dato sigue siendo el dato**: lo que conto el cajero.
+
+**Y el esperado cambio de origen**: el saldo en curso **ya incluye** la partida, asi que el esperado es **solo el saldo en curso**. Sumarla otra vez contaria el mismo dinero dos veces (partida 100 y un movimiento de 10 -> esperado **110**, no 210). El valor no cambia: cambia **de donde sale**. La partida se sigue enseñando **al lado** del saldo en curso.
+
+**Y el Z ahora existe**: cerrar **sella** el dia (totales, desglose por medio de pago, numero de ventas, correlativos, contado y descuadre) con un **hash** sobre la forma canonica **recalculado desde la fila** (un hash sobre el mismo valor nunca detectaria una alteracion; y `jsonb` no conserva el orden de las claves, por eso la forma canonica se reconstruye con clave fija antes de hashear), escrito en la **misma transaccion** que el cierre: si el snapshot falla, **el cierre falla**. Un dia cerrado **no se recalcula**. Y el Z tiene **historial**: reabrir exige **motivo**, se audita y deja el Z anterior marcado; al volver a cerrar se escribe **otra** fila y la anterior **no se borra nunca**.
+
+**El permiso `cash_day.reopen` lo tiene el CONTADOR, no el cajero**: deshacer un cierre sellado es una supervision, y el que cerro no es quien lo deshace.
+
+### Una decision que hay que confirmar
+
+El asiento de apertura debita efectivo, asi que necesita **contrapartida**, y el plan de cuentas no tenia cuenta de capital. Se anadio **al plan** (`equity` -> `3100000 Capital social`), el **quinto rol**. **Eso significa que una tienda con un plan de cuatro roles deja de cobrar**: el plan completo ahora exige cinco. Es coherente (no se abre caja sin plan, y no hay plan sin cuenta de capital) y el sembrador lo siembra, asi que una instalacion nueva va bien. **Pero es un cambio del contrato del plan, y queda ahi para que lo confirmes.**
+
+### La verificacion, y un bloqueo de entorno
+
+La suite completa **no se pudo correr en local**: el contenedor de PostgreSQL de esta maquina se **wedgeo** (acepta conexiones pero no ejecuta ninguna consulta, y la API de Docker Desktop responde 500). **El CI fue el verificador** de la unidad, sobre una base limpia.
+
+El CI **encontro dos tests que afirmaban el mundo de antes del asiento de apertura** (uno contaba todos los asientos del libro, y el otro cogia la PRIMERA linea de la cuenta de efectivo, que ahora es la de apertura). **Ninguno se relajo**: el asiento de la venta se busca ahora **por su tipo**, y el de apertura **se afirma por su cuenta**, porque es el hecho nuevo que hay que fijar.
+
+Y un detalle que explica el reparto: **con partida cero no se asienta** (el CHECK del esquema no admite lineas a cero en los dos sentidos), asi que el escenario de demostracion, que abre con partida cero, **sigue viendo un solo asiento** (el de la venta) y no fallo.
+
+### Fuera de esta unidad (senalado)
+
+- **Corregir una venta de un dia cerrado exige reabrir el dia.** El flujo de la UI de ventas (pedir el motivo y encadenar la reapertura) **no existe**: es de otra unidad. Esta escrito en el docblock de `CashRegisterService::reopen()` y de `CashDayController::reabrir()`.
+- La **auditoria de la reapertura** la escribe el controller con el `AuditWriter`, fuera de la transaccion del dominio, siguiendo la filosofia del repo (*"la auditoria no se traga el cambio"*). Si tiene que ser atomica, va dentro del servicio.
+- El **Z guarda los totales y los correlativos**, pero **no el detalle de ventas** (lineas, impuestos por linea): con muchas ventas, el Z no permite reconstruir la memoria de impresion.
+
 ### Deuda que queda
 
-- **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API). Es lo unico de la unidad que no esta en la UI.
+- **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
 - **La caja no enseña el estado del ticket** (el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume).
 - **El reintento y la reimpresion no se auditan** (hueco consciente de la F2-13).
 - **El `heartbeat` del agente sobreestima su trabajo pendiente** (cuenta tambien los trabajos de `server_socket`).
 - **El consumidor final sin identificativo** (el art. 8.6 pide cedula o pasaporte, y el mostrador no lo recoge).
 - `fiscal_series.assigned_by` es un dato **mas fino** que el canal para la regla del control.
-- **El limite del puerto 9100** del CHECK del esquema (decision del mantenedor).
+- **El limite del puerto 9100** del CHECK del esquema.
 
 ### Siguiente
 
-**F2-10**: el **asiento de apertura y el Z inmutable**. Es la mas valiosa de las que quedan por una razon concreta: **hoy el cierre de caja no cuadra con el libro**. La apertura **no deja asiento** (el tipo `opening_balance` existe en el catalogo y **nunca se escribe**), asi que el saldo de partida es un dato suelto en `cash_registers` y **la cuenta de efectivo del libro no cuadra con la caja**. Y el Z **no existe**: el descuadre se **calcula en vivo**, asi que si manana se corrige una venta de ayer, el "cierre" de ayer **cambia**.
-
-**El orden importa**: el asiento de apertura **antes** que el snapshot, y `esperado` pasa a ser **solo el saldo en curso**: si la partida entra al libro, `partida + en curso` cuadra dos veces (riesgo R3 de la exploracion).
+**F2-11**: el **arqueo con motivo y por denominacion**. El desglose por medio de pago existe, pero el cajero cuenta **billetes y monedas**: falta el catalogo de denominaciones y el conteo ("sobran 2 billetes de 50"), y un descuadre **exige justificacion** por encima de un **umbral configurable** (`cash_registers.note` existe y **nadie lo lee**).
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 

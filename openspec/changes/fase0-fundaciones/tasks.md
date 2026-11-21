@@ -685,14 +685,21 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   Ademas, el **latido por fin lee el cuerpo**: el agente declara sus impresoras y sus capacidades, y el
   servidor **avisa** de un destino no cubierto (sin rechazar el trabajo: una impresora puede estar
   apagada en ese momento). Dep: F2-06, F2-08
-- [ ] **F2-10** **El asiento de apertura y el Z inmutable.** Hoy la apertura **no deja asiento** (el
-  tipo `opening_balance` existe en el catalogo y **nunca se escribe**): el saldo de partida es un
-  dato suelto y **el libro no cuadra con la caja**. Y el Z **no existe**: el descuadre se **calcula
-  en vivo**, asi que si manana se corrige una venta de ayer, el "cierre" de ayer **cambia**. Una
-  tabla `cash_closes` que **sella** el dia (totales, impuestos, correlativos, medios de pago) en la
-  **misma transaccion** que el `close()`. **El asiento va ANTES que el snapshot**, y `esperado` pasa
-  a ser **solo el saldo en curso**: si la partida entra al libro, `partida + en curso` cuadra dos
-  veces. Dep: 1.5, F2-01
+- [x] **F2-10** **El asiento de apertura y el Z inmutable.** Dos agujeros contables, los dos de verdad.
+  (a) **La apertura NO dejaba asiento**: el tipo `opening_balance` estaba en el catalogo desde la Fase 0 y
+  **nunca se escribio**, asi que el saldo de partida era un dato suelto y **la cuenta de efectivo del
+  libro no cuadraba con la caja**. Ahora al abrir se escribe el asiento, en la **misma transaccion**,
+  debitando efectivo y acreditando capital (un asiento que no cuadra no es un asiento), y **el dato
+  sigue siendo el dato**: lo que conto el cajero. (b) **Y el esperado cambio de origen**: el saldo en
+  curso **ya incluye** la partida, asi que el esperado es **solo el saldo en curso** (sumarla otra vez
+  contaria el mismo dinero dos veces: partida 100 y un movimiento de 10 -> esperado **110**, no 210). La
+  partida se sigue=enseñando **al lado** del saldo en curso, para que se vea de donde sale el esperado.
+  (c) **Y el Z ahora existe**: cerrar **sella** el dia (totales, desglose por medio de pago, numero de
+  ventas, correlativos, contado y descuadre) con un **hash** sobre la forma canonica **recalculado desde
+  la fila** (un hash sobre el mismo valor nunca detectaria una alteracion), escrito en la **misma
+  transaccion** que el cierre: si el snapshot falla, **el cierre falla**. Un dia cerrado **no se recalcula**.
+  (d) El Z tiene **historial**: reabrir exige **motivo**, se audita y deja el Z anterior marcado; al
+  volver a cerrar se escribe **otra** fila y la anterior **no se borra nunca**. Dep: 1.5, F2-11
 - [ ] **F2-11** **El arqueo con motivo y por denominacion.** El desglose por medio de pago existe,
   pero el cajero cuenta **billetes y monedas**: falta el catalogo de denominaciones y el conteo
   ("sobran 2 billetes de 50"). Y un descuadre **exige justificacion** por encima de un **umbral
