@@ -1694,16 +1694,35 @@ El papel lleva el contenido **EXACTO** del Z sellado, **nunca un recalculo**: un
 - **El CSS termico esta duplicado** entre la vista del Z y la del comprobante fiscal. Se dejo **aislado a proposito** (no tocar la vista fiscal); un partial compartido es la mejora pendiente.
 - **Decision mia**: un Z cuya firma no cuadra **no se imprime**. Si prefieres que salga **con un aviso**, son tres lineas.
 
+### F2-13b — Las decisiones de configuracion por tienda (PR #143, `f8f83c1`)
+
+Cuatro decisiones del mantenedor, aplicadas en una unidad.
+
+**El umbral del descuadre es DE LA TIENDA.** Era global: una tienda con dos mil ventas al dia no deberia justificar cada centimo de diferencia, y una tienda de barrio si. Dos columnas en `store_settings` (nullable: `null` = se usa el global de `config/cash.php`) y **editables**, porque **una columna que nadie puede cambiar son datos que nadie posee**: hay ya pantalla de configuracion de la tienda.
+
+**La cuenta de capital es OPCIONAL.** El plan completo exigia **cinco** roles y una tienda con un plan de cuatro **dejaba de cobrar**. Ahora el plan completo vuelve a ser de **cuatro** y el capital solo hace falta al **abrir con partida distinta de cero** (una partida cero no se asienta, y no necesita contrapartida). **Ninguna tienda deja de cobrar.**
+
+**El puerto de la impresora de red es el que tenga.** El CHECK exigia el 9100 exacto (el estandar ESC/POS de facto, que no es una ley): hay impresoras en el 9105, el 515 (LPD) o el 631 (IPP), y **un POS que no puede configurar su impresora es un POS que se queda sin ticket**. El CHECK y la regla del dominio admiten ahora **cualquier puerto de 1 a 65535**, y el **USB directo y `file://` siguen rechazandose**.
+
+**Y el consumidor final se identifica por encima del umbral de la tienda.** El art. 8.6 pide el documento de identidad de la persona natural sin factura, y el mostrador **no lo pedia**: una venta sin cliente salia con el consumidor final y **sin identificativo**. Ahora la tienda declara el umbral y la venta sin cliente que lo supera **no se cobra sin el documento**. El documento **declara su propio tipo** (cedula o pasaporte): deducirlo del formato seria adivinar. Y llega al comprobante fiscal como el identificativo del receptor.
+
+### La quinta decision, que NO es codigo: el corte con el legacy
+
+**Decidido (2026-11-22): el historico NO se migra.** El v2 arranca en cero, con sus **saldos de apertura certificados** (que es lo que pide B1: los firma una persona con `certified_at` y `certified_by`), y el historico del legacy **se consulta en el legacy** cuando haga falta. Es lo que significa la decision del 2026-11-06 (*"datos limpios en la base nueva"*), y es lo mas barato y lo mas honesto.
+
+**Lo que hay que comunicar al cliente**: a partir de la fecha de corte, **el historico esta en el sistema viejo**. Y el contador no debe mezclar bases: o pregunta al v2 (que solo tiene lo nuevo) o al legacy (que solo tiene lo viejo).
+
+**Y por que es la unica decision CON FECHA**: cada semana que pasa, el historico se queda mas solo en la base vieja, y la fecha de corte se acerca sin que nadie lo decida.
+
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
 - **La caja no enseña el estado del ticket** (el campo `print` viaja en la respuesta, pero `pos/index.tsx` no lo consume).
 - **El reintento y la reimpresion no se auditan** (hueco consciente de la F2-13).
 - **El `heartbeat` del agente sobreestima su trabajo pendiente** (cuenta tambien los trabajos de `server_socket`).
-- **El consumidor final sin identificativo** (el art. 8.6 pide cedula o pasaporte, y el mostrador no lo recoge).
 - `fiscal_series.assigned_by` es un dato **mas fino** que el canal para la regla del control.
-- **El limite del puerto 9100** del CHECK del esquema.
 - **Corregir una venta de un dia cerrado exige reabrir el dia**, y el flujo de la UI de ventas que lo pida **no existe**.
+- El CSS termico esta **duplicado** entre el Z y el comprobante (un partial compartido es la mejora pendiente).
 
 ### Siguiente
 

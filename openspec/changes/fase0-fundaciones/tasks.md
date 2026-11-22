@@ -724,6 +724,16 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   **siempre** apunta a su Z y uno de comprobante **nunca**. Y **no se reimprime como un comprobante**: se
   reimprime desde la pantalla del dia **con MOTIVO** (la primera impresion no lo pide; desde la segunda es
   obligatorio). Dep: F2-10, F2-11
+- [x] **F2-13b** **Las decisiones de configuracion por tienda.** (a) El **umbral del descuadre** es
+  **de la tienda**: dos columnas en `store_settings` (nullable; `null` = se usa el global de
+  `config/cash.php`) y **editables** (pantalla de configuracion de la tienda: *una columna que nadie
+  puede cambiar son datos que nadie posee*). (b) La **cuenta de capital es OPCIONAL**: el plan completo
+  vuelve a ser de **cuatro** roles y el capital solo hace falta al **abrir con partida distinta de
+  cero** (una partida cero no se asienta). **Ninguna tienda deja de cobrar.** (c) El **puerto** de la
+  impresora de red es **el que tenga** (el CHECK y la regla del dominio admiten de 1 a 65535), y el
+  **USB directo y `file://` siguen rechazandose**. (d) El **consumidor final se identifica por encima
+  del umbral de la tienda**: una venta sin cliente que lo supera **no se cobra sin el documento**, y el
+  documento **declara su propio tipo** (deducirlo del formato seria adivinar). Dep: F2-10, F2-11
 - [ ] **F2-13** **La auditoria de negocio.** `audit_logs` existe y **un solo escritor** audita **una
   de 40+ acciones** (con el `ip_address` en `null`), y **no es append-only** (si lo es
   `fiscal_document_events`, con trigger). Un `AuditTrail` en todas las escrituras, **append-only**,
