@@ -712,8 +712,18 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   descuadre por encima del umbral **no se cierra sin MOTIVO**, que queda en la caja **y en el Z sellado**.
   Hay **dos caminos de cierre y solo uno por cierre** (por importe, o por conteo de piezas: el sistema
   **calcula** el importe y **no** lo acepta aparte, porque son dos verdades incompatibles). Dep: F2-10
-- [ ] **F2-12** **El Z imprimible.** El Z en papel (HTML y ESC/POS), reutilizando el
-  `ReceiptTemplate` y el `PrintPayload`. Dep: F2-10, F2-11
+- [x] **F2-12** **El Z imprimible.** El Z existia y estaba **sellado**, pero **solo se veia en la pantalla**:
+  un POS **imprime** su Z, que es el documento que el cajero entrega al turno, al dueño o al contador. El
+  papel lleva el contenido **EXACTO** del Z sellado, **nunca un recalculo** (un test **muta** las ventas y los
+  asientos despues de sellar y comprueba que el papel sigue diciendo lo que decia) y un Z cuya **firma no
+  cuadra no se imprime**. Y **cabe**: como el renderer **falla** si una linea no cabe (un fallo es correcto;
+  un Z recortado en silencio es un Z falso), el Z **se adapta al ancho** (dos columnas, las etiquetas que no
+  caben **envueltas** y nunca recortadas, las denominaciones en tres formas, y el **hash partido y al
+  final**), y por debajo de 20 caracteres **no hay un Z legible** y el sistema lo dice. **Un Z NO es un
+  comprobante y el esquema lo dice**: `print_jobs.document_kind` con un CHECK que un trabajo de Z
+  **siempre** apunta a su Z y uno de comprobante **nunca**. Y **no se reimprime como un comprobante**: se
+  reimprime desde la pantalla del dia **con MOTIVO** (la primera impresion no lo pide; desde la segunda es
+  obligatorio). Dep: F2-10, F2-11
 - [ ] **F2-13** **La auditoria de negocio.** `audit_logs` existe y **un solo escritor** audita **una
   de 40+ acciones** (con el `ip_address` en `null`), y **no es append-only** (si lo es
   `fiscal_document_events`, con trigger). Un `AuditTrail` en todas las escrituras, **append-only**,

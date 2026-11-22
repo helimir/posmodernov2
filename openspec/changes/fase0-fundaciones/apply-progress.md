@@ -1678,6 +1678,22 @@ Ahora las denominaciones son **DATO** (un catalogo por tienda, sembrado; **si la
 
 **El umbral NO es configurable por tienda.** `store_settings` (el esquema de la Fase 0) tiene 16 columnas —`timezone`, `base_color`, `char_per_line`…— y **ninguna** donde encaje un umbral de caja; anadirla cambiaria el esquema de la Fase 0. Queda **global** en `config/cash.php` (`difference_reason_threshold`, defecto `0.0100`), con la lectura ya preparada para resolver por tienda cuando el esquema lo admita.
 
+### F2-12 — El Z imprimible (PR #141, `7a70676`)
+
+El Z existia y estaba **sellado**, pero **solo se veia en la pantalla**. Un POS **imprime** su Z: es el documento que el cajero entrega al turno, al dueno o al contador.
+
+El papel lleva el contenido **EXACTO** del Z sellado, **nunca un recalculo**: un test **muta** las ventas y los asientos de efectivo despues de sellar y comprueba que el papel **sigue diciendo** 158.00 / 159.00 / 58.00. Y un Z cuya **firma no cuadra no se imprime** (409): es una fila tocada, y ponerla en circulacion es el defecto que la unidad existe para evitar.
+
+**Y cabe.** Como el renderer **falla** si una linea no cabe (un fallo es correcto; un Z recortado en silencio es un Z falso), el Z **se adapta al ancho**: dos columnas en vez de muchas, la columna de datos medida con el dato mas largo, las etiquetas que no caben **envueltas** y nunca recortadas, las denominaciones en tres formas (alineada, compacta, a dos lineas) y el **hash partido y al final** (es lo que se comprueba). Por debajo de **20 caracteres** no hay un Z legible, y el sistema lo dice en vez de componer uno roto.
+
+**Un Z NO es un comprobante, y lo dice el esquema**: `print_jobs.document_kind` con un CHECK que un trabajo de Z **siempre** apunta a su Z y uno de comprobante **nunca**. Y **no se reimprime como un comprobante**: se reimprime desde la pantalla del dia **con MOTIVO** (la primera impresion no lo pide; desde la segunda es obligatorio), porque el Z es el documento del cierre y alguien tiene que poder decir por que salio otra vez. La auditoria guarda el motivo, el enlace al Z y el trabajo que reimprime.
+
+### Dos pendientes y una decision mia
+
+- **Solo se imprime el Z del dia de negocio ACTUAL**: imprimir el de ayer (para el contador) pediria un `?date=YYYY-MM-DD`.
+- **El CSS termico esta duplicado** entre la vista del Z y la del comprobante fiscal. Se dejo **aislado a proposito** (no tocar la vista fiscal); un partial compartido es la mejora pendiente.
+- **Decision mia**: un Z cuya firma no cuadra **no se imprime**. Si prefieres que salga **con un aviso**, son tres lineas.
+
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
@@ -1691,7 +1707,7 @@ Ahora las denominaciones son **DATO** (un catalogo por tienda, sembrado; **si la
 
 ### Siguiente
 
-**F2-12**: el **Z imprimible**. El Z en papel (HTML y ESC/POS), reutilizando el `ReceiptTemplate` y el `PrintPayload` que ya existen. Es la pieza que hace el Z **salir de la pantalla**: hoy el cierre se ve en el navegador, pero un POS **imprime** su Z.
+**F2-13**: la **auditoria de negocio**. `audit_logs` existe (M26) y **un solo escritor** audita **una de 40+ acciones** (con el `ip_address` en `null`), y **no es append-only** (si lo es `fiscal_document_events`, con trigger). Un `AuditTrail` en todas las escrituras, **append-only**, con pantalla de consulta y retencion.
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 
