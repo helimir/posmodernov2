@@ -65,6 +65,9 @@ enum Permission: string
     /** Reabrir un dia cerrado: deshacer un cierre sellado. */
     case CashDayReopen = 'cash_day.reopen';
 
+    /** Imprimir el Z: el cierre de caja, en papel y en la impresora. */
+    case CashDayPrint = 'cash_day.print';
+
     /** Ver los clientes y su credito. */
     case CustomerRead = 'customer.read';
 
@@ -180,6 +183,7 @@ enum Permission: string
             self::CashDayOpen => 'Open the cash day',
             self::CashDayClose => 'Close the cash day',
             self::CashDayReopen => 'Reopen a closed cash day',
+            self::CashDayPrint => 'Print the closing report (Z)',
             self::CustomerRead => 'View customers',
             self::CustomerCreate => 'Create customers',
             self::CustomerUpdate => 'Update customers',

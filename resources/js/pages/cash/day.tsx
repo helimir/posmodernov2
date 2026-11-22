@@ -153,6 +153,24 @@ export interface CashDayZ {
     reopened_at: string | null;
     reopened_by: CashDayActor | null;
     reopen_reason: string | null;
+    /**
+     * How many times the Z has been QUEUED for printing. It is the reason why
+     * the screen asks for a REASON before printing it again: the Z is the
+     * document of the closing, and taking it out twice has to say why.
+     */
+    print_count: number;
+}
+
+/**
+ * A PRINT DESTINATION of the store: a physical printer the Z goes to.
+ *
+ * The `browser` transport is not here: the browser is the destination of the
+ * PAPER (the HTML of the Z), not of the bytes.
+ */
+export interface CashDayPrintTarget {
+    id: number;
+    name: string;
+    transport: string;
 }
 
 /**
@@ -191,6 +209,7 @@ export interface CashDayProps {
     count: CashDayCount;
     z: CashDayZ | null;
     z_history: CashDayZHistoryEntry[];
+    print_targets: CashDayPrintTarget[];
 }
 
 /**
@@ -258,6 +277,7 @@ export default function CashDay({
     count,
     z,
     z_history,
+    print_targets,
 }: CashDayProps) {
     const { can } = usePermissions();
     const [openingBalance, setOpeningBalance] = useState('0.0000');
@@ -265,6 +285,8 @@ export default function CashDay({
     const [piezas, setPiezas] = useState<Record<string, number>>({});
     const [motivo, setMotivo] = useState('');
     const [reopenReason, setReopenReason] = useState('');
+    const [printReason, setPrintReason] = useState('');
+    const [printingZ, setPrintingZ] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -314,6 +336,32 @@ export default function CashDay({
             setError((fallo as Error).message);
         } finally {
             setSaving(false);
+        }
+    };
+
+    /**
+     * The PRINT of the Z: the closing goes to the queue of the destination,
+     * and the LAN agent writes the bytes.
+     *
+     * AND A REPRINT NEEDS A REASON: the Z is the document of the closing, and
+     * taking it out again has to leave a trace of WHY.
+     */
+    const imprimirZ = async (targetId: number) => {
+        setPrintingZ(true);
+        setError(null);
+
+        try {
+            await postJson('/caja/dia/z/imprimir', {
+                print_target_id: targetId,
+                reason: printReason.trim() === '' ? undefined : printReason.trim(),
+            });
+
+            setPrintReason('');
+            router.reload();
+        } catch (fallo) {
+            setError((fallo as Error).message);
+        } finally {
+            setPrintingZ(false);
         }
     };
 
@@ -660,6 +708,49 @@ export default function CashDay({
                                 <p className="text-muted-foreground text-xs">
                                     This day was reopened {reabiertas.length} time(s): the closures below keep the reason.
                                 </p>
+                            )}
+
+                            {/*
+                              The PRINT of the Z: the PAPER (the HTML of the
+                              sealed Z) and the PRINTER (the bytes, queued for
+                              the LAN agent).
+                            */}
+                            {can('cash_day.print') && (
+                                <div className="space-y-3 border-t pt-4">
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button asChild variant="outline">
+                                            <a href="/caja/dia/z" target="_blank" rel="noreferrer">
+                                                View the Z
+                                            </a>
+                                        </Button>
+
+                                        {print_targets.map((target) => (
+                                            <Button
+                                                key={target.id}
+                                                variant="outline"
+                                                onClick={() => imprimirZ(target.id)}
+                                                disabled={printingZ}
+                                            >
+                                                {printingZ ? 'Queueing…' : `Print the Z to ${target.name}`}
+                                            </Button>
+                                        ))}
+                                    </div>
+
+                                    {z.print_count > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-muted-foreground text-xs">
+                                                This Z has been printed {z.print_count} time(s). Printing it again needs a
+                                                reason: the Z is the document of the closing.
+                                            </p>
+
+                                            <Input
+                                                value={printReason}
+                                                onChange={(event) => setPrintReason(event.target.value)}
+                                                placeholder="Reason for the reprint"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </CardContent>
                     </Card>

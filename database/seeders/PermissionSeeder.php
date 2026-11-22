@@ -161,6 +161,7 @@ class PermissionSeeder extends Seeder
                 Permission::CashDayRead,
                 Permission::CashDayOpen,
                 Permission::CashDayClose,
+                Permission::CashDayPrint,
                 Permission::CustomerRead,
                 Permission::CustomerCreate,
                 Permission::CustomerUpdate,
