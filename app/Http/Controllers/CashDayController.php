@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Accounting\CashClose;
 use App\Domain\Accounting\CashDay;
+use App\Domain\Accounting\CashDenominations;
 use App\Domain\Accounting\CashRegisterService;
 use App\Models\CashRegister;
 use App\Models\User;
@@ -158,6 +159,15 @@ class CashDayController extends Controller
      * El saldo contado es un DATO: el conteo de una caja es un hecho fisico.
      * Quien cierra es el usuario de la sesion.
      *
+     * EL CIERRE TIENE UNA SOLA VERDAD: o viene el IMPORTE que el cajero
+     * teclea, o viene el CONTEO DE PIEZAS que el cajero cuenta (y el sistema
+     * calcula el importe a partir de las piezas). Los dos a la vez se
+     * rechazan: son dos verdades incompatibles y el cierre solo puede tener
+     * una.
+     *
+     * Y EL MOTIVO: un descuadre por encima del umbral no se cierra sin
+     * explicacion, y el dominio lo dice si falta.
+     *
      * Si no hay caja para esa fecha de negocio, o si ya esta cerrada, el
      * dominio falla y la respuesta es un 422 con su mensaje.
      */
@@ -165,7 +175,24 @@ class CashDayController extends Controller
     {
         $datos = $request->all();
 
-        $error = $this->validar($datos, 'closing_balance');
+        $motivo = trim((string) ($datos['reason'] ?? ''));
+
+        $conteo = $datos['counted_pieces'] ?? null;
+        $importe = $datos['closing_balance'] ?? null;
+
+        // UNA SOLA VERDAD: el importe o el conteo de piezas.
+        if ($conteo !== null && $importe !== null) {
+            return response()->json([
+                'errorMsg' => 'El cierre se hace POR IMPORTE o POR CONTEO DE PIEZAS, pero no por los dos: '
+                    .'son dos verdades y el cierre solo puede tener una.',
+            ], 422);
+        }
+
+        if ($conteo === null) {
+            $error = $this->validar($datos, 'closing_balance');
+        } else {
+            $error = $this->validarConteo($conteo);
+        }
 
         if ($error !== null) {
             return response()->json(['errorMsg' => $error], 422);
@@ -193,15 +220,33 @@ class CashDayController extends Controller
         }
 
         try {
-            $this->registers->close(
-                (int) $caja->id,
-                PosAmount::declare($datos['closing_balance'], 'saldo contado'),
-                $request->user()?->id
-            );
+            if ($conteo === null) {
+                $this->registers->close(
+                    (int) $caja->id,
+                    PosAmount::declare($importe, 'saldo contado'),
+                    $request->user()?->id,
+                    $motivo
+                );
+            } else {
+                // El conteo se valida contra el MISMO catalogo que la
+                // pantalla ensena: el de la MONEDA de la tienda. Y la moneda
+                // se resuelve aqui, y no en el camino por importe: el cierre
+                // por importe no depende de que la tienda tenga moneda.
+                $this->registers->closeCounted(
+                    (int) $caja->id,
+                    $conteo,
+                    $request->user()?->id,
+                    $motivo,
+                    (int) $this->connection->table('currencies')
+                        ->where('code', $contexto->currency()['code'])
+                        ->value('id')
+                );
+            }
         } catch (RuntimeException $fallo) {
-            // La caja ya esta cerrada (el cierre es de UNA unidad), o el Z no
-            // se pudo sellar: en los dos casos el cierre NO ha pasado, porque
-            // el Z se sella en la misma transaccion.
+            // La caja ya esta cerrada (el cierre es de UNA unidad), el Z no
+            // se pudo sellar, o el descuadre exige un MOTIVO y no lo hay: en
+            // los tres casos el cierre NO ha pasado, porque el Z se sella en
+            // la misma transaccion.
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
 
@@ -347,6 +392,15 @@ class CashDayController extends Controller
         // queda, aunque el dia se reabra.
         $z = $this->day->zSellado($storeId, $fecha);
 
+        // EL CONteo por DENOMINACIONES: el catalogo de la tienda, el
+        // desglose esperado del importe, y lo que el cajero conto.
+        $conteo = $this->conteoDeLaCaja(
+            $storeId,
+            (int) $this->connection->table('currencies')->where('code', $moneda['code'])->value('id'),
+            $cifras['expected_balance'],
+            $z
+        );
+
         return [
             'state' => $this->estado($caja),
             'store' => [
@@ -360,9 +414,90 @@ class CashDayController extends Controller
             ...$cifras,
             'payments' => $pagos,
             'cash_total' => $this->day->cashTotal($pagos),
+            'count' => $conteo,
             'z' => $z === null ? null : $this->zProps($z),
             'z_history' => $this->historialDeZ($storeId, $fecha),
         ];
+    }
+
+    /**
+     * EL CONteo por DENOMINACIONES: el catalogo de la tienda, el desglose
+     * esperado del importe y lo que el cajero conto.
+     *
+     * REGLA que fija este metodo: *el cajero cuenta PIEZAS*. La pantalla
+     * ensena el catalogo de la tienda con el ESPERADO (cuantas piezas
+     * deberia haber) y el CONTADO (las que cuenta), y el total contado frente
+     * al esperado.
+     *
+     * Y CUANDO EL IMPORTE NO SE PUEDE FORMAR con el catalogo de la tienda, el
+     * desglose lo dice (`expected_error`): un arqueo que no se puede
+     * desglosar es un arqueo que hay que decir.
+     *
+     * @return array<string, mixed>
+     */
+    private function conteoDeLaCaja(
+        int $storeId,
+        int $currencyId,
+        string $esperado,
+        ?object $z
+    ): array {
+        $denominaciones = new CashDenominations($this->connection);
+
+        $catalogo = $denominaciones->catalog($storeId, $currencyId);
+        $desglose = $denominaciones->expected($esperado, $catalogo);
+
+        $conteo = [];
+        $diferencias = [];
+
+        if ($z !== null) {
+            $conteo = $this->piezasDelZ($z);
+            $diferencias = $denominaciones->differences($desglose['pieces'], $conteo);
+        }
+
+        return [
+            'denominations' => array_map(static fn (array $denominacion): array => [
+                'id' => $denominacion['id'],
+                'value' => $denominacion['value'],
+                'kind' => $denominacion['kind'],
+            ], $catalogo),
+            'expected' => $desglose['pieces'],
+            'expected_error' => $desglose['missing'],
+            'expected_total' => $desglose['total'],
+            'counted' => $conteo,
+            'differences' => $diferencias,
+            'threshold' => PosAmount::text(config('cash.difference_reason_threshold', '0.0100')),
+        ];
+    }
+
+    /**
+     * Las PIEZAS contadas que guarda el Z: un mapa de id de denominacion a
+     * cantidad.
+     *
+     * @return array<int, int>
+     */
+    private function piezasDelZ(object $z): array
+    {
+        $crudos = $z->counted_pieces ?? null;
+
+        if (is_string($crudos)) {
+            $crudos = json_decode($crudos, true);
+        }
+
+        if (! is_array($crudos)) {
+            return [];
+        }
+
+        $piezas = [];
+
+        foreach ($crudos as $clave => $valor) {
+            if (is_array($valor)) {
+                $piezas[(int) ($valor['id'] ?? 0)] = (int) ($valor['count'] ?? 0);
+            } else {
+                $piezas[(int) $clave] = (int) $valor;
+            }
+        }
+
+        return $piezas;
     }
 
     /**
@@ -385,6 +520,10 @@ class CashDayController extends Controller
             'expected_balance' => PosAmount::text($z->expected_balance),
             'counted_balance' => PosAmount::text($z->counted_balance),
             'difference' => PosAmount::text($z->difference),
+            // EL MOTIVO: por que se cerro asi.
+            'close_reason' => $z->close_reason ?? null,
+            // El CONTEO: las piezas que el cajero conto.
+            'counted_pieces' => $this->piezasDelZ($z),
             'subtotal' => PosAmount::text($z->subtotal),
             'tax_total' => PosAmount::text($z->tax_total),
             'grand_total' => PosAmount::text($z->grand_total),
@@ -636,6 +775,31 @@ class CashDayController extends Controller
     {
         $validador = Validator::make($datos, [
             $campo => ['required', 'string', 'decimal:0,4', 'min:0'],
+        ]);
+
+        if ($validador->fails()) {
+            return (string) $validador->errors()->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * VALIDA el CONTEO por piezas: cuantas piezas hay de cada denominacion.
+     *
+     * REGLA que fija este metodo: *un conteo es un mapa de cantidades
+     * enteras y no negativas*. El id de la denominacion lo pone el
+     * navegador, pero las piezas que no sean del catalogo de la tienda las
+     * rechaza el DOMINIO: la validacion de forma no es la validacion de
+     * fondo.
+     *
+     * @return string|null El mensaje del error, o `null` si todo esta bien.
+     */
+    private function validarConteo(mixed $conteo): ?string
+    {
+        $validador = Validator::make(['counted_pieces' => $conteo], [
+            'counted_pieces' => ['array'],
+            'counted_pieces.*' => ['integer', 'min:0'],
         ]);
 
         if ($validador->fails()) {

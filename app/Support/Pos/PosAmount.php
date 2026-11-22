@@ -84,4 +84,25 @@ final class PosAmount
     {
         return BigDecimal::of(self::declare($value, 'de la base de datos'));
     }
+
+    /**
+     * Un importe como TEXTO LEGIBLE: sin ceros de mas.
+     *
+     * REGLA que fija este metodo: *un mensaje dice el importe como lo dice
+     * una persona*. Un descuadre de `3.0000` se dice "de 3", y uno de
+     * `0.0100` se dice "de 0.01". Los ceros de mas son de la COLUMNA
+     * (`numeric(25,4)`), no del numero.
+     *
+     * @throws RuntimeException Cuando el valor no es un numero decimal.
+     */
+    public static function legible(mixed $value): string
+    {
+        $texto = self::text($value);
+
+        if (str_contains($texto, '.')) {
+            $texto = rtrim(rtrim($texto, '0'), '.');
+        }
+
+        return $texto === '' || $texto === '-' ? '0' : $texto;
+    }
 }

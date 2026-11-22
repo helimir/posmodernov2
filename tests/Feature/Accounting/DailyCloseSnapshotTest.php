@@ -86,7 +86,10 @@ test('test_al_cerrar_se_escribe_el_z_con_su_contenido', function () {
     $fecha = (new PosContext(DB::connection(), (int) $usuario->id))->businessDate()->format('Y-m-d');
 
     $this->actingAs($usuario)
-        ->postJson('/caja/dia/cerrar', ['closing_balance' => '160.0000'])
+        ->postJson('/caja/dia/cerrar', [
+            'closing_balance' => '160.0000',
+            'reason' => 'Sobran dos unidades en el conteo',
+        ])
         ->assertCreated();
 
     $z = z_ultimo_de_la_tienda((int) $escenario['store_id'], $fecha);
@@ -170,7 +173,7 @@ test('test_si_el_snapshot_falla_el_cierre_falla_y_no_hay_un_dia_cerrado_sin_z', 
 
     $servicio = new CashRegisterService(DB::connection());
 
-    expect(fn () => $servicio->close($cajaId, '999.0000', (int) $usuario->id))
+    expect(fn () => $servicio->close($cajaId, '999.0000', (int) $usuario->id, 'Diferencia de conteo justificada'))
         ->toThrow(QueryException::class);
 
     // Y la caja sigue ABIERTA: no hay un dia cerrado sin Z.
@@ -198,7 +201,10 @@ test('test_un_dia_cerrado_no_se_recalcula_cuando_se_corrige_una_venta_de_ayer', 
     $fecha = $contexto->businessDate()->format('Y-m-d');
 
     $this->actingAs($usuario)
-        ->postJson('/caja/dia/cerrar', ['closing_balance' => '160.0000'])
+        ->postJson('/caja/dia/cerrar', [
+            'closing_balance' => '160.0000',
+            'reason' => 'Sobran dos unidades en el conteo',
+        ])
         ->assertCreated();
 
     $z = z_ultimo_de_la_tienda((int) $escenario['store_id'], $fecha);
@@ -330,9 +336,13 @@ test('test_reabrir_deja_el_z_anterior_marcado_y_permite_volver_a_cerrar', functi
         ->and((int) $auditoria->user_id)->toBe((int) $usuario->id)
         ->and((string) $auditoria->context)->toContain('Se corrigio una venta del dia');
 
-    // VOLVER A CERRAR: se escribe OTRA fila de Z, y la anterior sigue.
+    // VOLVER A CERRAR: se escribe OTRA fila de Z, y la anterior sigue. Y el
+    // descuadre vuelve a exigir su MOTIVO.
     $this->actingAs($usuario)
-        ->postJson('/caja/dia/cerrar', ['closing_balance' => '110.0000'])
+        ->postJson('/caja/dia/cerrar', [
+            'closing_balance' => '110.0000',
+            'reason' => 'Diferencia de conteo justificada',
+        ])
         ->assertCreated();
 
     $filas = DB::table('cash_closes')
