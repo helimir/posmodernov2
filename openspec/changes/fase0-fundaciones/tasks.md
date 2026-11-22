@@ -700,10 +700,18 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   transaccion** que el cierre: si el snapshot falla, **el cierre falla**. Un dia cerrado **no se recalcula**.
   (d) El Z tiene **historial**: reabrir exige **motivo**, se audita y deja el Z anterior marcado; al
   volver a cerrar se escribe **otra** fila y la anterior **no se borra nunca**. Dep: 1.5, F2-11
-- [ ] **F2-11** **El arqueo con motivo y por denominacion.** El desglose por medio de pago existe,
-  pero el cajero cuenta **billetes y monedas**: falta el catalogo de denominaciones y el conteo
-  ("sobran 2 billetes de 50"). Y un descuadre **exige justificacion** por encima de un **umbral
-  configurable**: `cash_registers.note` existe y **nadie lo lee**. Dep: F2-10
+- [x] **F2-11** **El arqueo con motivo y por denominaciones.** El arqueo estaba a medias: hay un desglose por
+  medio de pago, pero el cajero cuenta **billetes y monedas**, y el sistema no tenia ni el **catalogo de
+  denominaciones** ni el conteo: lo unico que podia hacer era **teclear** la cifra. Y un descuadre **no
+  exigia justificacion** (`cash_registers.note` existe desde el principio y **nadie lo leia**). Ahora las
+  denominaciones son **DATO** (catalogo por tienda, sembrado; si la moneda no tiene conjunto **no se
+  siembra nada**), el desglose esperado reparte el importe en piezas **de mayor a menor** (asi cuenta un
+  cajero; **no es siempre el minimo numero de piezas**, y el criterio del cajero gana porque el arqueo
+  tiene que enseñarle la cuenta que va a hacer), y un importe **no formable** dice **que denominacion
+  falta**. **El cajero cuenta y el sistema suma**: esa es la diferencia de fondo con el legacy. Y un
+  descuadre por encima del umbral **no se cierra sin MOTIVO**, que queda en la caja **y en el Z sellado**.
+  Hay **dos caminos de cierre y solo uno por cierre** (por importe, o por conteo de piezas: el sistema
+  **calcula** el importe y **no** lo acepta aparte, porque son dos verdades incompatibles). Dep: F2-10
 - [ ] **F2-12** **El Z imprimible.** El Z en papel (HTML y ESC/POS), reutilizando el
   `ReceiptTemplate` y el `PrintPayload`. Dep: F2-10, F2-11
 - [ ] **F2-13** **La auditoria de negocio.** `audit_logs` existe y **un solo escritor** audita **una

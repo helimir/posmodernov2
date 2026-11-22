@@ -1664,6 +1664,20 @@ Y un detalle que explica el reparto: **con partida cero no se asienta** (el CHEC
 - La **auditoria de la reapertura** la escribe el controller con el `AuditWriter`, fuera de la transaccion del dominio, siguiendo la filosofia del repo (*"la auditoria no se traga el cambio"*). Si tiene que ser atomica, va dentro del servicio.
 - El **Z guarda los totales y los correlativos**, pero **no el detalle de ventas** (lineas, impuestos por linea): con muchas ventas, el Z no permite reconstruir la memoria de impresion.
 
+### F2-11 — El arqueo con motivo y por denominaciones (PR #139, `bceb586`)
+
+El arqueo estaba **a medias**: hay un desglose por medio de pago, pero el cajero cuenta **billetes y monedas**, y el sistema no tenia ni el **catalogo de denominaciones** ni el conteo: lo unico que podia hacer era **teclear** la cifra. Y un descuadre **no exigia justificacion** (`cash_registers.note` existe desde el principio y **nadie lo leia**). Un descuadre de -3,00 sin explicacion no es un arqueo: es un descuido.
+
+Ahora las denominaciones son **DATO** (un catalogo por tienda, sembrado; **si la moneda no tiene conjunto, no se siembra nada**, porque un catalogo equivocado es peor que uno vacio), el desglose esperado reparte el importe en piezas **de mayor a menor** (asi cuenta un cajero), y el cajero introduce **cuantas** de cada pieza: **el sistema las suma**. Esa es la diferencia de fondo con el legacy: **el cajero cuenta, no teclea**.
+
+**El desglose de mayor a menor NO es siempre el minimo numero de piezas** (el clasico 1-3-4-6 con un 5: para 8, el descendente da 6+1+1 y el minimo es 4+4). Gana el **criterio del cajero**, porque el arqueo tiene que enseñarle la cuenta que va a hacer. Y un importe que **no se puede formar** dice **que denominacion falta**.
+
+**Y un descuadre por encima del umbral NO se cierra sin MOTIVO**, que queda en la caja **y en el Z sellado** (el Z es el hecho). Hay **dos caminos de cierre y solo uno por cierre**: por importe, o por conteo de piezas (el sistema **calcula** el importe y **no** lo acepta aparte, porque son dos verdades incompatibles).
+
+### El punto pendiente de la unidad
+
+**El umbral NO es configurable por tienda.** `store_settings` (el esquema de la Fase 0) tiene 16 columnas —`timezone`, `base_color`, `char_per_line`…— y **ninguna** donde encaje un umbral de caja; anadirla cambiaria el esquema de la Fase 0. Queda **global** en `config/cash.php` (`difference_reason_threshold`, defecto `0.0100`), con la lectura ya preparada para resolver por tienda cuando el esquema lo admita.
+
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
@@ -1673,10 +1687,11 @@ Y un detalle que explica el reparto: **con partida cero no se asienta** (el CHEC
 - **El consumidor final sin identificativo** (el art. 8.6 pide cedula o pasaporte, y el mostrador no lo recoge).
 - `fiscal_series.assigned_by` es un dato **mas fino** que el canal para la regla del control.
 - **El limite del puerto 9100** del CHECK del esquema.
+- **Corregir una venta de un dia cerrado exige reabrir el dia**, y el flujo de la UI de ventas que lo pida **no existe**.
 
 ### Siguiente
 
-**F2-11**: el **arqueo con motivo y por denominacion**. El desglose por medio de pago existe, pero el cajero cuenta **billetes y monedas**: falta el catalogo de denominaciones y el conteo ("sobran 2 billetes de 50"), y un descuadre **exige justificacion** por encima de un **umbral configurable** (`cash_registers.note` existe y **nadie lo lee**).
+**F2-12**: el **Z imprimible**. El Z en papel (HTML y ESC/POS), reutilizando el `ReceiptTemplate` y el `PrintPayload` que ya existen. Es la pieza que hace el Z **salir de la pantalla**: hoy el cierre se ve en el navegador, pero un POS **imprime** su Z.
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 
