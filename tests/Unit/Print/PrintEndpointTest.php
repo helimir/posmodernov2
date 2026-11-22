@@ -8,7 +8,9 @@ use App\Print\PrintEndpoint;
  * REGLA que fija: *el endpoint dice donde se escriben los bytes, y solo se
  * admiten las dos formas que el esquema admite*.
  *
- *  - la IMPRESORA DE RED: `tcp://servidor:9100`, el puerto RAW del estandar;
+ *  - la IMPRESORA DE RED: `tcp://servidor:<puerto>`, con el puerto que tenga
+ *    la impresora (el 9100 es el RAW de facto del estandar, pero no lo es una
+ *    ley);
  *  - la IMPRESORA COMPARTIDA de Windows: `smb://servidor/impresora` o el
  *    recurso UNC `\\servidor\impresora`, que son la MISMA cola escrita de dos
  *    maneras.
@@ -27,6 +29,20 @@ test('test_un_endpoint_tcp_de_la_impresora_de_red_es_la_direccion_del_socket', f
         ->and($endpoint->esColaDeWindows())->toBeFalse()
         ->and($endpoint->direccionDeSocket())->toBe('tcp://192.168.1.50:9100')
         ->and($endpoint->host)->toBe('192.168.1.50');
+});
+
+/**
+ * El PUERTO es el que tenga la impresora: el 9100 es el RAW de facto, pero no
+ * una ley.
+ */
+test('test_el_puerto_de_la_impresora_de_red_es_el_que_tenga', function () {
+    foreach (['9100', '9105', '515', '631'] as $puerto) {
+        $endpoint = PrintEndpoint::deTexto('tcp://192.168.1.50:'.$puerto);
+
+        expect($endpoint->esSocket())->toBeTrue()
+            ->and($endpoint->puerto)->toBe((int) $puerto)
+            ->and($endpoint->direccionDeSocket())->toBe('tcp://192.168.1.50:'.$puerto);
+    }
 });
 
 test('test_un_endpoint_smb_se_convierte_en_la_ruta_unc_de_windows', function () {
@@ -61,8 +77,11 @@ test('test_un_endpoint_que_no_esta_en_la_lista_admitida_falla_con_un_mensaje_uti
     expect(fn () => PrintEndpoint::deTexto(null))
         ->toThrow(RuntimeException::class, 'no declara endpoint');
 
-    // 3. Una impresora de red en un puerto que no es el RAW.
-    expect(fn () => PrintEndpoint::deTexto('tcp://192.168.1.50:9101'))
+    // 3. Un puerto que NO es de TCP (ni el 0 ni uno de mas de 65535).
+    expect(fn () => PrintEndpoint::deTexto('tcp://192.168.1.50:0'))
+        ->toThrow(RuntimeException::class, 'no es un destino admitido');
+
+    expect(fn () => PrintEndpoint::deTexto('tcp://192.168.1.50:65536'))
         ->toThrow(RuntimeException::class, 'no es un destino admitido');
 
     // 4. Una cola de Windows sin recurso: el esquema la admite (todo lo que

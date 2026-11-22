@@ -11,11 +11,13 @@ use Tests\Concerns\WithoutWrappingTransaction;
  *
  * Regla que fija: el USB directo se descarta por requisito de Zadig.
  *
- * Un destino de impresión es SIEMPRE una impresora de red por TCP 9100 o una
- * impresora compartida de Windows. El acceso USB directo en Windows exige
- * instalar un driver con Zadig, que no es viable en un despliegue desatendido,
- * así que no es un destino: no existe como transporte y tampoco puede
- * colarse por el endpoint.
+ * Un destino de impresión es SIEMPRE una impresora de red por TCP (en el
+ * PUERTO que tenga la impresora) o una impresora compartida de Windows. El
+ * 9100 es el RAW de facto del estándar ESC/POS, pero no es una ley: hay
+ * impresoras de red en el 9105, en el 515 (LPD) o en el 631 (IPP). El acceso
+ * USB directo en Windows exige instalar un driver con Zadig, que no es viable
+ * en un despliegue desatendido, así que no es un destino: no existe como
+ * transporte y tampoco puede colarse por el endpoint.
  *
  * El transporte `browser` es el caso contrario: no tiene endpoint, porque
  * renderiza HTML/PDF desde el MISMO modelo de plantilla en vez de escribir
@@ -37,7 +39,7 @@ function codigo_de_impresora(string $prefijo = 'IMP'): string
     return $prefijo.'-'.strtoupper(substr(md5(uniqid('', true)), 0, 10));
 }
 
-test('test_un_destino_usb_directo_se_rechaza_y_exige_tcp_9100_o_impresora_compartida', function () {
+test('test_un_destino_usb_directo_se_rechaza_y_exige_tcp_o_impresora_compartida', function () {
     $printer = Printer::create([
         'code' => codigo_de_impresora(),
         'name' => 'Impresora de la tienda',
@@ -55,8 +57,8 @@ test('test_un_destino_usb_directo_se_rechaza_y_exige_tcp_9100_o_impresora_compar
     ]))->toThrow(QueryException::class);
 
     // 2. Un socket de servidor con un endpoint USB tampoco entra: lo rechaza
-    //    el CHECK del endpoint, que solo admite TCP 9100 o la impresora
-    //    compartida de Windows.
+    //    el CHECK del endpoint, que solo admite la impresora de RED (en el
+    //    puerto que tenga) o la impresora compartida de Windows.
     expect(fn () => DB::table('print_targets')->insert([
         'printer_id' => $printer->id,
         'store_id' => $store->id,
@@ -66,13 +68,24 @@ test('test_un_destino_usb_directo_se_rechaza_y_exige_tcp_9100_o_impresora_compar
         'printer_profile' => 'default',
     ]))->toThrow(QueryException::class);
 
-    // 3. La impresora de RED por TCP 9100 si se admite.
+    // 3. La impresora de RED si se admite, y en el PUERTO que tenga: el
+    //    9100 es el RAW de facto del estandar, pero el 9105, el 515 y el 631
+    //    son puertos de impresora de red tan reales como el 9100.
     $red = DB::table('print_targets')->insertGetId([
         'printer_id' => $printer->id,
         'store_id' => $store->id,
         'name' => 'Destino de red',
         'transport' => 'server_socket',
         'endpoint' => 'tcp://192.168.1.50:9100',
+        'printer_profile' => 'default',
+    ]);
+
+    $redEnOtroPuerto = DB::table('print_targets')->insertGetId([
+        'printer_id' => $printer->id,
+        'store_id' => $store->id,
+        'name' => 'Destino de red en el 9105',
+        'transport' => 'server_socket',
+        'endpoint' => 'tcp://192.168.1.50:9105',
         'printer_profile' => 'default',
     ]);
 
@@ -98,6 +111,7 @@ test('test_un_destino_usb_directo_se_rechaza_y_exige_tcp_9100_o_impresora_compar
     ]);
 
     expect($red)->toBeInt()
+        ->and($redEnOtroPuerto)->toBeInt()
         ->and($compartida)->toBeInt()
         ->and($navegador)->toBeInt();
 

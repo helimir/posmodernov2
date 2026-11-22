@@ -3,6 +3,7 @@
 namespace App\Domain\Accounting;
 
 use App\Support\Pos\PosAmount;
+use App\Support\Store\StoreThresholds;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use DateTimeImmutable;
@@ -42,7 +43,9 @@ use RuntimeException;
  *     `opening_balance` por ese importe, con la cuenta de efectivo de la
  *     tienda y la de capital, y en la MISMA transaccion que la apertura. Si el
  *     asiento falla, la caja NO queda abierta: una caja sin reflejo en el
- *     libro es una caja que no cuadra con nadie.
+ *     libro es una caja que no cuadra con nadie. Y UNA PARTIDA DE CERO NO SE
+ *     ASIENTA: sin asiento no hace falta la contrapartida, y por eso la
+ *     cuenta de capital solo es necesaria cuando la partida NO es cero.
  *  2. CERRAR SELLA EL Z. El cierre escribe el Z en la MISMA transaccion: si
  *     el snapshot falla, el cierre falla. No hay un dia cerrado sin Z.
  *  3. REABRIR ES UN DESHACER CON MOTIVO. Solo sobre una caja cerrada, con
@@ -74,7 +77,9 @@ final readonly class CashRegisterService
      *     efectivo de la tienda, con la de capital como contrapartida, y en la
      *     MISMA transaccion que la apertura. Una tienda sin plan de cuentas
      *     NO puede abrir la caja: una caja sin cuenta donde asentar no es una
-     *     caja.
+     *     caja. Y LA CUENTA DE CAPITAL SOLO HACE FALTA CON PARTIDA: con una
+     *     partida CERO no se asienta nada, y sin asiento no hace falta
+     *     contrapartida.
      *
      * @param  int  $storeId  Tienda que abre la caja.
      * @param  DateTimeImmutable  $businessDate  Fecha de negocio: un dato del llamante.
@@ -108,6 +113,17 @@ final readonly class CashRegisterService
         // Las CUENTAS del plan se resuelven ANTES de abrir: una tienda sin
         // cuenta donde asentar no abre caja.
         $cuentas = $this->cuentasDelPlan($storeId);
+
+        // EL CAPITAL SOLO HACE FALTA CON PARTIDA: una partida CERO no se
+        // asienta (el libro no admite lineas a cero), y sin asiento no hace
+        // falta contrapartida. Con partida DISTINTA DE CERO, si no hay cuenta
+        // de capital, la apertura falla con un mensaje util.
+        if (! BigDecimal::of($saldo)->isZero() && $cuentas['equity'] === null) {
+            throw new RuntimeException(
+                'Para asentar la partida hace falta una cuenta de capital: '
+                .'asigne el rol equity a una cuenta de tipo equity.'
+            );
+        }
 
         return $this->connection->transaction(function () use (
             $storeId,
@@ -145,7 +161,8 @@ final readonly class CashRegisterService
                 $businessDate,
                 (int) $id,
                 $saldo,
-                $cuentas,
+                $cuentas['cash'],
+                (string) $cuentas['equity'],
                 $actorId
             );
 
@@ -303,7 +320,7 @@ final readonly class CashRegisterService
             // EL MOTIVO: un descuadre por encima del umbral NO se cierra sin
             // explicacion. Aqui, dentro de la transaccion: si el motivo
             // falta, no se escribe NADA.
-            $this->exigeMotivo($descuadre, $razon);
+            $this->exigeMotivo($descuadre, $razon, $this->umbralDeMotivo($storeId));
 
             $afectadas = $this->connection->table('cash_registers')
                 ->where('id', $registerId)
@@ -352,8 +369,9 @@ final readonly class CashRegisterService
      *
      * REGLA que fija este metodo: *un descuadre es una EXCEPCION, y una
      * excepcion sin explicacion no es una excepcion*. El umbral sale de la
-     * configuracion (`config/cash.php`), y el defecto pide motivo para
-     * cualquier descuadre que no sea cero.
+     * ficha de la TIENDA si lo declara, y del GLOBAL (`config/cash.php`) si no
+     * lo declara: el defecto pide motivo para cualquier descuadre que no sea
+     * cero.
      *
      * Y UNA CAJA QUE CUADRA NUNCA PIDE MOTIVO: el descuadre de cero no es un
      * descuadre, y un umbral en cero no puede convertir un arqueo que cuadra
@@ -361,11 +379,12 @@ final readonly class CashRegisterService
      *
      * @param  string  $descuadre  El descuadre, con su signo. Texto decimal.
      * @param  string|null  $motivo  El motivo que se ha dado.
+     * @param  string  $umbral  El umbral que aplica, ya resuelto. Texto decimal.
      *
      * @throws RuntimeException Cuando el descuadre exige un motivo y no lo
      *                          hay.
      */
-    private function exigeMotivo(string $descuadre, ?string $motivo): void
+    private function exigeMotivo(string $descuadre, ?string $motivo, string $umbral): void
     {
         $magnitud = PosAmount::decimal($descuadre)->abs();
 
@@ -374,10 +393,10 @@ final readonly class CashRegisterService
             return;
         }
 
-        $umbral = PosAmount::decimal($this->umbralDeMotivo());
+        $limite = PosAmount::decimal($umbral);
 
         // Por DEBAJO del umbral: no hace falta motivo.
-        if ($magnitud->compareTo($umbral) < 0) {
+        if ($magnitud->compareTo($limite) < 0) {
             return;
         }
 
@@ -387,7 +406,7 @@ final readonly class CashRegisterService
 
         throw new RuntimeException(
             'El descuadre de la caja es de '.PosAmount::legible($magnitud->toScale(PosAmount::SCALE, RoundingMode::HALF_UP))
-            .' y supera el umbral de '.PosAmount::legible($this->umbralDeMotivo()).': '
+            .' y supera el umbral de '.PosAmount::legible($umbral).': '
             .'un descuadre por encima del umbral no se cierra sin un MOTIVO.'
         );
     }
@@ -395,21 +414,15 @@ final readonly class CashRegisterService
     /**
      * El UMBRAL a partir del cual un descuadre exige justificacion.
      *
-     * REGLA que fija este metodo: *el umbral es un PARAMETRO de operacion*,
-     * leido de la configuracion (`config/cash.php`), y no una columna: el
-     * esquema de la Fase 0 (`store_settings`) no tiene donde encajar un
-     * umbral de caja, y anadir una seria cambiar el esquema de la Fase 0 por
-     * una necesidad de la Fase 2.
-     *
-     * Cuando el esquema admita un umbral POR TIENDA, esta es la lectura que
-     * tiene que cambiar: el defecto se queda como el valor de la
-     * configuracion.
+     * REGLA que fija este metodo: *el umbral es de la TIENDA si la tienda lo
+     * declara, y del GLOBAL si no*. La ficha de la tienda manda sobre la
+     * configuracion (`config/cash.php`), y el global sigue siendo el
+     * defecto: una tienda que no declara umbral se comporta como hasta
+     * ahora.
      */
-    private function umbralDeMotivo(): string
+    private function umbralDeMotivo(int $storeId): string
     {
-        $umbral = config('cash.difference_reason_threshold', '0.0100');
-
-        return PosAmount::text($umbral);
+        return (new StoreThresholds($this->connection))->umbralDeDescuadre($storeId);
     }
 
     /**
@@ -541,18 +554,23 @@ final readonly class CashRegisterService
     }
 
     /**
-     * Las CUENTAS del plan que la caja necesita: la de efectivo y la de
-     * capital.
+     * Las CUENTAS del plan que la caja necesita: la de efectivo y, si la hay,
+     * la de capital.
      *
      * REGLA que fija este metodo: *el plan de cuentas es un DATO del negocio y
      * no hay un plan por defecto*. Si a la tienda le falta la cuenta donde
      * asentar el saldo de partida, la apertura falla con un mensaje util: una
      * caja sin cuenta donde asentar no es una caja.
      *
-     * @return array{cash: string, equity: string}
+     * Y EL CAPITAL ES OPCIONAL: la cuenta de capital es la CONTRAPARTIDA del
+     * saldo de partida, y solo hace falta cuando la partida es DISTINTA DE
+     * CERO (una partida cero no se asienta, y sin asiento no hace falta
+     * contrapartida). Por eso aqui NO se exige: se devuelve `null` si el plan
+     * no la tiene, y quien la necesita (la apertura con partida) lo dice.
      *
-     * @throws RuntimeException Cuando al plan le falta el rol de la caja o el
-     *                          del capital.
+     * @return array{cash: string, equity: string|null}
+     *
+     * @throws RuntimeException Cuando al plan le falta el rol de la caja.
      */
     private function cuentasDelPlan(int $storeId): array
     {
@@ -568,14 +586,7 @@ final readonly class CashRegisterService
             );
         }
 
-        if ($capital === '') {
-            throw new RuntimeException(
-                "La tienda {$storeId} no tiene cuenta de capital (el rol 'equity') en su plan de cuentas: "
-                .'el saldo de partida necesita su contrapartida en el libro.'
-            );
-        }
-
-        return ['cash' => $efectivo, 'equity' => $capital];
+        return ['cash' => $efectivo, 'equity' => $capital === '' ? null : $capital];
     }
 
     /**
@@ -587,16 +598,20 @@ final readonly class CashRegisterService
      * el importe del asiento es el del dato: si difieren, es un bug.
      *
      * Y UNA PARTIDA DE CERO NO SE ASIENTA: un asiento sin importe no es un
-     * asiento, y el libro no admite lineas a cero en los dos sentidos.
+     * asiento, y el libro no admite lineas a cero en los dos sentidos. Por eso
+     * la contrapartida (la cuenta de capital) solo hace falta cuando la
+     * partida NO es cero.
      *
-     * @param  array{cash: string, equity: string}  $cuentas
+     * @param  string  $efectivo  La cuenta de efectivo de la tienda.
+     * @param  string  $capital  La cuenta de capital: la contrapartida.
      */
     private function asientaLaPartida(
         int $storeId,
         DateTimeImmutable $businessDate,
         int $registerId,
         string $saldo,
-        array $cuentas,
+        string $efectivo,
+        string $capital,
         ?int $actorId = null
     ): void {
         if (BigDecimal::of($saldo)->isZero()) {
@@ -609,8 +624,8 @@ final readonly class CashRegisterService
             occurredAt: $this->momento(),
             businessDate: $businessDate,
             lines: [
-                ['account' => $cuentas['cash'], 'debit' => $saldo, 'credit' => '0'],
-                ['account' => $cuentas['equity'], 'debit' => '0', 'credit' => $saldo],
+                ['account' => $efectivo, 'debit' => $saldo, 'credit' => '0'],
+                ['account' => $capital, 'debit' => '0', 'credit' => $saldo],
             ],
             referenceType: 'cash_register',
             referenceId: $registerId,

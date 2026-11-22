@@ -5,6 +5,7 @@ namespace App\Domain\Checkout;
 use App\Domain\Accounting\LedgerWriter;
 use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Fiscal\ControlNumberGenerator;
+use App\Domain\Fiscal\FinalConsumerRule;
 use App\Domain\Fiscal\NumberSeries;
 use App\Domain\Fiscal\TaxRateResolver;
 use App\Domain\Inventory\LotConsumer;
@@ -15,6 +16,7 @@ use App\Domain\Tax\TaxDocumentResult;
 use App\Domain\Tax\TaxLineInput;
 use App\Models\FiscalProfile;
 use App\Models\PaymentMethod;
+use App\Support\Store\StoreThresholds;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Database\Connection;
@@ -79,7 +81,12 @@ use RuntimeException;
  *    deja en la cuenta por cobrar;
  *  - EL LIMITE DE CREDITO BLOQUEA la venta que dejaria al cliente por encima
  *    de su limite. La regla la cumple `CustomerBalanceService`, que es quien
- *    sabe cuanto debe el cliente.
+ *    sabe cuanto debe el cliente;
+ *  - EL CONSUMIDOR FINAL: una venta SIN CLIENTE que supera el UMBRAL DE LA
+ *    TIENDA no se cobra sin el documento de quien compra. El tipo del
+ *    documento lo DECLARA quien cobra: el sistema no lo deduce del formato.
+ *    La regla la cumple `FinalConsumerRule`, y se comprueba con el TOTAL ya
+ *    calculado.
  */
 final readonly class CheckoutService
 {
@@ -225,6 +232,25 @@ final readonly class CheckoutService
                 );
             }
 
+            // 5 ter. EL CONSUMIDOR FINAL. Una venta SIN CLIENTE que supera el
+            //        umbral de la tienda NO se cobra sin el documento de
+            //        quien compra: el comprobante fiscal necesita un
+            //        identificativo del receptor, y sin cliente el receptor es
+            //        el consumidor final.
+            //
+            //        La regla vive en el DOMINIO y se comprueba aqui, con el
+            //        TOTAL ya calculado: el total es un dato del motor, y una
+            //        segunda aritmetica seria una segunda verdad.
+            $documentoConsumidor = (new FinalConsumerRule(
+                $this->connection,
+                new StoreThresholds($this->connection),
+            ))->documento(
+                $input->storeId,
+                (string) $total,
+                $input->customerId,
+                $input->finalConsumerDocument,
+            );
+
             // 6. LA CABECERA. `fiscal_document_id` queda en `null`: lo cierra
             //    T2, la emision fiscal.
             $saleId = (int) $this->connection->table('sales')->insertGetId([
@@ -233,6 +259,12 @@ final readonly class CheckoutService
                 'invoice_no' => $invoiceNo,
                 'sale_date' => $input->businessDate->format('Y-m-d'),
                 'status' => $status,
+                // El DOCUMENTO DEL CONSUMIDOR FINAL viaja con la cabecera: la
+                // emision fiscal (T2) lo necesita para escribir el receptor,
+                // y el reintento de la emision lo tiene que seguir
+                // encontrando.
+                'final_consumer_document' => $documentoConsumidor?->document,
+                'final_consumer_document_kind' => $documentoConsumidor?->kind,
                 'created_by' => $input->actorId,
                 'created_at' => now(),
                 'updated_at' => now(),

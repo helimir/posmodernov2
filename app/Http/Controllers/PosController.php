@@ -9,6 +9,8 @@ use App\Domain\Checkout\CheckoutPaymentInput;
 use App\Domain\Checkout\CheckoutResult;
 use App\Domain\Checkout\CheckoutService;
 use App\Domain\Credit\CustomerBalanceService;
+use App\Domain\Fiscal\FinalConsumerDocument;
+use App\Domain\Fiscal\FinalConsumerRule;
 use App\Domain\Fiscal\FiscalIssuanceRunner;
 use App\Domain\Fiscal\ValueObjects\FiscalIssuanceOutcome;
 use App\Models\PaymentMethod;
@@ -18,6 +20,7 @@ use App\Support\Pos\PosAmount;
 use App\Support\Pos\PosBudget;
 use App\Support\Pos\PosCatalog;
 use App\Support\Pos\PosContext;
+use App\Support\Store\StoreThresholds;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Database\Connection;
@@ -302,6 +305,9 @@ class PosController extends Controller
             $providerKind = $context->providerKind();
             $lineas = $this->lineas($datos);
             $pagos = $this->pagos($datos);
+            // EL DOCUMENTO DEL CONSUMIDOR FINAL, tal como lo declara el
+            // llamante: el sistema no lo deduce del formato.
+            $consumidorFinal = $this->consumidorFinal($datos);
         } catch (RuntimeException $fallo) {
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
@@ -339,6 +345,7 @@ class PosController extends Controller
                 $lineas,
                 $pagos,
                 $customerId,
+                $consumidorFinal,
                 $actorId
             ): array {
                 // LA CAJA DEL DIA, antes de cobrar. Va DENTRO de la
@@ -357,6 +364,7 @@ class PosController extends Controller
                     accounts: $context->accounts(),
                     issuedAt: $context->issuedAt(),
                     businessDate: $context->businessDate(),
+                    finalConsumerDocument: $consumidorFinal,
                     actorId: $actorId,
                 ));
 
@@ -825,6 +833,11 @@ class PosController extends Controller
     {
         $reglas = [
             'customer_id' => ['nullable', 'integer', 'min:1'],
+            // El DOCUMENTO DEL CONSUMIDOR FINAL: el bloque solo se mira sin
+            // cliente, y el TIPO lo declara el llamante.
+            'final_consumer' => ['nullable', 'array'],
+            'final_consumer.document' => ['nullable', 'string', 'max:50'],
+            'final_consumer.kind' => ['nullable', 'string', 'max:20'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', 'min:1'],
             'lines.*.quantity' => ['required'],
@@ -883,6 +896,40 @@ class PosController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * El DOCUMENTO del CONSUMIDOR FINAL, tal como lo DECLARA el llamante.
+     *
+     * REGLA que fija este metodo: *el tipo del documento no se deduce, se
+     * declara*. El sistema comprueba que el tipo sea uno de los que admite el
+     * ESQUEMA, y no lo inventa: adivinar el tipo de un identificativo seria
+     * afirmar un dato que nadie ha verificado.
+     *
+     * Y EL BLOQUE SOLO TIENE SENTIDO SIN CLIENTE: con cliente, el receptor del
+     * comprobante es el cliente, y el documento del consumidor final no se
+     * pide (eso lo decide el dominio).
+     *
+     * @param  array<string, mixed>  $datos
+     */
+    private function consumidorFinal(array $datos): ?FinalConsumerDocument
+    {
+        $bloque = $datos['final_consumer'] ?? null;
+
+        if (! is_array($bloque)) {
+            return null;
+        }
+
+        $documento = $bloque['document'] ?? null;
+        $tipo = $bloque['kind'] ?? null;
+
+        return (new FinalConsumerRule(
+            $this->connection,
+            new StoreThresholds($this->connection),
+        ))->declarado(
+            $documento === null ? null : (string) $documento,
+            $tipo === null ? null : (string) $tipo,
+        );
     }
 
     /**

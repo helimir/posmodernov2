@@ -53,7 +53,7 @@ final class CanonicalTestNames
             'test_el_stock_en_cache_iguala_la_suma_de_lotes_y_no_se_sobrevende_bajo_concurrencia',
             'test_el_agente_recibe_bytes_ya_generados_y_no_interpreta_el_ticket',
             'test_el_agente_trae_trabajos_desde_la_lan_privada_y_la_tienda_se_resuelve_desde_el_agent_id',
-            'test_un_destino_usb_directo_se_rechaza_y_exige_tcp_9100_o_impresora_compartida',
+            'test_un_destino_usb_directo_se_rechaza_y_exige_tcp_o_impresora_compartida',
             'test_un_qr_sobre_un_perfil_sin_soporte_falla_en_el_servidor_antes_de_enviarlo',
             'test_reimprimir_crea_un_trabajo_nuevo_sin_consumir_correlativo_ni_alterar_el_documento',
             'test_un_lote_firmado_con_los_vectores_dorados_se_acepta_con_la_misma_respuesta',

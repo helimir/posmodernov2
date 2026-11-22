@@ -18,9 +18,10 @@ use RuntimeException;
  * LAS PARTES SON UN DATO, NO UN CALCULO: el emisor es la TIENDA (su nombre,
  * su domicilio y su inscripcion fiscal primaria) y el receptor es el CLIENTE
  * (su nombre, su documento y su domicilio). Si la venta no tiene cliente, el
- * receptor es el CONSUMIDOR FINAL, y su nombre es un TOKEN DEL PERFIL: si el
- * perfil no lo declara, no hay receptor, porque un nombre inventado es peor
- * que un hueco.
+ * receptor es el CONSUMIDOR FINAL: su nombre es un TOKEN DEL PERFIL, y su
+ * IDENTIFICATIVO (la cedula o el pasaporte) es el que DECLARO quien cobro. Si
+ * el perfil no declara el token, no hay receptor, porque un nombre inventado
+ * es peor que un hueco.
  *
  * Y EL HUECO SE VE: una tienda sin inscripcion fiscal emite un comprobante
  * sin identificativo fiscal, y eso es un dato que falta, no un dato que se
@@ -163,10 +164,21 @@ final readonly class FiscalDocumentParties
             ];
         }
 
-        // Sin cliente, el receptor es el CONSUMIDOR FINAL, y su nombre es un
-        // token del perfil. Sin token no hay receptor: un nombre inventado
-        // es peor que un hueco.
+        // Sin cliente, el receptor es el CONSUMIDOR FINAL: su NOMBRE es un
+        // token del perfil, y su IDENTIFICATIVO (la cedula o el pasaporte) es
+        // el que DECLARO quien cobro. El tipo NO se deduce del formato del
+        // documento: deducirlo seria adivinar.
+        $documento = $this->documentoDelConsumidorFinal($sale);
+
         $nombre = $this->token($document, self::TOKEN_CONSUMIDOR_FINAL);
+
+        // Sin token, el nombre del consumidor final NO se inventa: si hay
+        // documento, el propio documento es lo que se sabe de el, y se usa
+        // como nombre. Sin token y sin documento, no hay receptor: un nombre
+        // inventado es peor que un hueco.
+        if ($nombre === null) {
+            $nombre = $documento === null ? null : $documento['document'];
+        }
 
         if ($nombre === null) {
             return null;
@@ -174,10 +186,45 @@ final readonly class FiscalDocumentParties
 
         return [
             'name' => $nombre,
-            'fiscal_id' => null,
-            'fiscal_id_kind' => null,
+            'fiscal_id' => $documento === null ? null : $documento['document'],
+            'fiscal_id_kind' => $documento === null ? null : $documento['kind'],
             'address' => null,
         ];
+    }
+
+    /**
+     * El DOCUMENTO del consumidor final de la venta, tal como lo declaro
+     * quien cobro.
+     *
+     * Y EL TIPO LO DECLARA EL LLAMANTE: el documento y su tipo viajan en la
+     * cabecera de la venta (`final_consumer_document` y
+     * `final_consumer_document_kind`), y aqui se leen tal cual. El sistema no
+     * deduce el tipo del formato del documento, porque adivinar seria
+     * afirmar un dato que nadie ha verificado.
+     *
+     * @return array{document: string, kind: string}|null
+     */
+    private function documentoDelConsumidorFinal(object $sale): ?array
+    {
+        $documento = $sale->final_consumer_document ?? null;
+
+        if ($documento === null) {
+            return null;
+        }
+
+        $texto = trim((string) $documento);
+
+        if ($texto === '') {
+            return null;
+        }
+
+        $tipo = trim((string) ($sale->final_consumer_document_kind ?? ''));
+
+        if ($tipo === '') {
+            return null;
+        }
+
+        return ['document' => $texto, 'kind' => $tipo];
     }
 
     /**
@@ -196,7 +243,7 @@ final readonly class FiscalDocumentParties
             return null;
         }
 
-        $vocabulario = $this->vocabularioDeTipos();
+        $vocabulario = (new FiscalIdKinds($this->connection))->admitidos();
 
         if ($vocabulario === []) {
             return null;
@@ -213,48 +260,6 @@ final readonly class FiscalDocumentParties
         return in_array(self::TIPO_DESCONOCIDO, $vocabulario, true)
             ? self::TIPO_DESCONOCIDO
             : null;
-    }
-
-    /**
-     * El VOCABULARIO de los tipos de identificativo fiscal.
-     *
-     * Es el del ESQUEMA: la restriccion de la columna declara los tipos
-     * admitidos, y el codigo los PREGUNTA a la base de datos en vez de
-     * repetirlos. Repetirlos seria un literal de pais en el dominio, y el
-     * nombre de un tipo de identificativo fiscal ES un nombre de pais (el
-     * mismo identificativo se llama de una manera y de otra en cada pais).
-     *
-     * Si el esquema no declara su vocabulario (una tabla sin restriccion, o
-     * un esquema que cambia), no hay tipos: el hueco se ve y el tipo queda
-     * en `null`.
-     *
-     * @return list<string>
-     */
-    private function vocabularioDeTipos(): array
-    {
-        $definicion = $this->connection->selectOne(
-            <<<'SQL'
-                SELECT pg_get_constraintdef(oid) AS definicion
-                FROM pg_constraint
-                WHERE conrelid = 'fiscal_document_parties'::regclass
-                  AND contype = 'c'
-                  AND pg_get_constraintdef(oid) LIKE '%fiscal_id_kind%'
-            SQL
-        );
-
-        if ($definicion === null) {
-            return [];
-        }
-
-        // La definicion de la restriccion trae el ARRAY de los valores
-        // admitidos: de ahi se leen.
-        if (preg_match('/ARRAY\[([^\]]*)\]/', (string) $definicion->definicion, $coincidencia) !== 1) {
-            return [];
-        }
-
-        preg_match_all("/'([^']*)'/", $coincidencia[1], $valores);
-
-        return array_values(array_unique($valores[1]));
     }
 
     /**

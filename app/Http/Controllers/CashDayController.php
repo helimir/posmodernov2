@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\Audit\AuditWriter;
 use App\Support\Pos\PosAmount;
 use App\Support\Pos\PosContext;
+use App\Support\Store\StoreThresholds;
 use DateTimeImmutable;
 use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
@@ -512,7 +513,10 @@ class CashDayController extends Controller
             'expected_total' => $desglose['total'],
             'counted' => $conteo,
             'differences' => $diferencias,
-            'threshold' => PosAmount::text(config('cash.difference_reason_threshold', '0.0100')),
+            // El UMBRAL que APLICA a esta tienda: el que ella declara, o el
+            // global si no declara ninguno. La pantalla ensena el mismo
+            // numero que aplica el cierre.
+            'threshold' => (new StoreThresholds($this->connection))->umbralDeDescuadre($storeId),
         ];
     }
 

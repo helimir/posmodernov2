@@ -11,15 +11,16 @@ use RuntimeException;
  * POR QUE EXISTE, Y POR QUE ESCUCHA EN EL PUERTO 9100:
  *
  * El destino de impresion declara su endpoint, y el CHECK del esquema
- * (`print_targets_endpoint_admitted`) solo admite `tcp://servidor:9100`, la
+ * (`print_targets_endpoint_admitted`) admite `tcp://servidor:<puerto>`, la
  * impresora compartida de Windows o un recurso UNC. El puerto de la
- * impresora de red es el 9100: es el puerto RAW del estandar, y el esquema lo
- * fija. Por eso el socket de la prueba escucha en ESE puerto: si escuchara en
- * otro, el destino que el esquema admite no podria apuntar a el.
+ * impresora de red es el que tenga la impresora: el 9100 es el RAW de facto
+ * del estandar ESC/POS, pero no lo es una ley. Por eso el socket de la
+ * prueba escucha en ESE puerto, que es el que el estandar usa de hecho: si
+ * escuchara en otro, la prueba apuntaria a un destino que ninguna
+ * instalacion real tiene.
  *
- * Y POR QUE NO ES UN PUERTO CUALQUIERA: el puerto lo declara el ESQUEMA, que
- * es la regla del dominio. La prueba no inventa un destino que el esquema no
- * admite, porque ese destino no existiria en una instalacion real.
+ * Y POR QUE SIGUE SIENDO UN PUERTO FIJO: el socket de prueba es UNO, y dos
+ * pruebas de impresion a la vez no pueden escuchar en el mismo puerto.
  *
  * QUE HACE:
  *
@@ -75,7 +76,7 @@ final class PrintSocketServer
         if ($socket === false) {
             throw new RuntimeException(
                 "No se pudo abrir el socket de prueba en {$host}:{$port}: ".($errstr !== '' ? $errstr : "error {$errno}").'. '
-                .'El puerto '.self::PUERTO_RAW.' es el que admite el esquema de destinos (tcp://servidor:9100): '
+                .'El puerto '.self::PUERTO_RAW.' es el RAW de facto del estandar ESC/POS: '
                 .'si esta ocupado, libralo y vuelve a lanzar la prueba.'
             );
         }

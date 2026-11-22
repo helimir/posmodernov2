@@ -10,12 +10,19 @@ use RuntimeException;
  * REGLA que fija esta clase: *el endpoint dice donde se escribe, y sólo se
  * admiten las dos formas que el esquema admite*.
  *
- *  - la IMPRESORA DE RED: `tcp://servidor:9100`. El puerto es el RAW del
- *    estándar, y el CHECK del esquema (`print_targets_endpoint_admitted`) lo
- *    fija: un destino con otro puerto no es un destino.
+ *  - la IMPRESORA DE RED: `tcp://servidor:<puerto>`. El 9100 es el RAW del
+ *    estándar ESC/POS de facto, pero NO es una ley: hay impresoras de red en
+ *    el 9105, en el 515 (LPD) o en el 631 (IPP), y un POS que no puede
+ *    configurar su impresora es un POS que se queda sin ticket. El PUERTO es
+ *    el que tenga, siempre que sea uno de TCP (de 1 a 65535);
  *  - la IMPRESORA COMPARTIDA de WINDOWS: `smb://servidor/impresora` o el
  *    recurso UNC `\\servidor\impresora`. Son la MISMA cola escrita de dos
  *    maneras, y la regla dice como se quita el esquema.
+ *
+ * Y LO QUE NO SE ADMITE: el USB DIRECTO (en Windows exige Zadig) y el
+ * esquema `file://` (un destino no es un fichero local). El USB ya lo rechaza
+ * el esquema; esta clase es la segunda puerta, la que no depende de la base
+ * de datos.
  *
  * Y LA CONVERSION ES EXPLICITA, no una heuristica: el `endpoint` guarda el
  * esquema, y el escritor necesita la RUTA de Windows. La conversion va de
@@ -23,9 +30,7 @@ use RuntimeException;
  * ruta de Windows.
  *
  * Y UN ENDPOINT QUE NO ESTA EN LA LISTA ADMITIDA NO SE ESCRIBE A CIEGAS:
- * falla con un mensaje que dice QUE formas se admiten. El USB directo no es
- * un destino (exige Zadig), y el esquema ya lo rechaza; esta clase es la
- * segunda puerta, la que no depende de la base de datos.
+ * falla con un mensaje que dice QUE formas se admiten.
  */
 final readonly class PrintEndpoint
 {
@@ -40,9 +45,14 @@ final readonly class PrintEndpoint
     public const FORMA_COLA = 'cola';
 
     /**
-     * El puerto RAW de las impresoras de red: el que admite el esquema.
+     * El puerto MINIMO de un socket TCP.
      */
-    public const PUERTO_RAW = 9100;
+    public const PUERTO_MINIMO = 1;
+
+    /**
+     * El puerto MAXIMO de un socket TCP.
+     */
+    public const PUERTO_MAXIMO = 65535;
 
     /**
      * @param  string  $forma  `socket` o `cola`.
@@ -72,11 +82,15 @@ final readonly class PrintEndpoint
             );
         }
 
-        // 1. LA IMPRESORA DE RED: tcp://servidor:9100.
+        // 1. LA IMPRESORA DE RED: tcp://servidor:<puerto>.
+        //
+        // El PUERTO es el que tenga la impresora, siempre que sea uno de TCP:
+        // el 9100 es el RAW de facto del estandar ESC/POS, pero no es una ley,
+        // y un POS que no puede configurar su impresora se queda sin ticket.
         if (preg_match('/^tcp:\/\/([A-Za-z0-9._-]+):(\d{1,5})$/', $endpoint, $coincidencia) === 1) {
             $puerto = (int) $coincidencia[2];
 
-            if ($puerto !== self::PUERTO_RAW) {
+            if ($puerto < self::PUERTO_MINIMO || $puerto > self::PUERTO_MAXIMO) {
                 throw new RuntimeException(self::noAdmitido($endpoint));
             }
 
@@ -151,10 +165,15 @@ final readonly class PrintEndpoint
 
     /**
      * Las FORMAS de endpoint que se admiten, para los mensajes.
+     *
+     * Y EL PUERTO NO SE ANUNCIA COMO SI FUERA UNO SOLO: el 9100 es el RAW de
+     * facto del estandar ESC/POS, pero el destino admite el que tenga la
+     * impresora, y un mensaje que anuncia solo el 9100 hace creer que las
+     * demas impresoras de red no valen.
      */
     public static function formas(): string
     {
-        return 'tcp://servidor:'.self::PUERTO_RAW.' (la impresora de red), '
+        return 'tcp://servidor:<puerto> (la impresora de red, con el puerto que tenga), '
             .'smb://servidor/impresora o \\\\servidor\\impresora (la impresora compartida de Windows)';
     }
 
@@ -231,7 +250,7 @@ final readonly class PrintEndpoint
     private static function noAdmitido(string $endpoint): string
     {
         return "El endpoint «{$endpoint}» no es un destino admitido: los transportes «lan_agent» y "
-            .'«server_socket» escriben en la impresora de red (tcp://servidor:'.self::PUERTO_RAW.') '
+            .'«server_socket» escriben en la impresora de red (tcp://servidor:<puerto>) '
             .'o en la impresora compartida de Windows (smb://servidor/impresora o '
             .'\\\\servidor\\impresora). El transporte «browser» no declara endpoint: el navegador es el destino.';
     }

@@ -137,6 +137,12 @@ enum Permission: string
     /** Cambiar los permisos o el ambito de tiendas de un rol. */
     case RoleUpdate = 'role.update';
 
+    /** Ver la configuracion de la tienda. */
+    case StoreRead = 'store.read';
+
+    /** Cambiar la configuracion de la tienda. */
+    case StoreUpdate = 'store.update';
+
     /**
      * El MODULO del permiso: la parte del slug antes del punto.
      *
@@ -207,6 +213,8 @@ enum Permission: string
             self::PrintingTest => 'Test the connection of a print destination',
             self::PrintingReprint => 'Reprint a ticket that already went out',
             self::PrintingRetry => 'Retry a print job that failed',
+            self::StoreRead => 'View the store settings',
+            self::StoreUpdate => 'Change the store settings',
         };
     }
 
