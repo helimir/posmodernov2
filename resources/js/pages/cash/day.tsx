@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { postJson } from '@/lib/api';
 import { usePermissions } from '@/lib/permissions';
-import { type PosCurrency, formatAmount } from '@/lib/pos';
+import { type PosCurrency, addAmount, compareAmounts, formatAmount, formatPlainAmount, multiplyAmount, subtractAmount } from '@/lib/pos';
 import { useState, type FormEvent } from 'react';
 
 /**
@@ -57,6 +57,56 @@ export interface CashDayPayment {
 }
 
 /**
+ * A DENOMINATION of the store: the piece the cashier counts.
+ *
+ * `kind` comes from the catalog in the language of the DATA (`billete` or
+ * `moneda`); the screen speaks the language of the cashier.
+ */
+export interface CashDayDenomination {
+    id: number;
+    value: string;
+    kind: string;
+}
+
+/**
+ * The EXPECTED piece count of a denomination: how many pieces of it SHOULD
+ * be in the drawer.
+ */
+export interface CashDayExpectedPiece extends CashDayDenomination {
+    count: number;
+}
+
+/**
+ * The DIFFERENCE of one denomination: how many pieces are extra or missing.
+ */
+export interface CashDayCountDifference {
+    id: number;
+    value: string;
+    kind: string;
+    expected: number;
+    counted: number;
+    delta: number;
+}
+
+/**
+ * The COUNT of the day: the catalog of the store, the expected breakdown and
+ * what the cashier counted.
+ *
+ * `expected_error` says what is MISSING when the amount cannot be broken
+ * down with the catalog of the store: a count that cannot be broken down is
+ * a count that has to be said.
+ */
+export interface CashDayCount {
+    denominations: CashDayDenomination[];
+    expected: CashDayExpectedPiece[];
+    expected_error: string | null;
+    expected_total: string;
+    counted: Record<string, number>;
+    differences: CashDayCountDifference[];
+    threshold: string;
+}
+
+/**
  * The state of the screen: there is no register, it is open, or it is
  * closed. Three states, one screen.
  */
@@ -89,6 +139,17 @@ export interface CashDayZ {
     first_control_number: string | null;
     last_control_number: string | null;
     payments: CashDayPayment[];
+    /**
+     * The REASON of the closing: why the day was closed the way it was. It
+     * is there because a difference over the threshold is not closed without
+     * an explanation.
+     */
+    close_reason: string | null;
+    /**
+     * The COUNTED PIECES: how many pieces of each denomination the cashier
+     * counted. It is empty when the day was closed by amount.
+     */
+    counted_pieces: Record<string, number>;
     reopened_at: string | null;
     reopened_by: CashDayActor | null;
     reopen_reason: string | null;
@@ -127,8 +188,33 @@ export interface CashDayProps {
     difference: string | null;
     payments: CashDayPayment[];
     cash_total: string;
+    count: CashDayCount;
     z: CashDayZ | null;
     z_history: CashDayZHistoryEntry[];
+}
+
+/**
+ * The KIND of a piece, in the language of the screen.
+ *
+ * The catalog stores it in the language of the data (`billete`, `moneda`);
+ * the cashier reads `Bill` and `Coin`.
+ */
+function kindLabel(kind: string): string {
+    return kind === 'moneda' ? 'Coin' : 'Bill';
+}
+
+/**
+ * The DIFFERENCE of a piece, in words: "2 bills of 50 extra".
+ */
+function differenceLabel(difference: CashDayCountDifference, currency: PosCurrency): string {
+    const label = kindLabel(difference.kind);
+    const pieces = Math.abs(difference.delta);
+    const piece = `${pieces} ${pieces === 1 ? label.toLowerCase() : `${label.toLowerCase()}s`} of ${formatPlainAmount(
+        difference.value,
+        currency,
+    )}`;
+
+    return difference.delta > 0 ? `${piece} extra` : `${piece} missing`;
 }
 
 /**
@@ -169,12 +255,15 @@ export default function CashDay({
     difference,
     payments,
     cash_total,
+    count,
     z,
     z_history,
 }: CashDayProps) {
     const { can } = usePermissions();
     const [openingBalance, setOpeningBalance] = useState('0.0000');
     const [countedBalance, setCountedBalance] = useState('');
+    const [piezas, setPiezas] = useState<Record<string, number>>({});
+    const [motivo, setMotivo] = useState('');
     const [reopenReason, setReopenReason] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -200,7 +289,12 @@ export default function CashDay({
     };
 
     /**
-     * The CLOSING: the register of the day, with the money counted by hand.
+     * The CLOSING: the register of the day, with the money counted.
+     *
+     * THE COUNT HAS ONE TRUTH: when the store has a catalog of
+     * denominations, the cashier counts PIECES and the system adds them up.
+     * The amount is NOT sent along: the counted pieces and a typed amount are
+     * two truths, and the closing only has one.
      */
     const cerrar = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -209,7 +303,11 @@ export default function CashDay({
         setError(null);
 
         try {
-            await postJson('/caja/dia/cerrar', { closing_balance: countedBalance });
+            if (hayCatalogo) {
+                await postJson('/caja/dia/cerrar', { counted_pieces: conteoEnvio, reason: motivo });
+            } else {
+                await postJson('/caja/dia/cerrar', { closing_balance: countedBalance, reason: motivo });
+            }
 
             router.reload();
         } catch (fallo) {
@@ -218,6 +316,81 @@ export default function CashDay({
             setSaving(false);
         }
     };
+
+    /**
+     * The COUNT of a piece: what the cashier counted.
+     */
+    const contar = (id: number, value: string) => {
+        const numero = Number.parseInt(value, 10);
+
+        setPiezas((actual) => ({
+            ...actual,
+            [String(id)]: Number.isNaN(numero) || numero < 0 ? 0 : numero,
+        }));
+    };
+
+    /**
+     * The CATALOG of the store: without it there are no pieces to count, and
+     * the closing is by amount.
+     */
+    const hayCatalogo = count.denominations.length > 0;
+
+    /**
+     * The pieces COUNTED: the ones the cashier typed while the register is
+     * open, and the ones the sealed Z kept when the day is closed.
+     */
+    const countedPieces = state === 'closed' ? count.counted : piezas;
+
+    /**
+     * The EXPECTED count of each denomination: how many pieces SHOULD be in
+     * the drawer.
+     */
+    const expectedPieces: Record<string, number> = {};
+
+    for (const piece of count.expected) {
+        expectedPieces[String(piece.id)] = piece.count;
+    }
+
+    /**
+     * The TOTAL COUNTED: the system adds up the pieces. When the day was
+     * closed by amount, the Z keeps the amount instead.
+     */
+    const sumaPiezas = count.denominations.reduce(
+        (total, denomination) => addAmount(total, multiplyAmount(denomination.value, String(countedPieces[String(denomination.id)] ?? 0))),
+        '0.0000',
+    );
+
+    const hayConteo = Object.keys(countedPieces).length > 0;
+
+    const totalContado = state === 'closed' && !hayConteo ? (counted_balance ?? '0.0000') : sumaPiezas;
+
+    /**
+     * The DIFFERENCE of the count: the counted total against the expected.
+     */
+    const diferencia = subtractAmount(totalContado, expected_balance);
+
+    const diferenciaAbsoluta = diferencia.startsWith('-') ? diferencia.slice(1) : diferencia;
+
+    /**
+     * Does the difference need a REASON? A difference over the threshold is
+     * an EXCEPTION, and an exception without an explanation is not an
+     * exception.
+     */
+    const exigeMotivo = compareAmounts(diferencia, '0.0000') !== 0 && compareAmounts(diferenciaAbsoluta, count.threshold) >= 0;
+
+    /**
+     * The count that travels to the server: only the pieces that were
+     * counted.
+     */
+    const conteoEnvio: Record<string, number> = {};
+
+    for (const denomination of count.denominations) {
+        const pieces = countedPieces[String(denomination.id)] ?? 0;
+
+        if (pieces > 0) {
+            conteoEnvio[String(denomination.id)] = pieces;
+        }
+    }
 
     /**
      * The REOPENING: undoing a closing needs a REASON, and the previous Z
@@ -448,6 +621,13 @@ export default function CashDay({
                                     <dt className="text-muted-foreground text-xs">Signature</dt>
                                     <dd className="font-mono text-xs break-all">{z.content_hash}</dd>
                                 </div>
+
+                                {z.close_reason !== null && (
+                                    <div className="space-y-1 sm:col-span-2">
+                                        <dt className="text-muted-foreground text-xs">Reason</dt>
+                                        <dd className="font-medium">{z.close_reason}</dd>
+                                    </div>
+                                )}
                             </dl>
 
                             {z.payments.length > 0 && (
@@ -582,6 +762,118 @@ export default function CashDay({
                     </Card>
                 )}
 
+                {hayCatalogo && (
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between gap-3">
+                            <CardTitle className="text-base">Cash count by denomination</CardTitle>
+                            <Badge variant="outline">{count.denominations.length} denominations</Badge>
+                        </CardHeader>
+
+                        <CardContent className="space-y-4">
+                            {count.expected_error !== null && (
+                                <p className="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-sm">
+                                    {count.expected_error}
+                                </p>
+                            )}
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b">
+                                            <th className="px-2 py-2 text-left font-medium">Denomination</th>
+                                            <th className="px-2 py-2 text-left font-medium">Kind</th>
+                                            <th className="px-2 py-2 text-right font-medium">Expected</th>
+                                            <th className="px-2 py-2 text-right font-medium">Counted</th>
+                                            <th className="px-2 py-2 text-right font-medium">Difference</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        {count.denominations.map((denomination) => {
+                                            const esperado = expectedPieces[String(denomination.id)] ?? 0;
+                                            const contado = countedPieces[String(denomination.id)] ?? 0;
+                                            const delta = contado - esperado;
+
+                                            return (
+                                                <tr key={denomination.id} className="border-b last:border-0">
+                                                    <td className="px-2 py-2 tabular-nums">
+                                                        {formatPlainAmount(denomination.value, currency)}
+                                                    </td>
+
+                                                    <td className="px-2 py-2">{kindLabel(denomination.kind)}</td>
+
+                                                    <td className="px-2 py-2 text-right tabular-nums">{esperado}</td>
+
+                                                    <td className="px-2 py-2 text-right">
+                                                        {state === 'open' ? (
+                                                            <Input
+                                                                id={`pieza-${denomination.id}`}
+                                                                type="number"
+                                                                min={0}
+                                                                step={1}
+                                                                value={contado === 0 ? '' : String(contado)}
+                                                                onChange={(event) => contar(denomination.id, event.target.value)}
+                                                                className="w-24 text-right"
+                                                                aria-label={`Counted pieces of ${formatPlainAmount(denomination.value, currency)}`}
+                                                            />
+                                                        ) : hayConteo ? (
+                                                            <span className="tabular-nums">{contado}</span>
+                                                        ) : (
+                                                            <span className="text-muted-foreground">—</span>
+                                                        )}
+                                                    </td>
+
+                                                    <td className="px-2 py-2 text-right tabular-nums">
+                                                        {state === 'open' || hayConteo ? (
+                                                            delta === 0 ? (
+                                                                <span className="text-muted-foreground">0</span>
+                                                            ) : (
+                                                                <span className={delta > 0 ? 'text-destructive' : 'text-destructive'}>
+                                                                    {delta > 0 ? `+${delta}` : delta}
+                                                                </span>
+                                                            )
+                                                        ) : (
+                                                            <span className="text-muted-foreground">—</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+
+                                    <tfoot>
+                                        <tr className="border-t">
+                                            <td className="px-2 py-2 font-medium" colSpan={2}>
+                                                Total amount
+                                            </td>
+
+                                            <td className="px-2 py-2 text-right font-semibold tabular-nums">
+                                                {formatAmount(count.expected_total, currency)}
+                                            </td>
+
+                                            <td className="px-2 py-2 text-right font-semibold tabular-nums">
+                                                {formatAmount(totalContado, currency)}
+                                            </td>
+
+                                            <td className="px-2 py-2 text-right font-semibold tabular-nums">
+                                                {formatAmount(diferencia, currency)}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            {count.differences.length > 0 && (
+                                <ul className="text-muted-foreground space-y-1 text-sm">
+                                    {count.differences.map((piece) => (
+                                        <li key={piece.id}>{differenceLabel(piece, currency)}</li>
+                                    ))}
+                                </ul>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
                 {state === 'open' && (
                     <Card>
                         <CardHeader>
@@ -590,20 +882,48 @@ export default function CashDay({
 
                         <CardContent>
                             <form onSubmit={cerrar} className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="closing_balance">Counted balance</Label>
-                                    <Input
-                                        id="closing_balance"
-                                        value={countedBalance}
-                                        onChange={(event) => setCountedBalance(event.target.value)}
-                                        inputMode="decimal"
-                                        placeholder={expected_balance}
-                                        required
-                                    />
-                                    <p className="text-muted-foreground text-xs">
-                                        The money counted by hand. Expected: {formatAmount(expected_balance, currency)}.
-                                    </p>
-                                </div>
+                                {hayCatalogo ? (
+                                    <div className="space-y-1.5">
+                                        <Label>Counted total</Label>
+                                        <p className="text-xl font-semibold tabular-nums">{formatAmount(totalContado, currency)}</p>
+                                        <p className="text-muted-foreground text-xs">
+                                            The system adds up the pieces you counted. Expected:{' '}
+                                            {formatAmount(expected_balance, currency)}.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="closing_balance">Counted balance</Label>
+                                        <Input
+                                            id="closing_balance"
+                                            value={countedBalance}
+                                            onChange={(event) => setCountedBalance(event.target.value)}
+                                            inputMode="decimal"
+                                            placeholder={expected_balance}
+                                            required
+                                        />
+                                        <p className="text-muted-foreground text-xs">
+                                            The money counted by hand. Expected: {formatAmount(expected_balance, currency)}.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {exigeMotivo && (
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="close_reason">Reason</Label>
+                                        <Input
+                                            id="close_reason"
+                                            value={motivo}
+                                            onChange={(event) => setMotivo(event.target.value)}
+                                            placeholder="Why is the register off?"
+                                            required
+                                        />
+                                        <p className="text-muted-foreground text-xs">
+                                            The difference is {formatAmount(diferencia, currency)}: a difference over the threshold
+                                            has to be explained.
+                                        </p>
+                                    </div>
+                                )}
 
                                 {can('cash_day.close') && (
                                     <Button type="submit" disabled={saving}>

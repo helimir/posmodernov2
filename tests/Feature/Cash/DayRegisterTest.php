@@ -339,9 +339,13 @@ test('test_el_cierre_guarda_el_saldo_contado_y_calcula_el_descuadre', function (
         ->postJson('/caja/cobrar', caja_dia_pedido($escenario))
         ->assertCreated();
 
-    // El esperado son 158: se cuentan 160 y sobran dos.
+    // El esperado son 158: se cuentan 160 y sobran dos. Un DESCUADRE por
+    // encima del umbral exige MOTIVO: el cierre lo dice.
     $this->actingAs($usuario)
-        ->postJson('/caja/dia/cerrar', ['closing_balance' => '160.0000'])
+        ->postJson('/caja/dia/cerrar', [
+            'closing_balance' => '160.0000',
+            'reason' => 'Sobran dos unidades en el conteo',
+        ])
         ->assertCreated()
         ->assertJsonPath('status', 'closed')
         ->assertJsonPath('expected_balance', '158.0000')
@@ -373,9 +377,14 @@ test('test_la_pagina_de_la_caja_del_dia_muestra_el_resumen_del_dia_cuando_esta_c
         ->postJson('/caja/cobrar', caja_dia_pedido($escenario))
         ->assertCreated();
 
-    // Se cuenta de mas: el descuadre lo dice, con su signo.
+    // Se cuenta de mas: el descuadre lo dice, con su signo. Y el motivo es
+    // OBLIGATORIO: un descuadre por encima del umbral no se cierra sin
+    // explicacion.
     $this->actingAs($usuario)
-        ->postJson('/caja/dia/cerrar', ['closing_balance' => '155.0000'])
+        ->postJson('/caja/dia/cerrar', [
+            'closing_balance' => '155.0000',
+            'reason' => 'Faltan tres unidades en el conteo',
+        ])
         ->assertCreated();
 
     $this->actingAs($usuario)
@@ -409,7 +418,10 @@ test('test_cerrar_dos_veces_la_caja_del_dia_falla_con_422', function () {
         ->assertCreated();
 
     $this->actingAs($usuario)
-        ->postJson('/caja/dia/cerrar', ['closing_balance' => '158.0000'])
+        ->postJson('/caja/dia/cerrar', [
+            'closing_balance' => '158.0000',
+            'reason' => 'Diferencia de conteo justificada',
+        ])
         ->assertCreated();
 
     $this->actingAs($usuario)

@@ -38,11 +38,21 @@ final readonly class CashClose
      * cierre*. Si el snapshot falla, el cierre falla: no hay un dia cerrado
      * sin Z.
      *
+     * Y EL Z GUARDA POR QUE se cerro asi (`$motivo`) y COMO se conto
+     * (`$piezas`): un descuadre por encima del umbral no se cierra sin
+     * explicacion, y una explicacion que no queda con el cierre no explica
+     * nada.
+     *
      * @param  array<string, mixed>  $contenido  El contenido del Z: las
      *                                           cifras, los correlativos y
      *                                           el desglose por medio de
      *                                           pago.
      * @param  int|null  $actorId  Quien cerro.
+     * @param  string|null  $motivo  Por que se cerro asi. `null` cuando el
+     *                               descuadre no lo exigia.
+     * @param  array<int, int>|null  $piezas  Las piezas que el cajero conto,
+     *                                        por id de denominacion. `null`
+     *                                        cuando el cierre fue por importe.
      * @return int El id de la fila del Z.
      */
     public function seal(
@@ -51,7 +61,15 @@ final readonly class CashClose
         int $registerId,
         array $contenido,
         ?int $actorId = null,
+        ?string $motivo = null,
+        ?array $piezas = null,
     ): int {
+        $razon = $motivo === null ? null : trim($motivo);
+        $razon = $razon === '' ? null : $razon;
+
+        $contenido['close_reason'] = $razon;
+        $contenido['counted_pieces'] = $piezas === null ? null : $piezas;
+
         $canonico = self::canonico($contenido);
 
         return (int) $this->connection->table('cash_closes')->insertGetId([
@@ -62,6 +80,15 @@ final readonly class CashClose
             'expected_balance' => $canonico['expected_balance'],
             'counted_balance' => $canonico['counted_balance'],
             'difference' => $canonico['difference'],
+            // EL MOTIVO: por que se cerro asi.
+            'close_reason' => $razon,
+            // El CONTEO: las piezas que el cajero conto.
+            'counted_pieces' => $piezas === null
+                ? null
+                : json_encode(
+                    self::piezasCanonicas($piezas),
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                ),
             'subtotal' => $canonico['subtotal'],
             'tax_total' => $canonico['tax_total'],
             'grand_total' => $canonico['grand_total'],
@@ -154,7 +181,7 @@ final readonly class CashClose
      */
     public static function verify(object $fila): bool
     {
-        $canonico = self::canonico([
+        $contenido = [
             'business_date' => $fila->business_date,
             'opening_balance' => $fila->opening_balance,
             'expected_balance' => $fila->expected_balance,
@@ -169,7 +196,25 @@ final readonly class CashClose
             'first_control_number' => $fila->first_control_number,
             'last_control_number' => $fila->last_control_number,
             'payments' => self::pagosDeLaFila($fila),
-        ]);
+        ];
+
+        // EL MOTIVO y el CONTEO son OPCIONALES en la forma canonica: un Z
+        // sellado antes de que existieran no los tiene, y su firma se
+        // calculo sin ellos. Por eso solo se anaden cuando los hay: un Z
+        // viejo sigue cuadrando, y uno nuevo los cubre.
+        $motivo = $fila->close_reason ?? null;
+
+        if ($motivo !== null) {
+            $contenido['close_reason'] = $motivo;
+        }
+
+        $piezas = $fila->counted_pieces ?? null;
+
+        if ($piezas !== null) {
+            $contenido['counted_pieces'] = $piezas;
+        }
+
+        $canonico = self::canonico($contenido);
 
         return hash_equals((string) $fila->content_hash, self::hash($canonico));
     }
@@ -188,7 +233,7 @@ final readonly class CashClose
      */
     public static function canonico(array $contenido): array
     {
-        return [
+        $canonico = [
             'business_date' => (string) ($contenido['business_date'] ?? ''),
             'opening_balance' => PosAmount::text($contenido['opening_balance'] ?? '0'),
             'expected_balance' => PosAmount::text($contenido['expected_balance'] ?? '0'),
@@ -204,6 +249,61 @@ final readonly class CashClose
             'last_control_number' => self::texto($contenido['last_control_number'] ?? null),
             'payments' => self::pagosCanonicos($contenido['payments'] ?? []),
         ];
+
+        // EL MOTIVO y el CONTEO son OPCIONALES: solo entran en la forma
+        // canonica cuando los hay. Un Z sellado antes de que existieran se
+        // firmo sin ellos, y su firma sigue valiendo.
+        if (array_key_exists('close_reason', $contenido) && $contenido['close_reason'] !== null) {
+            $canonico['close_reason'] = self::texto($contenido['close_reason']);
+        }
+
+        if (array_key_exists('counted_pieces', $contenido) && $contenido['counted_pieces'] !== null) {
+            $canonico['counted_pieces'] = self::piezasCanonicas($contenido['counted_pieces']);
+        }
+
+        return $canonico;
+    }
+
+    /**
+     * Las PIEZAS contadas, en forma canonica: una lista ordenada por
+     * denominacion.
+     *
+     * REGLA que fija este metodo: *el conteo es una lista ORDENADA*. Viene
+     * como mapa (id => cantidad) porque asi lo cuenta el cajero, pero la
+     * firma se calcula sobre la lista ordenada: dos conteos iguales tienen la
+     * misma firma, escriban como los escriban.
+     *
+     * @return list<array{id: int, count: int}>
+     */
+    private static function piezasCanonicas(mixed $piezas): array
+    {
+        if (is_string($piezas)) {
+            $piezas = json_decode($piezas, true);
+        }
+
+        if (! is_array($piezas)) {
+            return [];
+        }
+
+        $canonicas = [];
+
+        foreach ($piezas as $clave => $valor) {
+            if (is_array($valor)) {
+                $id = (int) ($valor['id'] ?? 0);
+                $cuantas = (int) ($valor['count'] ?? 0);
+            } else {
+                $id = (int) $clave;
+                $cuantas = (int) $valor;
+            }
+
+            $canonicas[] = ['id' => $id, 'count' => $cuantas];
+        }
+
+        usort($canonicas, static function (array $a, array $b): int {
+            return $a['id'] <=> $b['id'];
+        });
+
+        return $canonicas;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Accounting;
 
+use App\Support\Pos\PosAmount;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use DateTimeImmutable;
@@ -165,18 +166,85 @@ final readonly class CashRegisterService
      *  4. EL Z SE SELLA EN LA MISMA TRANSACCION. El Z es el cierre hecho
      *     HECHO: si el snapshot falla, el cierre falla. No hay un dia cerrado
      *     sin Z.
+     *  5. UN DESCUADRE POR ENCIMA DEL UMBRAL NO SE CIERRA SIN MOTIVO. El
+     *     motivo se guarda en `cash_registers.note` y en el Z, y el error
+     *     dice el descuadre y dice que hace falta el motivo.
      *
      * @param  int  $registerId  Caja que se cierra.
      * @param  string  $closingBalance  Saldo observado al contar. Texto decimal.
      * @param  int|null  $actorId  Quien cierra la caja.
+     * @param  string|null  $motivo  Por que se cierra asi. Obligatorio si el
+     *                               descuadre supera el umbral.
      *
-     * @throws RuntimeException Cuando la caja no existe, ya esta cerrada, o
-     *                          el Z no se puede sellar.
+     * @throws RuntimeException Cuando la caja no existe, ya esta cerrada, el
+     *                          descuadre exige un motivo y no lo hay, o el Z
+     *                          no se puede sellar.
      */
-    public function close(int $registerId, string $closingBalance, ?int $actorId = null): void
-    {
+    public function close(
+        int $registerId,
+        string $closingBalance,
+        ?int $actorId = null,
+        ?string $motivo = null,
+    ): void {
         $saldo = $this->decimal($closingBalance);
 
+        $this->cierra($registerId, $saldo, null, $actorId, $motivo);
+    }
+
+    /**
+     * Cierra la caja POR CONTEO DE PIEZAS: el cajero cuenta las piezas y el
+     * sistema CALCULA el importe.
+     *
+     * REGLA que fija este metodo: *el cierre por conteo NO acepta el importe
+     * aparte*. Son DOS VERDADES: la que cuenta el cajero y la que se teclea.
+     * El sistema calcula el importe a partir de las piezas, y ese importe es
+     * el que se guarda. Por eso este metodo y `close()` son DOS CAMINOS y no
+     * dos parametros: un cierre tiene una sola verdad.
+     *
+     * @param  int  $registerId  Caja que se cierra.
+     * @param  array<int, int>  $conteo  Las piezas contadas, por id de
+     *                                   denominacion.
+     * @param  int|null  $actorId  Quien cierra la caja.
+     * @param  string|null  $motivo  Por que se cierra asi.
+     * @param  int|null  $currencyId  La MONEDA de la tienda: el conteo se
+     *                                valida contra el MISMO catalogo que la
+     *                                pantalla ensena. `null` significa "el
+     *                                de la tienda entera".
+     *
+     * @throws RuntimeException Cuando una pieza no es del catalogo de la
+     *                          tienda, o el descuadre exige un motivo y no
+     *                          lo hay.
+     */
+    public function closeCounted(
+        int $registerId,
+        array $conteo,
+        ?int $actorId = null,
+        ?string $motivo = null,
+        ?int $currencyId = null,
+    ): void {
+        $this->cierra($registerId, null, $conteo, $actorId, $motivo, $currencyId);
+    }
+
+    /**
+     * EL CIERRE: lo que los dos caminos (por importe y por conteo de piezas)
+     * tienen en comun.
+     *
+     * @param  int  $registerId  Caja que se cierra.
+     * @param  string|null  $saldo  El saldo contado, cuando viene por importe.
+     * @param  array<int, int>|null  $conteo  Las piezas contadas, cuando viene
+     *                                        por conteo.
+     * @param  int|null  $actorId  Quien cierra la caja.
+     * @param  string|null  $motivo  Por que se cierra asi.
+     * @param  int|null  $currencyId  La moneda del catalogo del conteo.
+     */
+    private function cierra(
+        int $registerId,
+        ?string $saldo,
+        ?array $conteo,
+        ?int $actorId,
+        ?string $motivo,
+        ?int $currencyId = null,
+    ): void {
         $caja = $this->connection->table('cash_registers')->where('id', $registerId)->first();
 
         if ($caja === null) {
@@ -190,14 +258,53 @@ final readonly class CashRegisterService
         $storeId = (int) $caja->store_id;
         $fecha = (string) $caja->business_date;
 
+        // El CONTEO se convierte en IMPORTE antes de cerrar: el cajero cuenta
+        // piezas, y el importe sale de ahi.
+        if ($conteo !== null) {
+            $denominaciones = new CashDenominations($this->connection);
+
+            $saldo = $denominaciones->countedTotal(
+                $conteo,
+                $denominaciones->catalog($storeId, $currencyId)
+            );
+        }
+
+        if ($saldo === null) {
+            throw new RuntimeException(
+                "El cierre de la caja {$registerId} necesita un saldo contado: "
+                .'o un importe, o un conteo de piezas.'
+            );
+        }
+
+        $razon = $motivo === null ? null : trim($motivo);
+        $razon = $razon === '' ? null : $razon;
+
         $this->connection->transaction(function () use (
             $registerId,
             $saldo,
             $actorId,
             $storeId,
             $fecha,
-            $caja
+            $caja,
+            $razon,
+            $conteo
         ): void {
+            // EL ESPERADO: el saldo EN CURSO de la fecha de negocio. Se
+            // calcula DENTRO de la transaccion, junto con el descuadre que
+            // decide si hace falta un motivo.
+            $cuentas = $this->cuentasDelPlan($storeId);
+            $dia = new CashDay($this->connection);
+            $negocio = new DateTimeImmutable($fecha);
+
+            $enCurso = $dia->runningBalance($storeId, $negocio, $cuentas['cash']);
+            $esperado = $dia->expected($enCurso);
+            $descuadre = $dia->difference($saldo, $esperado);
+
+            // EL MOTIVO: un descuadre por encima del umbral NO se cierra sin
+            // explicacion. Aqui, dentro de la transaccion: si el motivo
+            // falta, no se escribe NADA.
+            $this->exigeMotivo($descuadre, $razon);
+
             $afectadas = $this->connection->table('cash_registers')
                 ->where('id', $registerId)
                 ->where('status', 'open')
@@ -206,6 +313,9 @@ final readonly class CashRegisterService
                     'closed_at' => $this->instante(),
                     'closing_balance' => $saldo,
                     'closed_by' => $actorId,
+                    // El MOTIVO vive en la caja: la columna que ya existia y
+                    // que nadie leia.
+                    'note' => $razon,
                     'updated_at' => now(),
                 ]);
 
@@ -226,11 +336,80 @@ final readonly class CashRegisterService
                     $storeId,
                     $fecha,
                     (string) $caja->opening_balance,
-                    $saldo
+                    $saldo,
+                    $esperado
                 ),
-                $actorId
+                $actorId,
+                $razon,
+                $conteo
             );
         });
+    }
+
+    /**
+     * EL MOTIVO: un descuadre por encima del umbral NO se cierra sin
+     * explicacion.
+     *
+     * REGLA que fija este metodo: *un descuadre es una EXCEPCION, y una
+     * excepcion sin explicacion no es una excepcion*. El umbral sale de la
+     * configuracion (`config/cash.php`), y el defecto pide motivo para
+     * cualquier descuadre que no sea cero.
+     *
+     * Y UNA CAJA QUE CUADRA NUNCA PIDE MOTIVO: el descuadre de cero no es un
+     * descuadre, y un umbral en cero no puede convertir un arqueo que cuadra
+     * en una excepcion.
+     *
+     * @param  string  $descuadre  El descuadre, con su signo. Texto decimal.
+     * @param  string|null  $motivo  El motivo que se ha dado.
+     *
+     * @throws RuntimeException Cuando el descuadre exige un motivo y no lo
+     *                          hay.
+     */
+    private function exigeMotivo(string $descuadre, ?string $motivo): void
+    {
+        $magnitud = PosAmount::decimal($descuadre)->abs();
+
+        // Un descuadre de CERO no es un descuadre.
+        if ($magnitud->isZero()) {
+            return;
+        }
+
+        $umbral = PosAmount::decimal($this->umbralDeMotivo());
+
+        // Por DEBAJO del umbral: no hace falta motivo.
+        if ($magnitud->compareTo($umbral) < 0) {
+            return;
+        }
+
+        if ($motivo !== null && trim($motivo) !== '') {
+            return;
+        }
+
+        throw new RuntimeException(
+            'El descuadre de la caja es de '.PosAmount::legible($magnitud->toScale(PosAmount::SCALE, RoundingMode::HALF_UP))
+            .' y supera el umbral de '.PosAmount::legible($this->umbralDeMotivo()).': '
+            .'un descuadre por encima del umbral no se cierra sin un MOTIVO.'
+        );
+    }
+
+    /**
+     * El UMBRAL a partir del cual un descuadre exige justificacion.
+     *
+     * REGLA que fija este metodo: *el umbral es un PARAMETRO de operacion*,
+     * leido de la configuracion (`config/cash.php`), y no una columna: el
+     * esquema de la Fase 0 (`store_settings`) no tiene donde encajar un
+     * umbral de caja, y anadir una seria cambiar el esquema de la Fase 0 por
+     * una necesidad de la Fase 2.
+     *
+     * Cuando el esquema admita un umbral POR TIENDA, esta es la lectura que
+     * tiene que cambiar: el defecto se queda como el valor de la
+     * configuracion.
+     */
+    private function umbralDeMotivo(): string
+    {
+        $umbral = config('cash.difference_reason_threshold', '0.0100');
+
+        return PosAmount::text($umbral);
     }
 
     /**
@@ -306,6 +485,10 @@ final readonly class CashRegisterService
                     'closed_at' => null,
                     'closed_by' => null,
                     'closing_balance' => null,
+                    // El MOTIVO del cierre deshicho sale de la caja: el
+                    // cierre ya no esta en pie. El Z anterior lo conserva,
+                    // marcado.
+                    'note' => null,
                     'updated_at' => now(),
                 ]);
 
@@ -439,22 +622,21 @@ final readonly class CashRegisterService
     /**
      * EL CONTENIDO del Z: lo que se cerro ese dia.
      *
+     * @param  string  $esperado  El esperado ya calculado en la transaccion
+     *                            del cierre: no se recalcula aqui, para que
+     *                            el Z y el umbral del motivo hablen del
+     *                            MISMO numero.
      * @return array<string, mixed>
      */
     private function contenidoDelZ(
         int $storeId,
         string $fecha,
         string $partida,
-        string $contado
+        string $contado,
+        string $esperado
     ): array {
-        $cuentas = $this->cuentasDelPlan($storeId);
         $dia = new CashDay($this->connection);
         $negocio = new DateTimeImmutable($fecha);
-
-        // El ESPERADO es el saldo EN CURSO: el saldo de partida ya esta en el
-        // libro, con su asiento de apertura.
-        $enCurso = $dia->runningBalance($storeId, $negocio, $cuentas['cash']);
-        $esperado = $dia->expected($enCurso);
 
         $totales = $this->totalesDelDia($storeId, $fecha);
         $correlativos = $this->correlativosDelDia($storeId, $fecha);

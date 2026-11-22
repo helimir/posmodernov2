@@ -53,13 +53,17 @@ class DatabaseSeeder extends Seeder
      * 12. `DemoUsersSeeder`: las personas de demostracion CON SU ROL: el
      *     superusuario y el cajero. Van al final porque necesitan los roles y
      *     el vinculo con la tienda.
+     * 13. `CashDenominationSeeder`: el CATALOGO de DENOMINACIONES de la
+     *     tienda de demostracion: las piezas de su moneda, que son DATO del
+     *     negocio. Va al final porque necesita la MONEDA de la tienda, y la
+     *     moneda sale del perfil fiscal.
      *
      * Las CATEGORIAS DE IVA y las TASAS los siembra `FiscalProfileSeeder` y no
      * `TaxonomySeeder` porque son datos POR PERFIL (`tax_categories.
      * fiscal_profile_id`): sembrarlos desde el seeder de catalogos exigiria que
      * el perfil existiera antes que el pais que lo referencia, y el perfil
-     * depende de los paises. Es un ciclo, y el corte lo marca el grafo de
-     * llaves foraneas, no el nombre del seeder.
+     * depende del pais. Es un ciclo, y el corte lo marca el grafo de llaves
+     * foraneas, no el nombre del seeder.
      *
      * Todos son IDEMPOTENTES: sembrar dos veces no duplica ninguna fila.
      */
@@ -78,6 +82,7 @@ class DatabaseSeeder extends Seeder
             FiscalProviderSeeder::class,
             OpeningBalancesSeeder::class,
             DemoUsersSeeder::class,
+            CashDenominationSeeder::class,
         ]);
     }
 }

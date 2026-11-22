@@ -193,7 +193,9 @@ test('test_el_camino_de_la_caja_del_dia_por_http_abre_cobra_ve_el_saldo_y_cierra
             ->and($props['cash_total'] ?? null)->toBe('58.0000');
 
         // 9. POST /caja/dia/cerrar: se cuentan 160 y el esperado son 158. El
-        //    DESCUADRE son dos, con su signo.
+        //    DESCUADRE son dos, con su signo, y por eso el cierre lleva su
+        //    MOTIVO: un descuadre por encima del umbral no se cierra sin
+        //    explicacion.
         $cierre = $servidor->cliente($jar)
             ->withHeaders([
                 'X-CSRF-TOKEN' => $token,
@@ -202,6 +204,7 @@ test('test_el_camino_de_la_caja_del_dia_por_http_abre_cobra_ve_el_saldo_y_cierra
             ])
             ->post($servidor->url('/caja/dia/cerrar'), [
                 'closing_balance' => '160.0000',
+                'reason' => 'Sobran dos unidades en el conteo',
             ]);
 
         expect($cierre->status())->toBe(201)

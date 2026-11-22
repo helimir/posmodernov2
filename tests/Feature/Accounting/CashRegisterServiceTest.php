@@ -139,7 +139,7 @@ test('test_una_caja_cerrada_no_admite_mas_movimientos', function () {
     // Mientras esta ABIERTA, admite movimientos.
     expect((int) $servicio->registerFor($tienda->id, new DateTimeImmutable('2026-11-04'))->id)->toBe($caja);
 
-    $servicio->close($caja, '175.5000');
+    $servicio->close($caja, '175.5000', null, 'Diferencia de conteo justificada');
 
     // Cerrada, NO admite mas movimientos.
     expect(fn () => $servicio->registerFor($tienda->id, new DateTimeImmutable('2026-11-04')))
@@ -187,7 +187,7 @@ test('test_la_caja_guarda_quien_la_abrio_y_quien_la_cerro', function () {
         ->and($abierta->closed_by)->toBeNull();
 
     // Quien CIERRA queda en la suya, y NO borra quien abrio.
-    $servicio->close($caja, '175.5000', $quienCierra->id);
+    $servicio->close($caja, '175.5000', $quienCierra->id, 'Diferencia de conteo justificada');
 
     $cerrada = DB::table('cash_registers')->where('id', $caja)->first();
 
