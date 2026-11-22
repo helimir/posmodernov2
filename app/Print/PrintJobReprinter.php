@@ -56,6 +56,17 @@ final readonly class PrintJobReprinter
             );
         }
 
+        // UN Z NO SE REIMPRIME COMO UN COMPROBANTE: el Z es el documento del
+        // cierre, y sacarlo otra vez tiene que dejar constancia del POR QUE.
+        // Por eso la reimpresion del Z se hace desde la pantalla de la caja
+        // del dia, que pide el motivo y apunta al Z.
+        if ((string) $original->document_kind === PrintJob::KIND_CASH_CLOSE_Z) {
+            throw new RuntimeException(
+                "El trabajo de impresion {$originalJobId} es el Z de un cierre de caja: "
+                .'un Z se reimprime desde la pantalla de la caja del dia, y con un MOTIVO.'
+            );
+        }
+
         $bytes = $original->payload_bytes;
 
         if ($bytes === null || $bytes === '') {
@@ -71,21 +82,24 @@ final readonly class PrintJobReprinter
         $nuevo = $this->connection->selectOne(
             <<<'SQL'
                 INSERT INTO print_jobs
-                    (store_id, print_target_id, agent_id, status, payload, payload_bytes, payload_sha256,
-                     reason, reprint_of_job_id, lease_expires_at, attempts, last_error, created_by, created_at, updated_at)
-                VALUES (?, ?, NULL, 'queued', CAST(? AS jsonb), decode(?, 'hex'), ?,
-                        'reprint', ?, NULL, 0, NULL, ?, ?, ?)
+                    (store_id, print_target_id, agent_id, status, document_kind, payload, payload_bytes, payload_sha256,
+                     reason, reprint_of_job_id, cash_close_id, lease_expires_at, attempts, last_error, created_by, created_at, updated_at)
+                VALUES (?, ?, NULL, 'queued', ?, CAST(? AS jsonb), decode(?, 'hex'), ?,
+                        'reprint', ?, ?, NULL, 0, NULL, ?, ?, ?)
                 RETURNING id
             SQL,
             [
                 (int) $original->store_id,
                 (int) $original->print_target_id,
+                // QUE documento imprime: el mismo que el original.
+                (string) $original->document_kind,
                 $this->modelo($original),
                 // El `bytea` se escribe en hexadecimal: el constructor de
                 // consultas trunca cualquier cadena con un byte nulo.
                 bin2hex($bytes),
                 $original->payload_sha256,
                 (int) $originalJobId,
+                $original->cash_close_id,
                 $actorId,
                 now(),
                 now(),

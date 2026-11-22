@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CashCloseController;
 use App\Http\Controllers\CashDayController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\ChartOfAccountsController;
@@ -130,6 +131,21 @@ Route::middleware(['auth'])->group(function () {
     Route::post('caja/dia/reabrir', [CashDayController::class, 'reabrir'])
         ->middleware('permission:cash_day.reopen')
         ->name('caja.dia.reabrir');
+
+    // El Z IMPRIMIBLE: el cierre de caja en papel y en la impresora.
+    //
+    // UN DIA ABIERTO NO TIENE Z: la ruta no lo sirve, porque un dia abierto no
+    // es un hecho cerrado. Y lo que se imprime es el Z SELLADO: su contenido
+    // EXACTO, no un recalculo.
+    //
+    // Y REIMPRIMIR UN Z DEJA CONSTANCIA: a partir de la segunda impresion, el
+    // motivo es OBLIGATORIO.
+    Route::get('caja/dia/z', [CashCloseController::class, 'show'])
+        ->middleware('permission:cash_day.print')
+        ->name('caja.dia.z');
+    Route::post('caja/dia/z/imprimir', [CashCloseController::class, 'imprimir'])
+        ->middleware('permission:cash_day.print')
+        ->name('caja.dia.z.imprimir');
 
     // El REPORTE DE STOCK BAJO: los productos de la tienda que se estan
     // acabando, con su stock REAL.

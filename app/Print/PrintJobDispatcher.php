@@ -2,6 +2,7 @@
 
 namespace App\Print;
 
+use App\Models\PrintJob;
 use App\Models\PrintTarget;
 use Illuminate\Database\Connection;
 use JsonException;
@@ -31,6 +32,9 @@ final readonly class PrintJobDispatcher
      *                               una reimpresion. Es DATO, no codigo.
      * @param  int|null  $reprintOfJobId  El trabajo ORIGINAL, cuando este
      *                                    trabajo es una reimpresion.
+     * @param  string|null  $documentKind  QUE documento imprime: un
+     *                                     comprobante o el Z de un cierre.
+     * @param  int|null  $cashCloseId  El Z que imprime, cuando imprime un Z.
      *
      * @throws RuntimeException Si el ticket no es representable en el destino.
      */
@@ -41,6 +45,8 @@ final readonly class PrintJobDispatcher
         ?int $actorId = null,
         ?string $reason = null,
         ?int $reprintOfJobId = null,
+        ?string $documentKind = null,
+        ?int $cashCloseId = null,
     ): int {
         $target = PrintTarget::find($printTargetId);
 
@@ -64,20 +70,22 @@ final readonly class PrintJobDispatcher
         $trabajo = $this->connection->selectOne(
             <<<'SQL'
                 INSERT INTO print_jobs
-                    (store_id, print_target_id, agent_id, status, payload, payload_bytes, payload_sha256,
-                     reason, reprint_of_job_id, attempts, created_by, created_at, updated_at)
-                VALUES (?, ?, NULL, ?, CAST(? AS jsonb), decode(?, 'hex'), ?, ?, ?, 0, ?, ?, ?)
+                    (store_id, print_target_id, agent_id, status, document_kind, payload, payload_bytes, payload_sha256,
+                     reason, reprint_of_job_id, cash_close_id, attempts, created_by, created_at, updated_at)
+                VALUES (?, ?, NULL, 'queued', ?, CAST(? AS jsonb), decode(?, 'hex'), ?, ?, ?, ?, 0, ?, ?, ?)
                 RETURNING id
             SQL,
             [
                 $storeId,
                 $printTargetId,
-                'queued',
+                // QUE documento imprime: el comprobante, o el Z del cierre.
+                $documentKind ?? PrintJob::KIND_RECEIPT,
                 $this->modelo($payload),
                 bin2hex($renderizado->bytes),
                 $renderizado->sha256,
                 $reason,
                 $reprintOfJobId,
+                $cashCloseId,
                 $actorId,
                 now(),
                 now(),

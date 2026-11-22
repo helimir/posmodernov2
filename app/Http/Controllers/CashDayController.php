@@ -7,6 +7,7 @@ use App\Domain\Accounting\CashDay;
 use App\Domain\Accounting\CashDenominations;
 use App\Domain\Accounting\CashRegisterService;
 use App\Models\CashRegister;
+use App\Models\PrintTarget;
 use App\Models\User;
 use App\Support\Audit\AuditWriter;
 use App\Support\Pos\PosAmount;
@@ -417,7 +418,53 @@ class CashDayController extends Controller
             'count' => $conteo,
             'z' => $z === null ? null : $this->zProps($z),
             'z_history' => $this->historialDeZ($storeId, $fecha),
+            // Los DESTINOS de impresion de la tienda: donde sale el Z.
+            'print_targets' => $this->destinosDeImpresion($storeId),
         ];
+    }
+
+    /**
+     * Los DESTINOS de impresion FISICOS de la tienda: los que escriben
+     * bytes en una impresora.
+     *
+     * El transporte `browser` no sale: el navegador es el destino del PAPEL
+     * (el HTML del Z), no de los bytes.
+     *
+     * @return list<array{id: int, name: string, transport: string}>
+     */
+    private function destinosDeImpresion(int $storeId): array
+    {
+        $filas = $this->connection->table('print_targets')
+            ->where('store_id', $storeId)
+            ->where('is_active', true)
+            ->whereIn('transport', PrintTarget::TRANSPORTES_FISICOS)
+            ->orderBy('name')
+            ->get(['id', 'name', 'transport']);
+
+        $destinos = [];
+
+        foreach ($filas as $fila) {
+            $destinos[] = [
+                'id' => (int) $fila->id,
+                'name' => (string) $fila->name,
+                'transport' => (string) $fila->transport,
+            ];
+        }
+
+        return $destinos;
+    }
+
+    /**
+     * Las IMPRESIONES del Z: cuantos trabajos de impresion ha salido de el.
+     *
+     * Es lo que hace que la pantalla pida un MOTIVO antes de volver a
+     * imprimirlo: el Z es el documento del cierre.
+     */
+    private function impresionesDelZ(int $cashCloseId): int
+    {
+        return (int) $this->connection->table('print_jobs')
+            ->where('cash_close_id', $cashCloseId)
+            ->count();
     }
 
     /**
@@ -539,6 +586,9 @@ class CashDayController extends Controller
                 : Carbon::parse((string) $z->reopened_at)->toIso8601String(),
             'reopened_by' => $this->responsablePorId($z->reopened_by),
             'reopen_reason' => $z->reopen_reason,
+            // Las IMPRESIONES del Z: cuantas veces ha salido. La pantalla lo
+            // dice, porque reimprimir un Z pide un motivo.
+            'print_count' => $this->impresionesDelZ((int) $z->id),
         ];
     }
 
