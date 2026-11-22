@@ -3,6 +3,7 @@
 namespace App\Domain\Checkout;
 
 use App\Domain\Fiscal\Enums\ProviderKind;
+use App\Domain\Fiscal\FinalConsumerDocument;
 use DateTimeImmutable;
 
 /**
@@ -49,6 +50,14 @@ final readonly class CheckoutInput
         public DateTimeImmutable $businessDate,
         /** El descuento de documento, prorrateado a las lineas. */
         public string $documentDiscount = '0',
+        /**
+         * El DOCUMENTO del CONSUMIDOR FINAL, tal como lo declara quien cobra.
+         *
+         * Es `null` cuando la venta tiene cliente (el cliente ya es el
+         * receptor) o cuando la tienda no exige el documento. Y el TIPO lo
+         * declara el llamante: el sistema no lo deduce.
+         */
+        public ?FinalConsumerDocument $finalConsumerDocument = null,
         /** Quien registra la operacion. */
         public ?int $actorId = null,
     ) {}

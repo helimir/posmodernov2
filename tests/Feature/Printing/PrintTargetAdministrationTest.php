@@ -185,8 +185,9 @@ test('test_un_endpoint_no_admitido_falla_con_un_mensaje_que_enumera_las_formas_a
         ->and($mensaje)->toContain('server_socket')
         ->and($mensaje)->toContain('browser');
 
-    // 3. Y QUE formas se aceptan.
-    expect($mensaje)->toContain('tcp://servidor:9100')
+    // 3. Y QUE formas se aceptan. El PUERTO es el que tenga la impresora: el
+    //    mensaje no anuncia uno solo.
+    expect($mensaje)->toContain('tcp://servidor:<puerto>')
         ->and($mensaje)->toContain('smb://servidor/impresora')
         ->and($mensaje)->toContain('\\\\servidor\\impresora');
 

@@ -14,6 +14,12 @@ use RuntimeException;
  * vinculos, y si le falta un rol, el cobro falla con un mensaje util*. NO hay
  * un plan por defecto: un plan incompleto es un plan que hay que ver.
  *
+ * EL PLAN COMPLETO SON CUATRO ROLES: la caja, la cartera, los ingresos y el
+ * impuesto por pagar. El rol del CAPITAL (`equity`) es OPCIONAL: es la
+ * contrapartida del saldo de partida, y solo hace falta cuando la caja se
+ * abre con una partida DISTINTA DE CERO. Un plan de cuatro roles cobra igual
+ * que uno de cinco.
+ *
  * POR QUE el plan es DATO y no configuracion: el negocio decide que cuenta
  * es su caja, cual su cartera y cual su ingreso, y esa decision cambia con el
  * tiempo y es distinta en cada tienda. En la configuracion no se puede
@@ -123,6 +129,12 @@ final readonly class ChartOfAccounts
     /**
      * Los ROLES que le faltan al plan de la tienda.
      *
+     * REGLA que fija este metodo: *el plan COMPLETO son CUATRO roles* (los
+     * `obligatorios()`: la caja, la cartera, los ingresos y el impuesto por
+     * pagar). El rol del CAPITAL es OPCIONAL: su ausencia ya no impide
+     * cobrar, porque solo hace falta cuando la caja se abre con una partida
+     * distinta de cero, y ahi lo exige el propio asiento de apertura.
+     *
      * @return list<string>
      */
     public function missingRoles(int $storeId): array
@@ -131,7 +143,7 @@ final readonly class ChartOfAccounts
 
         $faltan = [];
 
-        foreach (AccountRole::cases() as $rol) {
+        foreach (AccountRole::obligatorios() as $rol) {
             if (! in_array($rol->value, $presentes, true)) {
                 $faltan[] = $rol->value;
             }
