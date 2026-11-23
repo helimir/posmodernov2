@@ -1,7 +1,9 @@
 <?php
 
+use App\Console\Schedule\PosSchedule;
 use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\HandleInertiaRequests;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -31,4 +33,14 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
+    })
+    ->withSchedule(function (Schedule $schedule): void {
+        // EL PLANIFICADOR. Lo que antes no existia y por eso no pasaba
+        // nada: los comandos estaban, pero NADIE los llamaba.
+        //
+        // Y EL PLAN ESTA EN UNA CLASE (`PosSchedule`), no en un closure
+        // aqui: el plan tiene que poder COMPROBARSE, y el planificador de
+        // Laravel llena los eventos cuando arranca la consola, asi que un
+        // test que lo mira en caliente depende del orden de los tests.
+        (new PosSchedule)->define($schedule);
     })->create();

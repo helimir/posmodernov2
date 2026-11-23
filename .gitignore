@@ -17,6 +17,9 @@
 /public/storage
 /storage/*.key
 /storage/pail
+# The BACKUPS and what the tests leave behind: they are DATA, not source.
+/storage/backups
+/storage/testing
 /vendor
 auth.json
 Homestead.json
