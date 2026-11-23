@@ -6,6 +6,7 @@ use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Credit\CustomerPaymentService;
 use App\Models\Customer;
 use App\Models\Store;
+use App\Support\Audit\AuditWriter;
 use App\Support\Pos\PosAmount;
 use App\Support\Pos\PosContext;
 use Brick\Math\BigDecimal;
@@ -393,6 +394,23 @@ class CustomerController extends Controller
             // existe, y un cobro sin destino no se registra.
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
+
+        // El COBRO queda anotado: a quien se le cobro, cuanto y con que
+        // referencia. Un cobro sin rastro es un cobro que el cliente
+        // podria disputar y nadie podria responder.
+        (new AuditWriter($this->connection))->recordFor(
+            $request,
+            'customer.payment_received',
+            'customer',
+            $customerId,
+            [
+                'entry_id' => $entryId,
+                'amount' => PosAmount::text($datos['amount']),
+                'reference_no' => (string) $datos['reference_no'],
+                'entry_date' => $entryDate->format('Y-m-d'),
+            ],
+            $storeId
+        );
 
         return response()->json([
             'entry_id' => $entryId,

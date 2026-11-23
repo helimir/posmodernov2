@@ -107,6 +107,9 @@ enum Permission: string
     /** Ver los reportes. */
     case ReportRead = 'report.read';
 
+    /** Ver la auditoria de negocio: quien hizo que, y desde donde. */
+    case AuditRead = 'audit.read';
+
     /** Ver los usuarios y sus roles. */
     case UserRead = 'user.read';
 
@@ -203,6 +206,7 @@ enum Permission: string
             self::AccountingUpdate => 'Update accounts',
             self::AccountingDelete => 'Delete accounts',
             self::ReportRead => 'View reports',
+            self::AuditRead => 'View the business audit trail',
             self::UserRead => 'View users',
             self::UserUpdate => 'Assign user roles',
             self::RoleRead => 'View roles',

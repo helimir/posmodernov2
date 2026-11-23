@@ -172,7 +172,7 @@ class PrintAdministrationController extends Controller
 
         $impresora = Printer::query()->findOrFail($id);
 
-        $this->audit->record(
+        $this->audit->recordFor(
             $request,
             self::ACCION_IMPRESORA_CREADA,
             self::ENTIDAD_IMPRESORA,
@@ -215,7 +215,7 @@ class PrintAdministrationController extends Controller
 
         $impresora = Printer::query()->findOrFail((int) $printer->id);
 
-        $this->audit->record(
+        $this->audit->recordFor(
             $request,
             self::ACCION_IMPRESORA_ACTUALIZADA,
             self::ENTIDAD_IMPRESORA,
@@ -252,7 +252,7 @@ class PrintAdministrationController extends Controller
 
         $destino = PrintTarget::query()->findOrFail($id);
 
-        $this->audit->record(
+        $this->audit->recordFor(
             $request,
             self::ACCION_DESTINO_CREADO,
             self::ENTIDAD_DESTINO,
@@ -286,7 +286,7 @@ class PrintAdministrationController extends Controller
 
         $destino = PrintTarget::query()->findOrFail((int) $target->id);
 
-        $this->audit->record(
+        $this->audit->recordFor(
             $request,
             self::ACCION_DESTINO_ACTUALIZADO,
             self::ENTIDAD_DESTINO,

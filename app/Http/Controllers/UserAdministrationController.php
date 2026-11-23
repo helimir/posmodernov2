@@ -109,7 +109,7 @@ class UserAdministrationController extends Controller
         $user->group_id = $roleId === null ? null : (int) $roleId;
         $user->save();
 
-        $this->audit->record(
+        $this->audit->recordFor(
             $request,
             self::ACCION,
             self::ENTIDAD,

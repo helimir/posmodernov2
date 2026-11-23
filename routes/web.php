@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\CashCloseController;
 use App\Http\Controllers\CashDayController;
 use App\Http\Controllers\CatalogController;
@@ -226,6 +227,14 @@ Route::middleware(['auth'])->group(function () {
     Route::get('contabilidad/cuentas', [ChartOfAccountsController::class, 'index'])
         ->middleware('permission:accounting.read')
         ->name('contabilidad.cuentas.index');
+
+    // La AUDITORIA DE NEGOCIO: quien hizo que, sobre que y desde donde.
+    //
+    // Y SOLO SE LEE: las filas son append-only, asi que esta pantalla no
+    // tiene ni edicion ni borrado. Solo filtra, pagina y muestra.
+    Route::get('contabilidad/auditoria', [AuditLogController::class, 'index'])
+        ->middleware('permission:audit.read')
+        ->name('contabilidad.auditoria.index');
 
     Route::prefix('api')->group(function () {
         // El ROL de una cuenta en la tienda activa: se asigna o se quita. Un

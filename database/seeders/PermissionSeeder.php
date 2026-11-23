@@ -182,6 +182,7 @@ class PermissionSeeder extends Seeder
                 Permission::CashDayReopen,
                 Permission::AccountingRead,
                 Permission::ReportRead,
+                Permission::AuditRead,
             ],
         ];
     }
