@@ -16,6 +16,7 @@ use App\Domain\Fiscal\ValueObjects\FiscalIssuanceOutcome;
 use App\Models\PaymentMethod;
 use App\Models\Store;
 use App\Print\CheckoutPrintQueue;
+use App\Support\Audit\AuditWriter;
 use App\Support\Pos\PosAmount;
 use App\Support\Pos\PosBudget;
 use App\Support\Pos\PosCatalog;
@@ -411,6 +412,22 @@ class PosController extends Controller
         $print = $this->tickets
             ->encolar((int) $resultado['sale_id'], $actorId)
             ->aArray();
+
+        // LA VENTA queda anotada: quien cobro, cuanto y con que numero de
+        // documento. **Una venta sin rastro es una venta que nadie puede
+        // defender despues** — y es la escritura que mas se disputa.
+        (new AuditWriter($this->connection))->recordFor(
+            $request,
+            'sale.created',
+            'sale',
+            (int) $resultado['sale_id'],
+            [
+                'invoice_no' => (string) ($resultado['invoice_no'] ?? ''),
+                'grand_total' => (string) ($resultado['grand_total'] ?? ''),
+                'status' => (string) ($resultado['status'] ?? ''),
+            ],
+            (int) $store->id
+        );
 
         return response()->json(
             array_merge($resultado, ['fiscal' => $fiscal, 'print' => $print]),

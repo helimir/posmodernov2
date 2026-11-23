@@ -734,10 +734,27 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   **USB directo y `file://` siguen rechazandose**. (d) El **consumidor final se identifica por encima
   del umbral de la tienda**: una venta sin cliente que lo supera **no se cobra sin el documento**, y el
   documento **declara su propio tipo** (deducirlo del formato seria adivinar). Dep: F2-10, F2-11
-- [ ] **F2-13** **La auditoria de negocio.** `audit_logs` existe y **un solo escritor** audita **una
-  de 40+ acciones** (con el `ip_address` en `null`), y **no es append-only** (si lo es
-  `fiscal_document_events`, con trigger). Un `AuditTrail` en todas las escrituras, **append-only**,
-  con pantalla de consulta y retencion. Dep: F2-01
+  - [x] **F2-13** **La auditoria de negocio.** `audit_logs` existe y **un solo escritor** audita **una
+    de 40+ acciones** (con el `ip_address` en `null`), y **no es append-only** (si lo es
+    `fiscal_document_events`, con trigger). Un `AuditTrail` en todas las escrituras, **append-only**,
+    con pantalla de consulta y retencion. Dep: F2-01
+    - El **escritor ya no depende de la peticion**: `record()` recibe DATOS (actor, tienda, IP) y
+      `recordFor()` los saca de la peticion. Una venta se audita **desde el dominio**, donde no hay
+      HTTP.
+    - La auditoria **no se traga el cambio**: si la escritura falla, el cambio esta hecho, la
+      peticion **sigue** y el hueco queda en el log. Deshacer un venta porque no se pudo anotar es
+      peor que la venta sin anotar.
+    - **`audit_logs` es append-only** (trigger): una anotacion no se edita ni se borra. La
+      **retencion** tiene su puerta: el comando `ops:audit-purge` pone la marca de sesion
+      `app.audit_purge` y solo asi puede purgar.
+    - La **retencion no es una sorpresa**: sin `--dias` no borra nada, sin `--force` **simula**, y
+      por debajo de **365 dias se niega** (con o sin `--force`): un ano de auditoria tiene que
+      poder revisarse.
+    - **La pantalla** `/contabilidad/auditoria` filtra por accion, entidad, persona y fecha, y
+      **no tiene edicion ni borrado**: solo se consulta.
+    - Las escrituras que **mas se disputan** quedan anotadas: la **venta**, la **apertura**, el
+      **cierre**, el **cobro a un cliente**, y la administracion (usuarios, roles, impresoras,
+      destinos y agentes).
 - [ ] **F2-14** **Los backups y el scheduler.** **No hay nada**: cero coincidencias de `backup` en
   `app/`, `config/` y `database/`. `ops:backup`, `ops:restore`, **verificacion** de restauracion, y
   el **scheduler que hoy no existe** (`bootstrap/app.php` no declara `withSchedule`), que es donde

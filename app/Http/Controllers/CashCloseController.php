@@ -167,7 +167,7 @@ class CashCloseController extends Controller
 
         // LA CONSTANCIA: un Z impreso queda anotado, y un Z reimpreso queda
         // anotado CON el motivo y con el trabajo anterior.
-        (new AuditWriter($this->connection))->record(
+        (new AuditWriter($this->connection))->recordFor(
             $request,
             $esReimpresion ? 'cash_close.reprinted' : 'cash_close.printed',
             'cash_close',
@@ -180,6 +180,7 @@ class CashCloseController extends Controller
                 'reason' => $motivo === '' ? null : $motivo,
                 'reprint_of_job_id' => $esReimpresion ? (int) $anteriores[0]->id : null,
             ],
+            (int) $contexto['store_id']
         );
 
         return response()->json([

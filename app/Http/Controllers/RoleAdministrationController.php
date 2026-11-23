@@ -127,7 +127,7 @@ class RoleAdministrationController extends Controller
 
         $this->escribeLosPermisos((int) $role->id, $ids);
 
-        $this->audit->record(
+        $this->audit->recordFor(
             $request,
             self::ACCION_PERMISOS,
             self::ENTIDAD,
@@ -162,7 +162,7 @@ class RoleAdministrationController extends Controller
 
         $this->escribeElAmbito((int) $role->id, $ids);
 
-        $this->audit->record(
+        $this->audit->recordFor(
             $request,
             self::ACCION_TIENDAS,
             self::ENTIDAD,

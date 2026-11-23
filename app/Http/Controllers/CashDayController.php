@@ -146,6 +146,20 @@ class CashDayController extends Controller
 
         $caja = CashRegister::query()->findOrFail($id);
 
+        // La APERTURA queda anotada: quien abrio la caja y con que partida.
+        // Una caja abierta sin rastro es una caja que nadie puede defender.
+        (new AuditWriter($this->connection))->recordFor(
+            $request,
+            'cash_register.opened',
+            'cash_register',
+            (int) $caja->id,
+            [
+                'business_date' => $fecha->format('Y-m-d'),
+                'opening_balance' => PosAmount::text($caja->opening_balance),
+            ],
+            (int) $store->id
+        );
+
         return response()->json([
             'id' => (int) $caja->id,
             'status' => (string) $caja->status,
@@ -254,6 +268,22 @@ class CashDayController extends Controller
 
         $cerrada = CashRegister::query()->findOrFail((int) $caja->id);
 
+        // EL CIERRE queda anotado: quien cerro, con que saldo contado y, si
+        // hubo descuadre, con que motivo. Un cierre sin motivo en la
+        // auditoria es un cierre que nadie puede justificar despues.
+        (new AuditWriter($this->connection))->recordFor(
+            $request,
+            'cash_register.closed',
+            'cash_register',
+            (int) $cerrada->id,
+            [
+                'business_date' => $fecha->format('Y-m-d'),
+                'closing_balance' => PosAmount::text($cerrada->closing_balance),
+                'reason' => $motivo,
+            ],
+            (int) $store->id
+        );
+
         // EL Z SELLADO: el cierre HECHO, con su contenido y su firma. Las
         // cifras del cierre son las del Z, no un recalculo.
         $z = $this->day->zSellado((int) $store->id, $fecha);
@@ -332,7 +362,7 @@ class CashDayController extends Controller
 
         // LA AUDITORIA: quien deshizo un cierre, y por que. Un cierre que se
         // deshace sin dejar rastro es un cierre que nadie puede defender.
-        (new AuditWriter($this->connection))->record(
+        (new AuditWriter($this->connection))->recordFor(
             $request,
             'cash_register.reopened',
             'cash_register',
@@ -342,6 +372,7 @@ class CashDayController extends Controller
                 'business_date' => $fecha->format('Y-m-d'),
                 'reason' => $motivo,
             ],
+            (int) $store->id
         );
 
         return response()->json([

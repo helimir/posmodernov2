@@ -84,7 +84,7 @@ final class PrintAgentAdministrationController extends Controller
                 'updated_at' => now(),
             ]);
 
-        $this->audit->record(
+        $this->audit->recordFor(
             $request,
             self::ACCION_REVOCADO,
             self::ENTIDAD_AGENTE,
@@ -139,7 +139,7 @@ final class PrintAgentAdministrationController extends Controller
                 'updated_at' => now(),
             ]);
 
-        $this->audit->record(
+        $this->audit->recordFor(
             $request,
             self::ACCION_RESTAURADO,
             self::ENTIDAD_AGENTE,
