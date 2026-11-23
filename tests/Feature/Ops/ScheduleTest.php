@@ -60,6 +60,22 @@ describe('el planificador', function () {
             ->and($evento->expression)->toBe('* * * * *');
     });
 
+    it('programa el bombeo de las impresoras que escribe el servidor', function () {
+        // Y ESTA NO ERA OPCIONAL: sin ella, los tickets de una impresora de
+        // red se quedaban en `queued` para siempre.
+        $evento = evento(plan(), 'ops:print-pump');
+
+        expect($evento)->not->toBeNull()
+            ->and($evento->expression)->toBe('* * * * *');
+    });
+
+    it('programa la reemision de las ventas fiscales pendientes', function () {
+        $evento = evento(plan(), 'ops:emit-fiscal');
+
+        expect($evento)->not->toBeNull()
+            ->and($evento->expression)->toBe('*/5 * * * *');
+    });
+
     it('programa el backup cada noche a las 02:00', function () {
         $evento = evento(plan(), 'ops:backup');
 
@@ -79,7 +95,13 @@ describe('el planificador', function () {
     it('ninguna tarea se pisa con si misma', function () {
         $schedule = plan();
 
-        foreach (['ops:print-lease-sweep', 'ops:backup', 'ops:audit-purge'] as $comando) {
+        foreach ([
+            'ops:print-lease-sweep',
+            'ops:print-pump',
+            'ops:emit-fiscal',
+            'ops:backup',
+            'ops:audit-purge',
+        ] as $comando) {
             $evento = evento($schedule, $comando);
 
             expect($evento)->not->toBeNull()
@@ -87,7 +109,7 @@ describe('el planificador', function () {
         }
     });
 
-    it('el plan REAL de la aplicacion tiene las tres tareas', function () {
+    it('el plan REAL de la aplicacion tiene las tareas', function () {
         // El PROCESO APARTE: es como lo ve el cron. Aqui la consola
         // arranca de verdad, el planificador se llena, y lo que se comprueba
         // es lo que de verdad se ejecutaria.
@@ -98,6 +120,8 @@ describe('el planificador', function () {
         $texto = implode("\n", $salida);
 
         expect($texto)->toContain('ops:print-lease-sweep')
+            ->and($texto)->toContain('ops:print-pump')
+            ->and($texto)->toContain('ops:emit-fiscal')
             ->and($texto)->toContain('ops:backup')
             ->and($texto)->toContain('ops:audit-purge')
             ->and($texto)->toContain('--dias=365');
