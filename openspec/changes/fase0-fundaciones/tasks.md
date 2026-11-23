@@ -813,3 +813,144 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
 | R12 | El test anti-pais es un proxy debil | crear `app/Providers/Fiscal/` y extender el test a verificar la ruta |
 | R13 | El rango de control es de demostracion | `NumberSeries` ya falla con mensaje explicito; falta la **alerta** de rango agotado |
 | R15 | `legacy` y `v2` con datos distintos y el mismo cliente | el corte hay que decidirlo **antes** de la Fase 2, no durante |
+
+## Fase 3 - Cerrar el negocio
+
+> La Fase 2 esta **completa**: 14 unidades (F2-01 a F2-14). El **corte 1 esta cerrado**: 179
+> tareas cerradas y la suite en verde (719 tests / 10994 assertions). Y lo que queda no es el
+> nucleo: es **la puerta de entrada**. Hay dominio bueno, probado y en verde, que el negocio
+> **no puede usar**.
+>
+> **Decisiones del mantenedor**: el corte con el legacy **no migra el historico**
+> (2026-11-22), el agente LAN es un **servicio .NET** fuera del corte (2026-11-12), y el
+> **adaptador del Portal del SENIAT sigue BLOQUEADO** por el Manual Tecnico del art. 41 y la
+> API del Portal.
+>
+> La exploracion completa esta en **`exploration-fase3.md`**. Cada unidad es **un PR**.
+
+### El corte 2 — cerrar el negocio
+
+- [ ] **F3-01** **Las series y los perfiles fiscales en la UI.** Hoy solo hay **seeders**: **no se
+  puede crear una serie, un perfil ni un proveedor en produccion**, y `PosContext` resuelve la
+  **serie de las filas sembradas**. Sin esto, **instalar un cliente nuevo es una tarea de base de
+  datos**: el corte 1 demuestra, no instala. Alta y baja de la serie de documento y de la de
+  control, del perfil, del proveedor, de su entorno y de la inscripcion fiscal del emisor.
+  Dep: 1.13, F2-02, F2-03
+    - **La fila es el unico sitio** donde se cambia un dato fiscal: no hay codigo que tocar, y el
+      perfil ya declara los tokens que el comprobante necesita (F2-02).
+    - Mismo vocabulario que las demas pantallas: importes como **texto decimal**, fallo **422 con
+      `{"errorMsg": ...}`** y permisos **declarados junto a la ruta**.
+- [ ] **F3-02** **La cola de impresion completa.** Cuatro huecos, y **ninguno es del canal**: (a)
+  la **pantalla de agentes**, donde la revocacion y el restore existen **por API** y **la UI no los
+  llama nunca** (el agente aparece solo como **lista de lectura** dentro de la pantalla de
+  destinos); (b) el **estado del ticket en el POS**, porque el campo `print` viaja en la respuesta
+  del cobro y `pos/index.tsx` **no lo consume**: el cajero ve "vendi" pero **no ve si el papel
+  salio**; (c) el **Z** que ensena el estado de sus trabajos de impresion; y (d) el **heartbeat
+  honesto**, que cuenta los trabajos en cola de **toda la tienda**, incluidos los de `browser` y
+  `server_socket` y los que ese agente **no puede tomar**. Dep: F2-05, F2-07, F2-08, F2-09
+    - La impresion es la **unica prueba** de que la caja entrego algo: si el papel no salio, el
+      cajero tiene que saberlo **antes** de que el cliente se vaya.
+    - El canal ya existe (dispatcher, maquina de estados, destinos, agente y sus cinco endpoints):
+      lo que falta es **la puerta** (la UI) y la **honestidad** del conteo.
+- [ ] **F3-03** **La anulacion y la devolucion de ventas.** `FiscalIssuanceService::void()` y
+  `DerivedDocumentService` **existen y solo los invocan tests**, y `SalesController` esta
+  **declarado de SOLO LECTURA**. Sin esto **no hay devolucion de venta ni nota de credito**.
+  Dep: 0.3.8, F2-04, 1.8
+    - La anulacion **deja la venta sin efecto**, **repone el lote exacto** y **escribe el asiento**:
+      es el P0 #15 del legacy en su forma correcta, no la venta historizada con importes viejos.
+    - El numero **anulado no vuelve**: es la regla del correlativo (SNAT/2026/00093 arts. 8.2, 21,
+      27).
+- [ ] **F3-04** **Las compras, los proveedores y las devoluciones de mercaderia.** `TransferService`
+  y `LotReturner` son **dominio huerfano con test verde**: existen, funcionan y **el negocio no
+  puede usarlos**. El ciclo de compras (alta con sus lotes, que es como entra el stock), los
+  proveedores con su deuda y la devolucion de mercaderia son el hueco que queda.
+  Dep: 0.4.5, 0.5.5, 0.5.7
+    - El P0 #9 del legacy (borrar una compra revierte el stock de **un solo producto**) **se evita
+      aqui**: la devolucion repone el **lote exacto** y la compra se revierte **completa**.
+    - Sin compras **no hay costo real**: el inventario valorado no tiene contra que valorar.
+- [ ] **F3-05** **El cobro de cuotas.** `InstallmentService` **ya calcula el plan con el redondeo
+  correcto** y **solo lo llama un test**. Los P0 **#2, #3 y #4** del legacy estan aqui, y **son los
+  mas graves que quedan**. Dep: 0.6.7, 0.6.8, 1.4
+    - El legacy actualizaba `installment_orders` y `selling_price` **sin `WHERE`**, y la cascada de
+      cuotas corria sobre **8 tablas sin transaccion**.
+    - Aqui el plan **es una fila**, la cascada va **en una transaccion** y cada cobro imputa **en su
+      tienda** (el P0 #3 no se repite).
+- [ ] **F3-06** **La contingencia en papel y el QR como imagen.** `ContingencyService` y la tabla
+  `fiscal_contingency_forms` **existen y no tienen puerta**: hoy **no se puede abrir un talonario de
+  contingencia**, o sea que **un corte de red no tiene salida**. Y el QR **no se dibuja como
+  imagen**: hoy es una cadena (`qr_content`) y no hay libreria de QR en `composer.json`.
+  Dep: 0.3.9, 0.8.3
+    - La conciliacion a **D+1** (registro de los documentos fisicos y remision de los PDF **al dia
+      siguiente**) es la regla que ya esta escrita en 0.3.9.
+    - El QR es la forma de **consultar el comprobante**, que hoy no existe (F3-12).
+- [ ] **F3-07** **Los gastos, los ingresos y la banca.** Escribe los **cuatro tipos de asiento que
+  hoy NO se escriben**: `expense`, `bank_movement`, `refund` y `adjustment` (hoy solo se escriben
+  `sale`, `sale_payment` y `opening_balance`, tres de los siete del catalogo). `expenses` es la
+  **fuente de verdad del gasto** y las tablas **ya estan vacias** (`expenses`,
+  `expense_categories`, `income_sources`, `bank_accounts`). Dep: 0.7.2, 0.7.3, 0.7.4
+    - **Es la precondicion de los reportes**: sin esto, "ingresos y gastos" daria ceros y el PyG
+      seria una mentira.
+    - El P0 #8 del legacy (el gasto que suma a `total_deposit` en vez de `total_withdraw`) **esta
+      resuelto por el diseno**: los saldos se derivan de los asientos.
+- [ ] **F3-08** **El motor de reportes.** **Depende de F3-07**: sin gastos, "ingresos y gastos" daria
+  ceros. Ventas por periodo, producto y cajero; IVA por alicuota; PyG; libro de caja; aging de
+  clientes; inventario valorado; arqueo; Z por periodo; y la **exportacion**, que hoy **no existe**.
+  Dep: F3-07, F2-10, F2-11
+    - El dato ya esta: `sales`, `sale_totals`, `sale_payments`, `ledger_entries`/`ledger_lines`, el
+      snapshot de la alicuota y el Z sellado.
+    - Hoy el **unico** reporte es el de stock bajo (1.5): un POS que no ensenia como va el mes no lo usa
+      un dueno.
+- [ ] **F3-09** **El correlativo fiscal atomico y el outbox de la emision.** Dos huecos que el corte 1
+  dejo. (a) `NumberSeries::reserve()` hace el `UPDATE ... RETURNING` y el `INSERT` de la traza en
+  **dos sentencias** y el llamante decide la transaccion: en el camino fiscal la reserva se hace
+  **fuera** de la transaccion, asi que un fallo posterior **quema el numero sin dejar traza**. (b) La
+  emision fiscal (T2) ocurre **FUERA** de la transaccion de la venta y **sin outbox**: si el proceso
+  muere entre el commit y la emision, la venta queda **sin comprobante y sin trabajo pendiente**, y el
+  reintento es **manual**. Dep: 0.3.3, 0.6.6, F2-04
+    - El patron de un outbox **ya existe** en este repositorio: `sms_messages` (M25).
+    - El correlativo es lo que **no se puede recuperar** (SNAT/2026/00093 arts. 8.2, 21, 27): un hueco
+      en la traza es un hueco **definitivo**.
+- [ ] **F3-10** **El registro del agente que no pisa el token de otro, y la idempotencia del
+  resultado.** `PrintAgentController::register()` busca primero por `instance_id` y, si no hay fila,
+  **busca por NOMBRE**: cuando la fila encontrada tiene otro `instance_id`, **la reemplaza**, y dos
+  agentes con el mismo nombre en la misma tienda **se pisan** (el segundo **invalida el token del
+  primero sin auditoria**). Y un `result` reenviado tras un lease vencido **cae en
+  `claimed`/`printing`** y **devuelve 422** en vez de ser un no-op: la idempotencia depende del estado,
+  y el agente que **si** imprimio el papel se lleva un error. Dep: F2-09, 0.8.4
+    - **Ahora** es, porque el cliente .NET viene despues: arreglar el contrato **antes** de que exista
+      el cliente es mas barato que hacerlo reimplementando el rodeo en otro lenguaje.
+    - El canal endurecido de la Fase 2 (argon2id, revocacion definitiva, rotacion con ventana de
+      gracia) ya esta: faltan estas dos cosas.
+- [ ] **F3-11** **El selector de tienda y la configuracion por tienda completa.**
+  `PosContext::resolveStore()` elige **SIEMPRE la primera tienda** del usuario: un usuario con dos
+  tiendas **cobra siempre en la primera**. Y de las **17 columnas** de `store_settings` solo **2 tienen
+  puerta** en la UI (los dos umbrales de la Fase 2): `auto_print` y `remote_printing` las **lee** el
+  sistema, y las demas **no las edita nadie**. Dep: 1.1, F2-13b
+    - **Una columna que nadie puede cambiar son datos que nadie posee**, y **una tienda que no se puede
+      elegir no es una tienda**.
+    - `auto_print` ya decide si el ticket se encola: se lee de una fila que el operador **no puede
+      corregir**.
+- [ ] **F3-12** **La entrega del comprobante al cliente.** El contrato ya tiene `deliver()` y los
+  modelos de destino (`DeliveryRecipient`) y de acuse (`DeliveryReceipt`); el proveedor local **lanza**.
+  Dep: 1.8, F2-05
+    - **Ojo: la entrega por correo o por consulta publica NO depende del adaptador del Portal**:
+      depende de **donde se hospeda el PDF**, y eso es **una decision nuestra**. El adaptador del Portal
+      sigue **bloqueado**; **la entrega no**.
+    - Se dijo que dependia del adaptador cuando **no** es cierto, y esa confusion es hoy **la mas cara
+      del plan**: bloquea una unidad que se puede escribir ya.
+- [ ] **F3-13** **La i18n.** El copy de la UI esta en **ingles hardcodeado** y los `errorMsg` en
+  **castellano**, en la misma aplicacion. Las tablas `languages`, `language_translations` (M25) y
+  `number_formats` (M01) **existen y no se siembran ni se consultan**. Dep: 0.1.6, F2-01
+    - **No bloquea el uso: es calidad**. Entra **al final** porque es **mecanica** (el 80 % es
+      extraccion) y porque el esquema **ya esta pagado**: el coste es el trabajo, no las tablas.
+    - `number_formats` es el sitio donde deberia vivir el formato de fecha y de numero que el renderer
+      hoy escribe a pelo (`d/m/Y`, `h.i.s`).
+
+### Lo que NO entra en este corte (y por que)
+
+| Fuera | Por que |
+|---|---|
+| El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |
+| La **remision mensual al SENIAT** (~900 l) | depende del adaptador; las tablas (`fiscal_periodic_reports`, `fiscal_contingency_forms`) ya estan en el esquema |
+| El **cliente .NET del agente LAN** (1 500-2 500 l, fuera de PHP) | decision tomada (.NET, servicio nativo), pero es otro lenguaje y otro repositorio: aqui **solo se cierra el contrato** |
+| El **motor de reportes sin gastos** (~3 300 l) | **dependencia interna**: sin **F3-07**, "ingresos y gastos" daria ceros. Los reportes van **despues** de los gastos, no en paralelo |

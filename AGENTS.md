@@ -23,14 +23,17 @@ test command, the testing preconditions and the `rules` for each phase.
 **Tasks are numbered `0.F.N` and each has a twin `0.F.N-T`** — the test that fixes the
 rule the implementation serves. Both close together or not at all.
 
-**WHERE THE PROJECT IS (2026-11-23): the CUT 1 IS CLOSED.** Phase 0 (the foundations), Phase 1
-(the POS application, 13 units) and Phase 2 (**the cut, 14 units**: F2-01 to F2-14) are all
-done, each in its own PR, with the suite green. `tasks.md` carries the 179 closed tasks and
-`apply-progress.md` the evidence of each unit. What is **not** done, and why, is written
-down: the Portal del SENIAT adapter (blocked by the Manual Tecnico del art. 41 and the API:
-not one line before having them in hand), the LAN agent in .NET (another language, out of the
-cut), the reports engine, the i18n, and the cut with the legacy. **Phase 3 does not exist
-yet**: planning it is the next thing, not writing another unit.
+  **WHERE THE PROJECT IS (2026-11-23): the CUT 1 IS CLOSED.** Phase 0 (the foundations), Phase 1
+  (the POS application, 13 units) and Phase 2 (**the cut, 14 units**: F2-01 to F2-14) are all
+  done, each in its own PR, with the suite green. `tasks.md` carries the 179 closed tasks and
+  the **13 units of Phase 3** (`F3-01` to `F3-13`, planned in `exploration-fase3.md`), and
+  `apply-progress.md` the evidence of each unit. What is **not** done, and why, is written
+  down: the Portal del SENIAT adapter (blocked by the Manual Tecnico del art. 41 and the API:
+  not one line before having them in hand), the monthly remision (depends on the adapter), the
+  LAN agent in .NET (another language and another repository: only the contract is closed
+  here), and the cut with the legacy. **Phase 3 is planned but not started**: F3-01 (the fiscal
+  series in the UI) is the first unit, because today a new client cannot have a series
+  created without touching the database.
 
 ## The chain: one PR per unit, and how it advances
 

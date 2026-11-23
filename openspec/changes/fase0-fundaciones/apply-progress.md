@@ -1774,7 +1774,7 @@ El **reintento automatico de los trabajos FALLIDOS no se programa**. Un fallo de
 
 ### Siguiente
 
-**EL CORTE 1 ESTA CERRADO**: las 14 unidades de la Fase 2 (F2-01 a F2-14) estan hechas, cada una en su PR, con su suite en verde. Lo que sigue no es una unidad mas: es **planear la Fase 3**, que todavia no existe en el plan. Y hay tres deudas **deDecision** que son del mantenedor, no del codigo: el **corte con el legacy** (que tiene fecha pero no dia), el **agente LAN en .NET** (fuera del corte 1, porque es otro lenguaje) y el **adaptador del Portal del SENIAT** (bloqueado por el Manual Tecnico del art. 41 y la API: no se escribe ni una linea antes de tenerlos en la mano).
+**EL CORTE 1 ESTA CERRADO**: las 14 unidades de la Fase 2 (F2-01 a F2-14) estan hechas, cada una en su PR, con su suite en verde. Y **la Fase 3 esta PLANIFICADA** (no hecha): 13 unidades (F3-01 a F3-13) en `exploration-fase3.md` y en la seccion "Fase 3" del `tasks.md`. La primera es **F3-01, las series y los perfiles fiscales en la UI**: hoy solo hay seeders, y **un cliente nuevo no puede tener una serie creada sin tocar la base de datos**. Y hay tres deudas **deDecision** que son del mantenedor, no del codigo: el **corte con el legacy** (que tiene fecha pero no dia), el **agente LAN en .NET** (fuera del corte 1, porque es otro lenguaje) y el **adaptador del Portal del SENIAT** (bloqueado por el Manual Tecnico del art. 41 y la API: no se escribe ni una linea antes de tenerlos en la mano).
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 
