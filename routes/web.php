@@ -307,3 +307,4 @@ require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
 require __DIR__.'/administration.php';
 require __DIR__.'/printing.php';
+require __DIR__.'/fiscal.php';

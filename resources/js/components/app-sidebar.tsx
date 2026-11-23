@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, ListChecks, Package, Plug, Printer, Receipt, ScanLine, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
+import { BookOpen, Folder, Hash, Landmark, LayoutGrid, ListChecks, Package, Plug, Printer, Radio, Receipt, ScanLine, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
 import { usePermissions } from '@/lib/permissions';
 import AppLogo from './app-logo';
 
@@ -74,6 +74,24 @@ const mainNavItems: NavItem[] = [
         url: '/impresion/trabajos',
         icon: ListChecks,
         permission: 'printing.read',
+    },
+    {
+        title: 'Fiscal series',
+        url: '/fiscal/series',
+        icon: Hash,
+        permission: 'fiscal.read',
+    },
+    {
+        title: 'Fiscal profiles',
+        url: '/fiscal/perfiles',
+        icon: Landmark,
+        permission: 'fiscal.read',
+    },
+    {
+        title: 'Fiscal providers',
+        url: '/fiscal/proveedores',
+        icon: Radio,
+        permission: 'fiscal.read',
     },
 ];
 
