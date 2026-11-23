@@ -1737,6 +1737,31 @@ Cuatro decisiones del mantenedor, aplicadas en una unidad.
 El script que adapto las llamadas al escritor nuevo **quito el `$request`** de 13 llamadas y **duplico** el argumento en 2 (`CashDayController`). Sin la `$request`, las rutas de administracion fallaban con un argumento de menos. Se restauraron una a una y se verifico que las **15** pasan exactamente un `$request` y el `store_id` en su sitio.
 
 Es el fallo que hacen los scripts de busqueda y reemplazo: cambian el texto y no verifican que la llamada **siga significando lo mismo**. Un cambio de firma no se propaga con un `sed`: se propaga mirando, una llamada por una, que la llamada nueva significa lo que significaba la vieja.
+### F2-14 — Los backups y el scheduler (PR #147, `7c1eabe`)
+
+No habia **nada**: cero coincidencias de `backup` en `app/`, `config/` y `database/`, y `bootstrap/app.php` no declaraba `withSchedule`. El **barrido de leases** ya estaba escrito desde la F2-08 y **nadie lo ejecutaba nunca**: un agente que moria con un trabajo en las manos dejaba el comprobante sin imprimir **para siempre**.
+
+**El backup se VERIFICA y se RESTAURA DE VERDAD.** Un fichero que `pg_restore --list` no puede leer no es un backup, y **se borra**: un backup roto en la carpeta ocupa el sitio del bueno. Y la prueba **restaura de verdad** sobre una base **PROPIA** (restaurar pisa, y pisar la base de la suite dejaria a los demas tests sin base) y comprueba que los datos **vuelven**.
+
+**El mismo codigo habla los dos idiomas**: `pg_dump` en el PATH (el servidor y la CI) o `docker exec` dentro del contenedor (un desarrollo con la base en Docker, donde el host no tiene ni `pg_dump`). Un backup que solo funciona en una maquina no existe el dia de la recuperacion, que es el unico dia en que importa.
+
+**`ops:restore` exige `--force`**: restaurar pisa la base, y sin el flag no se hace **nada**. Y un backup ilegible **no se restaura**: restaurar uno roto deja la base **vacia**, que es peor que no restaurar, porque una base vacia parece un fallo de PostgreSQL y no de un restore.
+
+**La retencion tiene un suelo de 7 dias**: por debajo, la purga no borra nada. Un backup es la ultima linea de defensa, y si el reloj va mal el primero que se lleva por delante es el unico que hay.
+
+**El plan esta en una clase** (`PosSchedule`), no en un closure de `bootstrap/app.php`: el planificador de Laravel llena los eventos en `Artisan::starting()`, es decir, **cuando arranca la consola**, asi que un test que lo mira en caliente depende de si otro test arranco la consola antes. Un test que depende del orden **no es un test**. Con el plan en una clase, el test monta **el mismo** plan y, ademas, el plan **real** se comprueba en un **proceso aparte** (lo que ve el cron).
+
+**Lo que se programa**: el barrido de leases **cada minuto**, el **backup cada noche a las 02:00** y la **purga de la auditoria cada noche a las 03:00**, las tres con `withoutOverlapping()`.
+
+### Lo que el CI catch y esta maquina no podia
+
+El camino `pg_dump` (el de produccion) **nunca se ejercita en esta maquina**, porque aqui no hay `pg_dump` y se va por Docker. El CI lo probo y encontro **dos** fallos que solo existen en ese camino: el closure que ejecuta `pg_restore` **no capturaba** `$database` ni `$fichero`, y el codigo de salida se asignaba **dentro** del closure (fuera solo habia `null`, que no es `0`: un restore correcto parecia fallido).
+
+**La leccion**: una maquina que solo ejercita UNO de los dos caminos no sabe que el otro existe. El CI no es un tramite: es **la otra mitad de la cobertura**. Y el camino Docker ahora **hereda `PGPASSWORD`** del entorno (`docker exec -e PGPASSWORD`, sin valor), porque un servidor con `scram-sha-256` no acepta un `pg_restore` sin credencial, y la contrasena no se escribe en la linea de ordenes.
+
+### Decision mia
+
+El **reintento automatico de los trabajos FALLIDOS no se programa**. Un fallo de impresion no distingue "no salio" de "salio a medias", y un reintento automatico puede **duplicar un ticket**. El reintento lo pide una persona (`DispatchPrintJob`), que es quien sabe si el ticket salio.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
@@ -1749,7 +1774,7 @@ Es el fallo que hacen los scripts de busqueda y reemplazo: cambian el texto y no
 
 ### Siguiente
 
-**F2-14**: los **backups y el scheduler**. **No hay nada**: cero coincidencias de `backup` en `app/`, `config/` y `database/`. `ops:backup`, `ops:restore`, **verificacion** de restauracion, y el **scheduler que hoy no existe** (`bootstrap/app.php` no declara `withSchedule`), que es donde vive el barrido de leases y el reintento de los trabajos.
+**EL CORTE 1 ESTA CERRADO**: las 14 unidades de la Fase 2 (F2-01 a F2-14) estan hechas, cada una en su PR, con su suite en verde. Lo que sigue no es una unidad mas: es **planear la Fase 3**, que todavia no existe en el plan. Y hay tres deudas **deDecision** que son del mantenedor, no del codigo: el **corte con el legacy** (que tiene fecha pero no dia), el **agente LAN en .NET** (fuera del corte 1, porque es otro lenguaje) y el **adaptador del Portal del SENIAT** (bloqueado por el Manual Tecnico del art. 41 y la API: no se escribe ni una linea antes de tenerlos en la mano).
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 
