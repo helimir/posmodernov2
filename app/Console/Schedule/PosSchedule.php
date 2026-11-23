@@ -43,6 +43,32 @@ final class PosSchedule
             ->everyMinute()
             ->withoutOverlapping();
 
+        // EL BOMPEO de las impresoras que escribe el SERVIDOR, cada minuto.
+        //
+        // Y ESTE NO ERA OPCIONAL: el comando existia desde la F2-06 (el
+        // escritor directo) y su propio docblock decia "el trabajo en
+        // bucle es del planificador". Sin esta tarea, los tickets de una
+        // impresora de red se quedaban en `queued` PARA SIEMPRE: la venta
+        // se cobraba y el papel no salia, y nadie se enteraba.
+        //
+        // Y CADA MINUTO, no cada diez segundos: el cron de verdad es
+        // `schedule:run`, que se despierta una vez por minuto, y una tarea
+        // mas rapida que el cron no se ejecuta nunca. El ticket del
+        // mostrador sale en el peor caso en un minuto; que salga AL
+        // INSTANTE es una decision de la Fase 3.
+        $schedule->command('ops:print-pump')
+            ->everyMinute()
+            ->withoutOverlapping();
+
+        // La REEMISION fiscal de las ventas pendientes, cada cinco minutos.
+        //
+        // Y ES SEGURA: el reintento reutiliza la reserva de la venta y no
+        // quema el correlativo, y solo trabaja con las ventas en
+        // `fiscal_failed`. Una venta ya emitida no se reemite.
+        $schedule->command('ops:emit-fiscal')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+
         // El BACKUP, cada noche.
         $schedule->command('ops:backup')
             ->dailyAt('02:00')
