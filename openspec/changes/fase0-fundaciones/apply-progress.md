@@ -1762,6 +1762,22 @@ El camino `pg_dump` (el de produccion) **nunca se ejercita en esta maquina**, po
 ### Decision mia
 
 El **reintento automatico de los trabajos FALLIDOS no se programa**. Un fallo de impresion no distingue "no salio" de "salio a medias", y un reintento automatico puede **duplicar un ticket**. El reintento lo pide una persona (`DispatchPrintJob`), que es quien sabe si el ticket salio.
+### F3-01 — Las series, los perfiles y los proveedores fiscales en la UI (PR #151)
+
+Las series, los perfiles y los proveedores fiscales existian **solo como seeders**: no habia ninguna pantalla ni endpoint para crearlos, y `PosContext` resolvia la serie de las filas sembradas. **Un cliente nuevo no podia tener una serie creada sin tocar la base de datos a mano**, y eso es lo primero que pide cualquiera que instala un POS.
+
+Tres pantallas (`/fiscal/series`, `/fiscal/perfiles`, `/fiscal/proveedores`) y sus endpoints, con el **permiso declarado junto a la ruta**. Y **sin borrado**: la numeracion no se borra nunca, una serie se apaga cerrando su vigencia y un canal con su interruptor.
+
+**Lo que se edita y lo que no**, que es el fondo de la unidad: la **identidad de la numeracion** (perfil, tienda, papel, autoridad, prefijo, rango) y el `next_number` **no se editan nunca** — el correlativo lo mueve el dominio con `UPDATE ... RETURNING`; un **regimen se declara una vez** (cerrarlo no es editarlo: se declara el otro y el resolvedor elige el de vigencia mas reciente); y el **canal de un proveedor no se cambia** (decide como se emite y quien asigna el control). Y el **secreto nunca es un campo**: solo el prefijo de la variable de entorno.
+
+Tres permisos planos y del modulo `fiscal` (`fiscal.read`, `fiscal.create`, `fiscal.update`),following el precedente de la impresion: un area de administracion con varias pantallas es un modulo, no un permiso por pantalla. El **contador lee** (supervisa que numeracion declara cada tienda); el **cajero no tiene ninguno** (un cajero cobra, no declara numeracion).
+
+**Suite**: 770 tests / 11 273 assertions, en verde. 25 tests nuevos, tres de ellos **pineando los conjuntos cerrados contra el esquema y contra lo que el dominio de verdad resuelve** (los papeles y las autoridades contra las CHECK de PostgreSQL, los canales contra el resolutor), para que un enum espejo no se aparte del esquema en silencio.
+
+### Las dos deudas que deja
+
+- **La unicidad de la serie la comprueba la aplicacion, no la base**: dos POST simultaneos con el mismo papel pueden crear dos series y el resolvedor se queda con la primera. El indice UNIQUE sobre `(store_id, fiscal_profile_id, series_role)` es el arreglo.
+- **`fiscal_series.provider_id` se puede editar y NADIE lo lee**: el dominio resuelve la imprenta por `fiscal_profile_environments.provider_id`. Un campo editable que no cambia nada es una trampa: tiene que dejar de editarse o el dominio tiene que empezar a leerlo.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).

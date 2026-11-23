@@ -830,7 +830,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
 
 ### El corte 2 — cerrar el negocio
 
-- [ ] **F3-01** **Las series y los perfiles fiscales en la UI.** Hoy solo hay **seeders**: **no se
+- [x] **F3-01** **Las series y los perfiles fiscales en la UI.** Hoy solo hay **seeders**: **no se
   puede crear una serie, un perfil ni un proveedor en produccion**, y `PosContext` resuelve la
   **serie de las filas sembradas**. Sin esto, **instalar un cliente nuevo es una tarea de base de
   datos**: el corte 1 demuestra, no instala. Alta y baja de la serie de documento y de la de
@@ -957,6 +957,13 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
   contador (que a partir del corte el historico esta en el sistema viejo, y que **no se
   mezclan bases**), y el **apagado** del `sync.php` del legacy **el mismo dia** que se enciende
   el nuevo servicio, **nunca antes**. Dep: F3-04, F3-05, F3-07
+    - **La unicidad de la serie la comprueba la aplicacion, no la base**: dos POST simultaneos con el
+      mismo papel pueden crear dos series, y el resolvedor se queda con la primera. El indice UNIQUE
+      sobre `(store_id, fiscal_profile_id, series_role)` es el arreglo, y es un cambio de esquema del
+      dominio fiscal.
+    - **`fiscal_series.provider_id` se puede editar y NADIE lo lee**: el dominio resuelve la imprenta
+      por `fiscal_profile_environments.provider_id`. Un campo editable que no cambia nada es una
+      trampa, asi que tiene que dejar de editarse o el dominio tiene que empezar a leerlo.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |
