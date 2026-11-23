@@ -755,11 +755,36 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
     - Las escrituras que **mas se disputan** quedan anotadas: la **venta**, la **apertura**, el
       **cierre**, el **cobro a un cliente**, y la administracion (usuarios, roles, impresoras,
       destinos y agentes).
-- [ ] **F2-14** **Los backups y el scheduler.** **No hay nada**: cero coincidencias de `backup` en
+- [x] **F2-14** **Los backups y el scheduler.** **No hay nada**: cero coincidencias de `backup` en
   `app/`, `config/` y `database/`. `ops:backup`, `ops:restore`, **verificacion** de restauracion, y
   el **scheduler que hoy no existe** (`bootstrap/app.php` no declara `withSchedule`), que es donde
   vive el barrido de leases y el reintento de los trabajos. Dep: F2-08
-
+    - **El backup se VERIFICA y se RESTAURA DE VERDAD.** Un fichero que `pg_restore --list` no puede
+      leer no es un backup, y **se borra**: un backup roto en la carpeta ocupa el sitio del bueno.
+      Y la prueba **restaura de verdad** sobre una base **propia** (restaurar pisa) y comprueba que
+      los datos **vuelven**.
+    - **El mismo codigo habla los dos idiomas**: `pg_dump` en el PATH (el servidor y la CI) o
+      `docker exec` dentro del contenedor (un desarrollo con la base en Docker, donde el host no
+      tiene ni `pg_dump`). Un backup que solo funciona en una maquina no existe el dia de la
+      recuperacion, que es el unico dia en que importa.
+    - **`ops:restore` exige `--force`**: restaurar pisa la base, y sin el flag no se hace NADA.
+      Y un backup ilegible **no se restaura**: restaurar uno roto deja la base vacia, que es peor
+      que no restaurar.
+    - **La retencion tiene un suelo de 7 dias**: por debajo, la purga no borra nada. Un backup es la
+      ultima linea de defensa, y si el reloj va mal el primero que se lleva por delante es el
+      unico que hay.
+    - **El plan esta en una clase** (`PosSchedule`), no en un closure de `bootstrap/app.php`:
+      el planificador de Laravel llena los eventos cuando arranca la CONSOLA, asi que un test que
+      lo mira en caliente depende del orden de los tests. Con el plan en una clase, el test monta
+      **el mismo** plan y, ademas, se comprueba el plan REAL en un proceso aparte (lo que ve el
+      cron).
+    - **Lo que se programa**: el barrido de leases **cada minuto** (un agente que murio con un
+      trabajo en las manos lo bloqueaba para siempre), el **backup cada noche a las 02:00** y la
+      **purga de la auditoria cada noche a las 03:00**.
+    - **Decision mia**: el **reintento automatico de los trabajos FALLIDOS no se programa**. Un
+      fallo de impresion no distingue "no salio" de "salio a medias", y un reintento automatico
+      puede **duplicar un ticket**. El reintento lo pide una persona (`DispatchPrintJob`), que es
+      quien sabe si el ticket salio.
 ### Lo que NO entra en este corte (y por que)
 
 | Fuera | Por que |
