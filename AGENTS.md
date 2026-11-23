@@ -12,7 +12,7 @@ defects. Do not port its code; do reuse its domain rules.
 ## The plan lives here, not in your head
 
 The active SDD change is **`fase0-fundaciones`**, in `openspec/changes/fase0-fundaciones/`:
-`proposal.md`, `design.md` (906 lines), `tasks.md` (152 tasks), `exploration.md`,
+`proposal.md`, `design.md` (906 lines), `tasks.md` (179 tasks, **all closed**), `exploration.md`,
 `apply-progress.md`, 10 capability specs under `specs/`, and research under `research/`.
 
 Read `tasks.md` and `apply-progress.md` **before** touching code: they carry the task
@@ -23,13 +23,23 @@ test command, the testing preconditions and the `rules` for each phase.
 **Tasks are numbered `0.F.N` and each has a twin `0.F.N-T`** — the test that fixes the
 rule the implementation serves. Both close together or not at all.
 
-## The chain: 18 stacked PRs, and how it advances
+**WHERE THE PROJECT IS (2026-11-23): the CUT 1 IS CLOSED.** Phase 0 (the foundations), Phase 1
+(the POS application, 13 units) and Phase 2 (**the cut, 14 units**: F2-01 to F2-14) are all
+done, each in its own PR, with the suite green. `tasks.md` carries the 179 closed tasks and
+`apply-progress.md` the evidence of each unit. What is **not** done, and why, is written
+down: the Portal del SENIAT adapter (blocked by the Manual Tecnico del art. 41 and the API:
+not one line before having them in hand), the LAN agent in .NET (another language, out of the
+cut), the reports engine, the i18n, and the cut with the legacy. **Phase 3 does not exist
+yet**: planning it is the next thing, not writing another unit.
+
+## The chain: one PR per unit, and how it advances
 
 `stacked-to-main`, **10000 changed lines per PR**. Each PR opens against `main` **after the
 previous one merged**, and is implemented on the previous PR's branch, then rebased onto
 `main` after the merge. `tasks.md` §"Corte final" is the authoritative list with the
-per-PR status; the older 16-PR tables in the same file are the historical measurement —
-use the 18-PR one.
+per-PR status; the older tables in the same file are the historical measurement.
+**The repo has 147 PRs and the cut 1 is closed**: read `tasks.md` and
+`apply-progress.md` for where each unit landed, not the tables above.
 
 **The ceiling moved from 2500 to 10000 on 2026-11-11**, by the maintainer's decision, to
 stop units from being split where the split fights the domain: a sale without its ledger
@@ -42,13 +52,15 @@ Non-negotiable rules of the chain:
 
 - **One work unit per PR.** The diff must show *only* that unit. A polluted diff is a
   base bug: retarget or rebase.
-- **The attempt ledger gates every unit.** Before any runtime-bearing work:
+- **The attempt ledger gates every unit.** The ledger command is
   `gentle-ai sdd-attempt acquire --cwd <repo> --change fase0-fundaciones --request-id <id>
-  --work-unit <label> --evidence-goal <goal> --max-attempts <n> --max-changed-lines <n>`.
-  Launch only on `state: proceed`; keep the token. Afterwards `… settle` with
+  --work-unit <label> --evidence-goal <goal> --max-attempts <n> --max-changed-lines <n>`;
+  launch only on `state: proceed` and keep the token, then settle with
   `--outcome passed|failed|interrupted`, `--evidence-revision`, `--diagnosis`,
   `--harness-disposition`, `--cleanup-evidence`, `--process-evidence`. **Merge before
   begin or after finish** — never rebase with an attempt open.
+  **If `gentle-ai sdd-attempt` is not in the binary, there is no ledger**: run the unit
+  without it and say so. The ledger is an accounting aid, not a gate that can stop the work.
 - **Every PR needs** its linked issue with `status:approved`, `Closes #N`, exactly one
   `type:*` label, the repo's PR template with the full **Chain Context** (start, end,
   prior dependencies, follow-up, out of scope), the dependency diagram marking the
