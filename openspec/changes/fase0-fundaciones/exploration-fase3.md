@@ -399,3 +399,59 @@ cuando **no** depende.
   espanol y con el nombre que declara la regla que fija**.
 - Los permisos van **declarados junto a la ruta**, el fallo es **422 con `{"errorMsg": ...}`**,
   y los **importes viajan como texto decimal**.
+
+## Las tres decisiones del mantenedor, RESUELTAS (2026-11-23)
+
+Lo de arriba es el contexto. Esto es lo que se decidio, y **cada decision tiene su consecuencia
+escrita en el plan**:
+
+### 1. EL CORTE CON EL LEGACY: **se decide al desplegar**
+
+El historico **no se migra** y **la fecha no se fija ahora**: se fija el dia que el cliente
+**certifique** los saldos de apertura. Por que: es lo que evita el "el legacy y el nuevo
+muestran stocks distintos el primer dia y nadie sabe cual es el bueno".
+
+**Lo que hay que tener listo ANTES de ese dia** (es la unidad **F3-14**):
+
+- el **checklist** de los cuatro saldos que hay que certificar: stock por tienda y producto,
+  saldo y deuda por cliente y proveedor, saldo de caja por cuenta y tienda;
+- la **guia** de la ventana de solo lectura del legacy;
+- el **material de aviso** al cliente y al contador: que a partir del corte el historico esta
+  en el sistema viejo, y que **no se mezclan bases** (o se pregunta al v2, que solo tiene lo
+  nuevo, o al legacy, que solo tiene lo viejo);
+- el **apagado** del `sync.php` del legacy **el mismo dia** que se enciende el nuevo servicio
+  de sincronizacion, **nunca antes**.
+
+### 2. EL AGENTE LAN EN .NET: **se abre el repositorio del agente**
+
+El cliente del agente es **otro repositorio y otro lenguaje**, asi que **no es una unidad de
+este repositorio**: no esta en la Fase 3 y no puede estarlo.
+
+Lo que este repositorio **ya tiene cerrado** y no hay que rehacer: el contrato HTTP de los
+cinco endpoints, la autenticacion (argon2id, rotacion con ventana de gracia, revocacion
+definitiva), el TLS obligatorio, la tienda resuelta desde el `agent_id` y nunca del cuerpo, la
+frontera de los bytes (el servidor congela el ESC/POS y el agente **solo escribe**), el journal
+local para el "efectivamente-una-vez", y la **prohibicion de USB directo**.
+
+**Queda una decision pequena**, que es del cliente .NET y no de aqui: si el `instance_id`
+viaja en el **cuerpo** o en la **cabecera**. El middleware del servidor cambia **antes** de
+escribirlo, si hace falta.
+
+**Y MIENTRAS TANTO**, este repositorio sigue con lo que tiene: la impresion desde el servidor
+(`server_socket`, ahora programado cada minuto) y el modo `browser` como respaldo.
+
+### 3. EL ADAPTADOR DEL PORTAL DEL SENIAT: **se pide el Manual Tecnico y la API ya**
+
+El bloqueo es **documental**: sin el Manual Tecnico del art. 41 y la especificacion de la API
+del Portal no se escribe **ni una linea** del adaptador, porque el Manual puede cambiar el
+payload de raiz y escribirlo antes es escribirlo dos veces.
+
+**La accion es pedir la documentacion**, al cliente o al PSCE, y no una unidad de codigo.
+
+**Y MIENTRAS TANTO**, el canal en papel es un estado valido (la emision fiscal esta en la base
+y el comprobante se emite), y se puede avanzar en todo lo que **no depende** del adaptador:
+
+- la **entrega del comprobante al cliente** (**F3-12**): el `deliver()` del contrato ya existe
+  y lo que falta es **donde se hospeda el PDF**, que es decision nuestra;
+- la **contingencia en papel** y el **QR como imagen** (**F3-06**);
+- la **remision mensual** sigue depending del adaptador, asi que sigue fuera.

@@ -948,6 +948,15 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
 
 ### Lo que NO entra en este corte (y por que)
 
+- [ ] **F3-14** **El corte con el legacy, preparado.** El historico **NO se migra** (decidido el
+  2026-11-22) y la **fecha se decide AL DESPLEGAR**, cuando el cliente certifique los saldos.
+  Lo que esta unidad deja **listo** es lo que hace que ese dia sea **mecanico** y no una
+  discusion: el **checklist** de los cuatro saldos que hay que certificar (stock por tienda y
+  producto, saldo y deuda por cliente y proveedor, saldo de caja por cuenta y tienda), la
+  **guia** de la ventana de solo lectura del legacy, el **material de aviso** al cliente y al
+  contador (que a partir del corte el historico esta en el sistema viejo, y que **no se
+  mezclan bases**), y el **apagado** del `sync.php` del legacy **el mismo dia** que se enciende
+  el nuevo servicio, **nunca antes**. Dep: F3-04, F3-05, F3-07
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |
