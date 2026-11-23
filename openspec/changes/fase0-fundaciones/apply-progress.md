@@ -1714,6 +1714,29 @@ Cuatro decisiones del mantenedor, aplicadas en una unidad.
 
 **Y por que es la unica decision CON FECHA**: cada semana que pasa, el historico se queda mas solo en la base vieja, y la fecha de corte se acerca sin que nadie lo decida.
 
+### F2-13 — La auditoria de negocio (PR #145, `a0dc261`)
+
+`audit_logs` existia desde la Fase 0, pero no servia para nada: **un solo escritor** audita **una** de las 40+ acciones (con el `ip_address` en `null`), **no es append-only** y no hay forma de consultarla.
+
+**El escritor ya no depende de la peticion.** `record()` recibe DATOS (actor, tienda, IP) y `recordFor()` los saca de la peticion. Una venta se escribe **desde el dominio**, donde no hay HTTP, y por eso `record()` existe como metodo aparte: una venta que no queda auditada es una venta que nadie puede defender despues.
+
+**La auditoria NO se traga el cambio.** Si la escritura falla, el cambio ya esta hecho, la peticion **sigue** y el hueco queda **reportado**. Deshacer una venta porque no se pudo anotar es peor que la venta sin anotar: el hueco se ve, y por eso el escritor **devuelve si pudo escribir** en vez de lanzar.
+
+**`audit_logs` es append-only** (trigger, como `fiscal_document_events` desde M22): lo anotado no se edita ni se borra. Una prueba que se puede rehacer a posteriori no prueba nada.
+
+**Y la retencion tiene SU PUERTA.** Un trigger que bloquea el borrado y una tabla que crece para siempre son incompatibles: el comando `ops:audit-purge` pone la marca de sesion `app.audit_purge = 'on'` y solo asi puede purgar. La marca es de sesion, se va sola con la transaccion, y **nadie mas puede borrar** ni por error ni por descuido.
+
+**La retencion nunca es una sorpresa:** sin `--dias` no borra nada, sin `--force` **simula** (cuenta lo que borraria y no borra), y por debajo de **365 dias se niega**, con o sin `--force`. Eso no es una confirmacion, es una **politica**: la auditoria de un ano tiene que poder revisarse.
+
+**La pantalla** `/contabilidad/auditoria` (permiso `audit.read`, en el catalogo y en el rol del contador) filtra por **accion, entidad, persona y fecha**, y **no tiene edicion ni borrado**: solo se consulta. Y las entradas **sin usuario** (una accion del sistema) **no desaparecen**: el `leftJoin` las deja, y un `join` las borraria de la vista, que es peor que no auditarlas.
+
+**Las escrituras que mas se disputan quedan anotadas:** la **venta**, la **apertura**, el **cierre**, el **cobro a un cliente**, y la administracion (usuarios, roles, impresoras, destinos y agentes de impresion).
+
+### El defecto que casi se cuela
+
+El script que adapto las llamadas al escritor nuevo **quito el `$request`** de 13 llamadas y **duplico** el argumento en 2 (`CashDayController`). Sin la `$request`, las rutas de administracion fallaban con un argumento de menos. Se restauraron una a una y se verifico que las **15** pasan exactamente un `$request` y el `store_id` en su sitio.
+
+Es el fallo que hacen los scripts de busqueda y reemplazo: cambian el texto y no verifican que la llamada **siga significando lo mismo**. Un cambio de firma no se propaga con un `sed`: se propaga mirando, una llamada por una, que la llamada nueva significa lo que significaba la vieja.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
@@ -1726,7 +1749,7 @@ Cuatro decisiones del mantenedor, aplicadas en una unidad.
 
 ### Siguiente
 
-**F2-13**: la **auditoria de negocio**. `audit_logs` existe (M26) y **un solo escritor** audita **una de 40+ acciones** (con el `ip_address` en `null`), y **no es append-only** (si lo es `fiscal_document_events`, con trigger). Un `AuditTrail` en todas las escrituras, **append-only**, con pantalla de consulta y retencion.
+**F2-14**: los **backups y el scheduler**. **No hay nada**: cero coincidencias de `backup` en `app/`, `config/` y `database/`. `ops:backup`, `ops:restore`, **verificacion** de restauracion, y el **scheduler que hoy no existe** (`bootstrap/app.php` no declara `withSchedule`), que es donde vive el barrido de leases y el reintento de los trabajos.
 
 La **Fase 2**, planificada el 2026-11-12. La exploracion esta en **`exploration-fase2.md`** y las unidades en `tasks.md` §"Fase 2".
 
