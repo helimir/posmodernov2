@@ -52,6 +52,14 @@ function escenario_de_rutas(): array
         'account_id' => PermissionFixture::cuenta(),
         'role_id' => (int) ($rol?->id ?? 0),
         'user_id' => (int) $usuario->id,
+        // La ADMINISTRACION FISCAL: la serie, el perfil y el proveedor que
+        // las rutas de la unidad necesitan resolver.
+        'series_id' => (int) $escenario['document_series_id'],
+        'profile_id' => (int) $escenario['profile_id'],
+        'provider_id' => (int) DB::table('fiscal_providers')
+            ->where('fiscal_profile_id', (int) $escenario['profile_id'])
+            ->orderBy('id')
+            ->value('id'),
     ];
 }
 
@@ -70,6 +78,9 @@ function uri_de_la_ruta(string $uri, array $escenario): string
         '{account}' => (string) $escenario['account_id'],
         '{user}' => (string) $escenario['user_id'],
         '{role}' => (string) $escenario['role_id'],
+        '{series}' => (string) $escenario['series_id'],
+        '{profile}' => (string) $escenario['profile_id'],
+        '{provider}' => (string) $escenario['provider_id'],
     ]);
 }
 
@@ -124,6 +135,18 @@ dataset('rutas protegidas', [
     'un rol' => ['get', '/roles/{role}', 'role.read'],
     'permisos de un rol' => ['put', '/api/roles/{role}/permisos', 'role.update'],
     'tiendas de un rol' => ['put', '/api/roles/{role}/tiendas', 'role.update'],
+    'series fiscales' => ['get', '/fiscal/series', 'fiscal.read'],
+    'perfiles fiscales' => ['get', '/fiscal/perfiles', 'fiscal.read'],
+    'proveedores fiscales' => ['get', '/fiscal/proveedores', 'fiscal.read'],
+    'api de series fiscales' => ['get', '/api/fiscal/series', 'fiscal.read'],
+    'alta de serie fiscal' => ['post', '/api/fiscal/series', 'fiscal.create'],
+    'edicion de serie fiscal' => ['put', '/api/fiscal/series/{series}', 'fiscal.update'],
+    'api de perfiles fiscales' => ['get', '/api/fiscal/profiles', 'fiscal.read'],
+    'alta de perfil fiscal' => ['post', '/api/fiscal/profiles', 'fiscal.create'],
+    'edicion de perfil fiscal' => ['put', '/api/fiscal/profiles/{profile}', 'fiscal.update'],
+    'api de proveedores fiscales' => ['get', '/api/fiscal/proveedores', 'fiscal.read'],
+    'alta de proveedor fiscal' => ['post', '/api/fiscal/proveedores', 'fiscal.create'],
+    'edicion de proveedor fiscal' => ['put', '/api/fiscal/proveedores/{provider}', 'fiscal.update'],
 ]);
 
 /**

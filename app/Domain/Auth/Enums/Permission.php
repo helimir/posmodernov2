@@ -146,6 +146,15 @@ enum Permission: string
     /** Cambiar la configuracion de la tienda. */
     case StoreUpdate = 'store.update';
 
+    /** Ver la administracion fiscal: las series, los perfiles y los proveedores. */
+    case FiscalRead = 'fiscal.read';
+
+    /** Dar de alta una serie, un perfil o un proveedor fiscal. */
+    case FiscalCreate = 'fiscal.create';
+
+    /** Editar una serie, un perfil o un proveedor fiscal. */
+    case FiscalUpdate = 'fiscal.update';
+
     /**
      * El MODULO del permiso: la parte del slug antes del punto.
      *
@@ -219,6 +228,9 @@ enum Permission: string
             self::PrintingRetry => 'Retry a print job that failed',
             self::StoreRead => 'View the store settings',
             self::StoreUpdate => 'Change the store settings',
+            self::FiscalRead => 'View the fiscal administration',
+            self::FiscalCreate => 'Create fiscal series, profiles and providers',
+            self::FiscalUpdate => 'Update fiscal series, profiles and providers',
         };
     }
 
