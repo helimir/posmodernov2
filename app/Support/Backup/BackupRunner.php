@@ -188,18 +188,29 @@ final class BackupRunner
                 throw new RuntimeException('No se pudo copiar el backup al contenedor.');
             }
 
-            [$codigo, $salida] = $this->ejecutar(sprintf(
-                'docker exec %s pg_restore -U %s -d %s --clean --if-exists %s',
-                $this->contenedor(),
-                $this->usuario(),
-                $this->comando($database),
-                $this->comando($remoto),
-            ));
+            // La CONTRASEÑA se hereda del entorno (`-e PGPASSWORD` sin
+            // valor): el contenedor la recibe sin que nadie la escriba en
+            // la linea de ordenes, donde cualquier otro proceso podria
+            // leerla. Y hace falta: un servidor con `scram-sha-256` no
+            // acepta un `pg_restore` sin credencial.
+            [$codigo, $salida] = $this->conPassword(function () use ($database, $remoto): array {
+                return $this->ejecutar(sprintf(
+                    'docker exec -e PGPASSWORD %s pg_restore -U %s -d %s --clean --if-exists %s',
+                    $this->contenedor(),
+                    $this->usuario(),
+                    $this->comando($database),
+                    $this->comando($remoto),
+                ));
+            });
 
             $this->borrarDelContenedor($remoto);
         } else {
-            $this->conPassword(function (): void {
-                [$codigo, $salida] = $this->ejecutar(sprintf(
+            // El RESULTADO se saca FUERA del closure: dentro solo vive en
+            // el ambito del closure, y una comprobacion sobre una variable
+            // que no existe da `null`, que no es `0`, y hace que un restore
+            // correcto parezca fallido.
+            [$codigo, $salida] = $this->conPassword(function () use ($database, $fichero): array {
+                return $this->ejecutar(sprintf(
                     '%s -h %s -p %s -U %s -d %s --clean --if-exists %s',
                     $this->comando((string) config('backup.pg_restore', 'pg_restore')),
                     $this->comando((string) config('database.connections.pgsql.host', '127.0.0.1')),
@@ -299,13 +310,18 @@ final class BackupRunner
             // El `pg_dump` del contenedor escribe en STDOUT y el shell lo
             // deja en el fichero: los bytes van tal cual, que es lo que un
             // dump en formato custom necesita.
-            return $this->ejecutar(sprintf(
-                'docker exec %s pg_dump -U %s -d %s -Fc > %s',
-                $this->contenedor(),
-                $this->usuario(),
-                $this->comando($database),
-                $this->comando($fichero),
-            ));
+            //
+            // Y la CONTRASEÑA se hereda del entorno (`-e PGPASSWORD` sin
+            // valor): sin escribirla en la linea de ordenes.
+            return $this->conPassword(function () use ($database, $fichero): array {
+                return $this->ejecutar(sprintf(
+                    'docker exec -e PGPASSWORD %s pg_dump -U %s -d %s -Fc > %s',
+                    $this->contenedor(),
+                    $this->usuario(),
+                    $this->comando($database),
+                    $this->comando($fichero),
+                ));
+            });
         }
 
         return $this->conPassword(function () use ($database, $fichero): array {
