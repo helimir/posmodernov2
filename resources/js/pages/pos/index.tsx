@@ -7,6 +7,7 @@ import PosLayout from '@/layouts/pos-layout';
 import { getJson, postJson } from '@/lib/api';
 import { type FiscalStatus, fiscalLabel, fiscalVariant } from '@/lib/fiscal';
 import { usePermissions } from '@/lib/permissions';
+import { type PrintQueueStatus, printLabel, printReasonLabel, printVariant } from '@/lib/print';
 import {
     type PosCurrency,
     addAmount,
@@ -108,6 +109,12 @@ export interface PosBudget {
  * The `fiscal` field is the FISCAL STATUS of the sale: it says whether the
  * fiscal document was issued, failed (with its reason) or was not issued at
  * all. It is the contract of the 1.7 and it does not change.
+ *
+ * The `print` field is the STATE OF THE TICKET: it says whether the paper
+ * went to the queue of the store or not, and why not. The cashier has to
+ * see it: the printing is the only proof that the till handed something
+ * over, and a ticket that did not go out has to be said before the client
+ * walks away.
  */
 export interface PosSale {
     sale_id: number;
@@ -117,6 +124,7 @@ export interface PosSale {
     status: string;
     change: string;
     fiscal: FiscalStatus;
+    print: PrintQueueStatus;
 }
 
 /**
@@ -959,44 +967,88 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                     </DialogHeader>
 
                     {sale !== null && (
-                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                            <dt className="text-muted-foreground">Document</dt>
-                            <dd className="font-medium">{sale.invoice_no}</dd>
+                        <>
+                            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                <dt className="text-muted-foreground">Document</dt>
+                                <dd className="font-medium">{sale.invoice_no}</dd>
 
-                            <dt className="text-muted-foreground">Control number</dt>
-                            <dd className="font-medium">{sale.control_number ?? '—'}</dd>
+                                <dt className="text-muted-foreground">Control number</dt>
+                                <dd className="font-medium">{sale.control_number ?? '—'}</dd>
 
-                            <dt className="text-muted-foreground">Total</dt>
-                            <dd className="font-medium tabular-nums">{formatAmount(sale.grand_total, currency)}</dd>
+                                <dt className="text-muted-foreground">Total</dt>
+                                <dd className="font-medium tabular-nums">{formatAmount(sale.grand_total, currency)}</dd>
 
-                            <dt className="text-muted-foreground">Change</dt>
-                            <dd className="font-medium tabular-nums">{formatAmount(sale.change, currency)}</dd>
+                                <dt className="text-muted-foreground">Change</dt>
+                                <dd className="font-medium tabular-nums">{formatAmount(sale.change, currency)}</dd>
 
-                            <dt className="text-muted-foreground">Status</dt>
-                            <dd>
-                                <Badge variant={sale.status === 'paid' ? 'default' : 'secondary'}>{sale.status}</Badge>
-                            </dd>
+                                <dt className="text-muted-foreground">Status</dt>
+                                <dd>
+                                    <Badge variant={sale.status === 'paid' ? 'default' : 'secondary'}>{sale.status}</Badge>
+                                </dd>
 
-                            <dt className="text-muted-foreground">Fiscal status</dt>
-                            <dd>
-                                <Badge variant={fiscalVariant(sale.fiscal.status)}>
-                                    {fiscalLabel(sale.fiscal.status)}
-                                </Badge>
+                                <dt className="text-muted-foreground">Fiscal status</dt>
+                                <dd>
+                                    <Badge variant={fiscalVariant(sale.fiscal.status)}>
+                                        {fiscalLabel(sale.fiscal.status)}
+                                    </Badge>
 
-                                {sale.fiscal.control_number && (
-                                    <span className="text-muted-foreground ml-2 text-xs tabular-nums">
-                                        {sale.fiscal.control_number}
-                                    </span>
+                                    {sale.fiscal.control_number && (
+                                        <span className="text-muted-foreground ml-2 text-xs tabular-nums">
+                                            {sale.fiscal.control_number}
+                                        </span>
+                                    )}
+                                </dd>
+
+                                {sale.fiscal.message && (
+                                    <>
+                                        <dt className="text-muted-foreground">Fiscal message</dt>
+                                        <dd className="text-destructive">{sale.fiscal.message}</dd>
+                                    </>
                                 )}
-                            </dd>
 
-                            {sale.fiscal.message && (
-                                <>
-                                    <dt className="text-muted-foreground">Fiscal message</dt>
-                                    <dd className="text-destructive">{sale.fiscal.message}</dd>
-                                </>
+                                {/*
+                                  EL TICKET: el estado del papel. El cobro ya lo
+                                  dice, y la caja lo ENSENA: un ticket que no
+                                  salio tiene que saberlo el cajero antes de que
+                                  el cliente se vaya.
+                                */}
+                                <dt className="text-muted-foreground">Ticket</dt>
+                                <dd>
+                                    <Badge variant={printVariant(sale.print.status)}>{printLabel(sale.print.status)}</Badge>
+
+                                    {sale.print.job_id !== null && (
+                                        <span className="text-muted-foreground ml-2 text-xs tabular-nums">job #{sale.print.job_id}</span>
+                                    )}
+                                </dd>
+
+                                {sale.print.reason !== null && (
+                                    <>
+                                        <dt className="text-muted-foreground">Ticket reason</dt>
+                                        <dd className="text-destructive">{printReasonLabel(sale.print.reason) ?? sale.print.reason}</dd>
+                                    </>
+                                )}
+
+                                {sale.print.message !== null && (
+                                    <>
+                                        <dt className="text-muted-foreground">Ticket message</dt>
+                                        <dd className="text-destructive">{sale.print.message}</dd>
+                                    </>
+                                )}
+                            </dl>
+
+                            {/*
+                              El ESTADO REAL del papel esta en la cola de
+                              trabajos: el enlace se muestra solo a quien
+                              puede abrirla.
+                            */}
+                            {can('printing.read') && (
+                                <p className="mt-2 text-sm">
+                                    <a href="/impresion/trabajos" target="_blank" rel="noreferrer" className="underline">
+                                        See the print queue
+                                    </a>
+                                </p>
                             )}
-                        </dl>
+                        </>
                     )}
 
                     {fiscalError && <p className="text-destructive mt-2 text-sm">{fiscalError}</p>}

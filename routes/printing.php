@@ -42,6 +42,12 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('permission:printing.read')
         ->name('impresion.trabajos.index');
 
+    // Los AGENTES LAN de la tienda activa: su estado, su inventario y la
+    // REVOCACION (que es definitiva y solo un operador la levanta).
+    Route::get('impresion/agentes', [PrintAgentAdministrationController::class, 'agents'])
+        ->middleware('permission:printing.read')
+        ->name('impresion.agentes.index');
+
     Route::prefix('api')->group(function () {
         // El CATALOGO de impresoras, en JSON.
         Route::get('impresion/impresoras', [PrintAdministrationController::class, 'indexPrinters'])

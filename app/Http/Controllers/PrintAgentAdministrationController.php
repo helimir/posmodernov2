@@ -3,16 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Store;
+use App\Print\PrintAgentDirectory;
 use App\Print\PrintAgentToken;
 use App\Support\Audit\AuditWriter;
 use App\Support\Pos\PosContext;
 use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
 use RuntimeException;
 
 /**
- * La ADMINISTRACION del agente LAN: la REVOCACION y su levantada.
+ * La ADMINISTRACION del agente LAN: la PANTALLA, la REVOCACION y su
+ * levantada.
  *
  * REGLA que fija esta clase: *la revocacion de un agente es DEFINITIVA, y
  * solo un operador la levanta*.
@@ -51,7 +55,39 @@ final class PrintAgentAdministrationController extends Controller
         private readonly Connection $connection,
         private readonly AuditWriter $audit,
         private readonly PrintAgentToken $tokens,
+        private readonly PrintAgentDirectory $directory,
     ) {}
+
+    /**
+     * La PANTALLA de los agentes de la tienda.
+     *
+     * EL CONTRATO de los props es el de
+     * `resources/js/pages/printing/agents.tsx`:
+     *
+     *  - `agents`: lista de `{ id, name, instance_id, is_active, revoked,
+     *    revoked_at, last_heartbeat_at, printers, capabilities,
+     *    uncovered_targets }`.
+     *  - `store`: la tienda activa, la misma que usa la caja.
+     *
+     * Y AQUI ESTA LA PUERTA DE LA REVOCACION: la revocacion y su levantada
+     * ya existian por API, pero NINGUNA pantalla las llamaba, asi que una
+     * revocacion no se podia levantar desde la aplicacion. Esta pantalla es
+     * la que las llama, con el MISMO permiso que el resto de la administracion
+     * de la impresion.
+     */
+    public function agents(Request $request): Response
+    {
+        $tienda = $this->tienda($request);
+
+        return Inertia::render('printing/agents', [
+            'agents' => $this->directory->agentes((int) $tienda->id),
+            'store' => [
+                'id' => (int) $tienda->id,
+                'name' => (string) $tienda->name,
+                'code_name' => $tienda->code_name,
+            ],
+        ]);
+    }
 
     /**
      * La REVOCACION de un agente.

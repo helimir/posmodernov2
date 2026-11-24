@@ -92,4 +92,43 @@ final readonly class PrintQueueOutcome
             'message' => $this->message,
         ];
     }
+
+    /**
+     * Los ESTADOS del ticket: el conjunto CERRADO.
+     *
+     * REGLA que fija este metodo: *el estado del ticket es un codigo cerrado*.
+     * Son dos, y son los del dominio: la pantalla los traduce, y una pantalla
+     * que inventa un estado es una pantalla con dos verdades.
+     *
+     * @return list<string>
+     */
+    public static function estados(): array
+    {
+        return [
+            self::ENCOLADO,
+            self::NO_ENCOLADO,
+        ];
+    }
+
+    /**
+     * Los MOTIVOS de no encolar: el conjunto CERRADO.
+     *
+     * REGLA que fija este metodo: *el motivo es un codigo cerrado*. La
+     * pantalla lo traduce con este mismo conjunto, asi que un motivo nuevo del
+     * dominio tiene que traducirse tambien: un motivo sin traducir es un
+     * codigo crudo en la cara del cajero.
+     *
+     * @return list<string>
+     */
+    public static function motivos(): array
+    {
+        return [
+            self::AUTO_PRINT_APAGADO,
+            self::SIN_DESTINO,
+            self::DESTINO_AMBIGUO,
+            self::SIN_COMPROBANTE,
+            self::COMPROBANTE_NO_EMITIDO,
+            self::FALLO_DEL_DESTINO,
+        ];
+    }
 }

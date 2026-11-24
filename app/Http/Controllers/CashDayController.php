@@ -500,6 +500,77 @@ class CashDayController extends Controller
     }
 
     /**
+     * Los TRABAJOS DE IMPRESION del Z: con su estado y su motivo de fallo.
+     *
+     * REGLA que fija este metodo: *el Z dice si su papel salio*.
+     *
+     * Un CONTADOR de impresiones no es el estado de las impresiones: el
+     * operador tenia que saber si el Z seguia en la cola, si lo estaba
+     * imprimiendo o si habia fallado. El estado NO se inventa: es el que
+     * escribe la maquina de estados (`queued`, `claimed`, `printing`,
+     * `printed`, `failed`), leido tal cual.
+     *
+     * Y SON LOS TRABAJOS DE ESE Z: el vinculo es `cash_close_id`, que es lo
+     * que dice que documento imprime el trabajo. Los comprobantes de las
+     * ventas no son del Z, y un trabajo de otro Z tampoco.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function trabajosDelZ(int $storeId, int $cashCloseId): array
+    {
+        $filas = $this->connection->table('print_jobs')
+            ->join('print_targets', 'print_targets.id', '=', 'print_jobs.print_target_id')
+            ->where('print_jobs.store_id', $storeId)
+            ->where('print_jobs.cash_close_id', $cashCloseId)
+            ->orderByDesc('print_jobs.id')
+            ->get([
+                'print_jobs.id as id',
+                'print_jobs.status as status',
+                'print_jobs.attempts as attempts',
+                'print_jobs.reason as reason',
+                'print_jobs.reprint_of_job_id as reprint_of_job_id',
+                'print_jobs.last_error as last_error',
+                'print_jobs.created_at as created_at',
+                'print_jobs.print_target_id as print_target_id',
+                'print_targets.name as target_name',
+                'print_targets.transport as transport',
+            ]);
+
+        $trabajos = [];
+
+        foreach ($filas as $fila) {
+            $trabajos[] = [
+                'id' => (int) $fila->id,
+                'status' => (string) $fila->status,
+                'target_id' => (int) $fila->print_target_id,
+                'target_name' => (string) $fila->target_name,
+                'transport' => (string) $fila->transport,
+                'attempts' => (int) $fila->attempts,
+                'reason' => $fila->reason === null ? null : (string) $fila->reason,
+                'reprint_of_job_id' => $fila->reprint_of_job_id === null
+                    ? null
+                    : (int) $fila->reprint_of_job_id,
+                'last_error' => $fila->last_error === null ? null : (string) $fila->last_error,
+                'created_at' => $this->instanteDeLaFila($fila->created_at),
+            ];
+        }
+
+        return $trabajos;
+    }
+
+    /**
+     * Un INSTANTE de la base, en ISO 8601.
+     */
+    private function instanteDeLaFila(mixed $valor): ?string
+    {
+        if ($valor === null) {
+            return null;
+        }
+
+        return Carbon::parse((string) $valor)->toIso8601String();
+    }
+
+    /**
      * EL CONteo por DENOMINACIONES: el catalogo de la tienda, el desglose
      * esperado del importe y lo que el cajero conto.
      *
@@ -624,6 +695,9 @@ class CashDayController extends Controller
             // Las IMPRESIONES del Z: cuantas veces ha salido. La pantalla lo
             // dice, porque reimprimir un Z pide un motivo.
             'print_count' => $this->impresionesDelZ((int) $z->id),
+            // Y el ESTADO de cada trabajo: el Z dice si su papel salio, y no
+            // solo cuantas veces se encolo.
+            'print_jobs' => $this->trabajosDelZ((int) $z->store_id, (int) $z->id),
         ];
     }
 

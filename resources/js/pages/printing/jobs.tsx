@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import AppLayout from '@/layouts/app-layout';
 import { postJson } from '@/lib/api';
 import { usePermissions } from '@/lib/permissions';
+import { printJobLabel, printJobVariant } from '@/lib/print';
 import { Printer, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 
@@ -40,36 +41,6 @@ export interface PrintJobsIndexProps {
         name: string;
         code_name: string | null;
     };
-}
-
-/**
- * The STATE of a job, as the screen says it.
- *
- * The states are the ones of the schema: they are the vocabulary of the
- * domain, not a label of the interface.
- */
-const STATUS_LABEL: Record<string, string> = {
-    queued: 'Queued',
-    claimed: 'Claimed',
-    printing: 'Printing',
-    printed: 'Printed',
-    failed: 'Failed',
-    cancelled: 'Cancelled',
-};
-
-/**
- * The BADGE of a state: a failure is red, the rest is quiet.
- */
-function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-    if (status === 'failed') {
-        return 'destructive';
-    }
-
-    if (status === 'printed') {
-        return 'default';
-    }
-
-    return 'secondary';
 }
 
 /**
@@ -190,7 +161,7 @@ export default function PrintJobsIndex({ jobs, store }: PrintJobsIndexProps) {
                                             <tr key={job.id} className="border-b last:border-0">
                                                 <td className="px-2 py-2 font-mono">#{job.id}</td>
                                                 <td className="px-2 py-2">
-                                                    <Badge variant={statusVariant(job.status)}>{STATUS_LABEL[job.status] ?? job.status}</Badge>
+                                                    <Badge variant={printJobVariant(job.status)}>{printJobLabel(job.status)}</Badge>
                                                 </td>
                                                 <td className="px-2 py-2">{job.target_name}</td>
                                                 <td className="px-2 py-2 text-right tabular-nums">{job.attempts}</td>
