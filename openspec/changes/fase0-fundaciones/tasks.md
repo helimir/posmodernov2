@@ -852,7 +852,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       cajero tiene que saberlo **antes** de que el cliente se vaya.
     - El canal ya existe (dispatcher, maquina de estados, destinos, agente y sus cinco endpoints):
       lo que falta es **la puerta** (la UI) y la **honestidad** del conteo.
-- [ ] **F3-03** **La anulacion y la devolucion de ventas.** `FiscalIssuanceService::void()` y
+- [x] **F3-03** **La anulacion y la devolucion de ventas.** `FiscalIssuanceService::void()` y
   `DerivedDocumentService` **existen y solo los invocan tests**, y `SalesController` esta
   **declarado de SOLO LECTURA**. Sin esto **no hay devolucion de venta ni nota de credito**.
   Dep: 0.3.8, F2-04, 1.8
@@ -974,6 +974,32 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
     - **Levantar una revocacion invalida el token anterior**, asi que un agente al que se le levante
       tiene que **volver a registrarse** para volver a imprimir. Quien espere que "levantar" lo
       reponga se queda con un agente mudo: el dialogo de la pantalla lo dice.
+    - **El saldo a favor del cliente NO tiene cuenta contable.** El libro del cliente lo soporta
+      (`balance()` es la suma con signo y `due()` es `max(0, saldo)`, y el docblock lo dice literal), pero
+      el **plan de cuentas solo tiene cinco roles** (`cash`, `receivable`, `revenue`, `tax_payable`,
+      `equity`) y **no hay pasivo para el credito a favor**. Por eso la anulacion **no escribe el asiento
+      de reversa**: uno que acreditase la caja cambiaria el saldo del dia, y uno que dejase el dinero en el
+      cajon necesita una cuenta que no existe. **Mientras tanto el libro del cliente y el libro contable
+      DIFIEREN.** El tipo de asiento `refund` ya existe: lo que falta es la cuenta, y anadir un rol al plan
+      es una migracion de otra unidad.
+    - **El dato NO distingue "no salio" de "salio y el reporte fallo"**: `markFailed()` acepta los dos
+      origenes y deja la misma fila (el origen se borra), el controlador del agente **promueve a
+      `printing` antes de fallar** (destruye el unico rastro) y `markPrinting` ocurre **ANTES** de
+      escribir los bytes. Por eso la pantalla de tickets del cajero **no tiene boton de reimprimir ni de
+      reintentar**: un boton que puede duplicar un ticket es peor que un boton que no existe.
+    - **La matriz de roles SE APLICA, no se anade**: el seeder **borra** los vinculos que no esten en la
+      matriz. Si alguien siembra con una version antigua del seeder, `printing.own` desaparece del cajero y
+      su pantalla le da 403. La matriz es un contrato en dos sitios.
+    - **`created_by IS NULL` es mas ancho que "mis companeros"**: cualquier trabajo sin actor (un proceso
+      de fondo, o el de un cajero borrado, porque el FK es `nullOnDelete`) lo ve **todo** usuario de la
+      tienda. Es una decision de visibilidad de datos, no un descuido.
+    - **El comprobante imprimible de la nota de credito no se ofrece**: `ReceiptTemplate` lee el token
+      `document_denomination`, asi que el papel de la nota diria "Factura". Es un hueco del **dominio
+      fiscal**, que esta unidad no toca.
+    - **Dos decisiones de negocio sin tomar**: (a) si anular una venta de un dia **cerrado** exige
+      reabrirlo (la regla del legacy dice que si; la anulacion no escribe asiento ni toca la caja, y sus
+      efectos caen hoy, no el dia de la venta); y (b) si el **cajero** puede anular su propia venta, o solo
+      el contador (hoy solo el contador: `sales.void`).
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |

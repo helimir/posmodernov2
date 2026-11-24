@@ -1801,6 +1801,32 @@ Cuatro huecos, y uno de ellos era **doble**: la revocacion del agente **no tenia
 - **El cajero ve QUE el papel no salio y POR QUE, pero no ve el estado real de su ticket**: la cola es de `printing.read` y el cajero no lo tiene. Decision de negocio pendiente.
 - **`print_jobs` no tiene FK a la venta**: el estado *duradero* del ticket no se puede enseñar en la ficha de la venta. Es una migracion.
 - **Levantar una revocacion invalida el token anterior**: el agente tiene que volver a registrarse. El dialogo lo dice, pero quien lo quite deja de avisar.
+### F3-03 — Se puede anular una venta, y el cajero ve sus tickets (PR #155)
+
+No habia **ninguna** via para anular una venta: `SalesController` esta declarado de **SOLO LECTURA** y no habia ruta ni metodo. Y el dominio que faltaba estaba **escrito y probado, pero huerfano**: `FiscalIssuanceService::void()` y `DerivedDocumentService` **solo los invocaban los tests**.
+
+**Una unidad atomica**: `POST /ventas/{sale}/anulacion` con `sales.void` y motivo obligatorio. Comprobante anulado, nota emitida, venta en `cancelled` y libro del cliente compensado, **todo en una transaccion**, y la nota **numerada dentro**: un fallo **no quema numeros**.
+
+**Una venta con comprobante EMITIDO no se "desemite"**: se anula con una **nota de credito**, documento derivado con su correlativo en la **misma serie**, que referencia el original. Una venta **sin** comprobante emitido se anula **sin nota**: no habia nada que anular ante la autoridad.
+
+**El libro del cliente conserva UNA regla**: la venta suma por el total, el cobro resta por lo aplicado, y la nota **resta por el total de la venta**. Con una venta de 58 y un cliente que paga 30: +58, −30, −58 → saldo **−30** (credit a favor) y deuda 0. El saldo a favor **ya estaba soportado** (`balance()` es la suma con signo, `due()` es `max(0, saldo)` y el docblock lo dice literal): lo que faltaba era el **metodo**, no la regla.
+
+**El stock NO se repone** y la pantalla lo dice dos veces (en el dialogo y en la tarjeta): la mercaderia se queda fuera y el dinero se queda en el cajon. Y **la caja del dia no se toca**: una venta anulada sigue siendo caja.
+
+**Y el cajero ve sus tickets.** Veia *que* el papel no salio y *por que*, y nunca veia si salio: la cola es de `printing.read`, que el cajero no tiene. Ahora hay `/impresion/mis-trabajos`, filtrado **en la base** por la tienda de la sesion y por el creador (mas los trabajos sin actor, que son del sistema), con un permiso **nuevo** `printing.own`: `printing.read` abre la cola de toda la tienda y comparte el modulo con la **configuracion** de impresion, y ese es el permiso de quien **administra** la tienda.
+
+### El hallazgo que quito un boton
+
+**No hay boton de reimprimir ni de reintentar**, porque **el dato NO distingue "no salio" de "salio y el reporte fallo"**: `markFailed()` acepta los dos origenes y deja la **misma fila** (el origen se borra), el controlador del agente **promueve a `printing` antes de fallar** (destruye el unico rastro) y `markPrinting` ocurre **ANTES** de escribir los bytes. Si `markPrinted()` falla **despues** de escribir, el `catch` marca el trabajo `failed` **con el papel ya fuera**. Un test construye los dos casos y **afirma que las dos filas son identicas**. Un boton que puede duplicar un ticket es peor que un boton que no existe.
+
+**Suite**: 810 tests / 11 677 assertions, en verde.
+
+### Lo que esta unidad deja a medias, y con nombre
+
+- **El asiento de reversa NO se escribe**, y la razon es el **plan de cuentas**: no hay pasivo para el credito a favor. **Mientras tanto el libro del cliente y el libro contable DIFIEREN.** El tipo `refund` ya existe: falta la cuenta.
+- **Dos decisiones de negocio sin tomar**: si anular una venta de un dia cerrado exige reabrirlo, y si el cajero puede anular su propia venta o solo el contador.
+- El comprobante imprimible de la nota de credito (el papel diria "Factura") es un hueco del **dominio fiscal**.
+- La **matriz de roles se aplica**, no se anade: el seeder borra lo que no esta en la matriz, asi que `printing.own` hay que mantenerlo en los dos sitios.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
