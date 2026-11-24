@@ -95,8 +95,24 @@ export default function SalesIndex({ sales }: { sales: SaleSummary[] }) {
                                                     <Badge variant={statusVariant(sale.status)}>{sale.status}</Badge>
                                                 </td>
                                                 <td className="px-2 py-2">
-                                                    <Badge variant={fiscalVariant(sale.fiscal.status)}>
-                                                        {fiscalLabel(sale.fiscal.status)}
+                                                    {/*
+                                                      The FISCAL badge of a
+                                                      VOIDED sale: the invoice
+                                                      was issued and then
+                                                      annulled, so "not issued"
+                                                      would say that it never
+                                                      existed.
+                                                    */}
+                                                    <Badge
+                                                        variant={
+                                                            sale.status === 'cancelled'
+                                                                ? 'destructive'
+                                                                : fiscalVariant(sale.fiscal.status)
+                                                        }
+                                                    >
+                                                        {sale.status === 'cancelled'
+                                                            ? 'Voided'
+                                                            : fiscalLabel(sale.fiscal.status)}
                                                     </Badge>
 
                                                     {sale.fiscal.control_number && (

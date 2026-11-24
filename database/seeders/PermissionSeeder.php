@@ -27,7 +27,10 @@ use Illuminate\Support\Facades\DB;
  *  - EL CONTADOR lee: las ventas, los clientes, la contabilidad, los reportes
  *    y la AUDITORIA FISCAL (las series, los perfiles y los proveedores) en
  *    lectura. Lee, pero NO instala: declarar una numeracion o un regimen es
- *    una instalacion, y de eso se ocupa el superusuario.
+ *    una instalacion, y de eso se ocupa el superusuario. Y SUPERVISA lo que
+ *    el mostrador hizo: reabre un dia cerrado y anula una venta, porque
+ *    deshacer el cierre sellado y dejar sin efecto una venta emitida son
+ *    correcciones de supervision, no del cajero que las hizo.
  *
  * Y LA MATRIZ SE APLICA, NO SE ANADE: los vinculos de un rol por defecto que
  * no esten en la matriz se BORRAN. Los roles por defecto son un contrato, y
@@ -176,6 +179,12 @@ class PermissionSeeder extends Seeder
             // cerrado: deshacer un cierre sellado es una supervision, y el
             // que lo hizo el cajero no es quien lo deshace.
             //
+            // Y ANULA UNA VENTA: por la misma regla. La anulacion deshace una
+            // venta que HIZO el mostrador, consume un correlativo de la
+            // serie (la nota de credito) y deja al cliente con un credito a
+            // favor: es una supervision, y el que lo hizo el cajero no es
+            // quien lo deshace.
+            //
             // Y LA ADMINISTRACION FISCAL, EN LECTURA: el contador ve que
             // numeracion declara cada tienda y con que regimen y con que
             // canal emite, porque es lo que tiene que supervisar. Lo que NO
@@ -185,6 +194,7 @@ class PermissionSeeder extends Seeder
             self::SLUG_ACCOUNTANT => [
                 Permission::DashboardRead,
                 Permission::SalesRead,
+                Permission::SalesVoid,
                 Permission::ReceiptRead,
                 Permission::CustomerRead,
                 Permission::CashDayRead,

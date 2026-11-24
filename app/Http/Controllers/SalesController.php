@@ -23,7 +23,13 @@ use Inertia\Response;
  * Son de SOLO LECTURA: no escriben nada, no cambian el estado de una venta y
  * no tocan la numeracion. Ver una venta no puede cambiar lo que la venta es.
  * El REINTENTO de la emision fiscal NO vive aqui: es una escritura, y tiene
- * su propia ruta (`FiscalIssuanceController`).
+ * su propia ruta (`FiscalIssuanceController`). Y la ANULACION tampoco: es
+ * otra escritura, con su nota de credito, y vive en `SaleVoidController`.
+ *
+ * Y LO QUE LA FICHA ENSEÑA DE UNA VENTA ANULADA: el estado, el motivo y su
+ * nota de credito. La anulacion no es un estado invisible: una venta
+ * anulada que parece una venta corriente es una venta que nadie puede
+ * defender despues.
  *
  * Los importes viajan como TEXTO decimal: las columnas son `numeric(25,4)` y
  * un `float` no es un dinero. La pagina los enseña tal y como estan, sin
@@ -169,6 +175,9 @@ class SalesController extends Controller
                     'difference' => $resumen->difference,
                     'matches_total' => $resumen->matchesTotal,
                 ],
+                // La ANULACION: el bloque que aparece cuando la venta esta
+                // anulada. Es `null` en una venta corriente.
+                'void' => $this->anulacion($model),
                 'ledger' => $asiento === null ? null : [
                     'id' => (int) $asiento->id,
                     'entry_type' => (string) ($asiento->entryType?->code ?? ''),
@@ -227,6 +236,193 @@ class SalesController extends Controller
             // reintentar.
             'can_retry' => $estado['status'] === 'failed',
         ];
+    }
+
+    /**
+     * La ANULACION de la venta, tal como la ve la pantalla.
+     *
+     * REGLA que fija este metodo: *una venta anulada se VE anulada*. El
+     * bloque dice que la venta esta anulada, POR QUE, que comprobante quedo
+     * sin efecto y que NOTA DE CREDITO lo deja sin efecto. Una venta anulada
+     * que parece una venta corriente es una venta que nadie puede defender
+     * despues.
+     *
+     * Y EL MOTIVO se lee de la traza: primero el EVENTO FISCAL (que la
+     * anulacion escribio en la MISMA transaccion) y, si no hay comprobante
+     * que anular, la AUDITORIA de negocio. El motivo de una anulacion no se
+     * inventa: o esta escrito o no se enseño.
+     *
+     * @return array{
+     *     reason: string|null,
+     *     voided_at: string|null,
+     *     document: array{id: int, number: string, control_number: string|null}|null,
+     *     note: array{id: int, number: string, issue_date: string|null}|null
+     * }|null
+     */
+    private function anulacion(Sale $model): ?array
+    {
+        if ((string) $model->status !== 'cancelled') {
+            return null;
+        }
+
+        $documentoId = $model->fiscal_document_id === null ? null : (int) $model->fiscal_document_id;
+
+        $documento = $documentoId === null
+            ? null
+            : $this->connection->table('fiscal_documents')->where('id', $documentoId)->first();
+
+        $evento = $documentoId === null
+            ? null
+            : $this->connection->table('fiscal_document_events')
+                ->where('fiscal_document_id', $documentoId)
+                ->where('action', 'cancel')
+                ->orderByDesc('id')
+                ->first();
+
+        $auditoria = $this->connection->table('audit_logs')
+            ->where('action', 'sale.voided')
+            ->where('entity_type', 'sale')
+            ->where('entity_id', (int) $model->id)
+            ->orderByDesc('id')
+            ->first();
+
+        $motivo = $this->motivoDe($evento?->payload, $auditoria?->context);
+
+        $anuladaEl = $documento?->voided_at !== null
+            ? (string) $documento->voided_at
+            : ($auditoria?->created_at === null ? null : (string) $auditoria->created_at);
+
+        // El COMPROBANTE que quedo sin efecto: solo cuando esta ANULADO. Una
+        // venta sin comprobante emitido no tiene ninguna factura que anular.
+        $anulado = $documento !== null && (string) $documento->status === 'void' ? $documento : null;
+
+        return [
+            'reason' => $motivo,
+            'voided_at' => $anuladaEl,
+            'document' => $anulado === null ? null : [
+                'id' => (int) $anulado->id,
+                'number' => $this->numeroDelDocumento($anulado),
+                'control_number' => $documentoId === null ? null : $this->controlNumber($documentoId),
+            ],
+            'note' => $this->notaDeCredito($documentoId),
+        ];
+    }
+
+    /**
+     * El MOTIVO de la anulacion: el de la traza fiscal o el de la auditoria.
+     *
+     * @param  mixed  $payload  La carga util del evento fiscal.
+     * @param  mixed  $contexto  El contexto de la auditoria de negocio.
+     */
+    private function motivoDe(mixed $payload, mixed $contexto): ?string
+    {
+        $delEvento = $this->motivoDeLaCarga($payload, 'reason');
+
+        if ($delEvento !== null) {
+            return $delEvento;
+        }
+
+        return $this->motivoDeLaCarga($contexto, 'reason');
+    }
+
+    /**
+     * El MOTIVO de una carga util en JSON.
+     */
+    private function motivoDeLaCarga(mixed $carga, string $clave): ?string
+    {
+        if ($carga === null) {
+            return null;
+        }
+
+        if (is_string($carga)) {
+            $carga = json_decode($carga, true);
+        }
+
+        if (! is_array($carga)) {
+            return null;
+        }
+
+        $motivo = $carga[$clave] ?? null;
+
+        return $motivo === null ? null : (string) $motivo;
+    }
+
+    /**
+     * La NOTA DE CREDITO que deja sin efecto al comprobante de la venta.
+     *
+     * La nota es un documento DERIVADO: se encuentra por el VINCULO que
+     * dejo el dominio (`corrects`), no por buscar "una nota".
+     *
+     * @return array{id: int, number: string, issue_date: string|null}|null
+     */
+    private function notaDeCredito(?int $documentoId): ?array
+    {
+        if ($documentoId === null) {
+            return null;
+        }
+
+        $nota = $this->connection->table('fiscal_document_links')
+            ->join(
+                'fiscal_documents',
+                'fiscal_documents.id',
+                '=',
+                'fiscal_document_links.fiscal_document_id'
+            )
+            ->where('fiscal_document_links.parent_document_id', $documentoId)
+            ->where('fiscal_document_links.link_type', 'corrects')
+            ->where('fiscal_documents.document_type', 'credit_note')
+            ->orderByDesc('fiscal_documents.id')
+            ->first();
+
+        if ($nota === null) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $nota->id,
+            'number' => $this->numeroDelDocumento($nota),
+            'issue_date' => $nota->issue_date === null ? null : (string) $nota->issue_date,
+        ];
+    }
+
+    /**
+     * El NUMERO COMPLETO de un documento fiscal: el prefijo de su serie mas
+     * el secuencial.
+     *
+     * Un secuencial suelto ("3") no identifica un documento fiscal: hay
+     * varias series y sus prefijos son distintos.
+     */
+    private function numeroDelDocumento(object $documento): string
+    {
+        $numero = (string) $documento->number;
+
+        if ($documento->series_id === null) {
+            return $numero;
+        }
+
+        $prefijo = $this->connection->table('fiscal_series')
+            ->where('id', (int) $documento->series_id)
+            ->value('prefix');
+
+        if ($prefijo === null || trim((string) $prefijo) === '') {
+            return $numero;
+        }
+
+        return trim((string) $prefijo).$numero;
+    }
+
+    /**
+     * El NUMERO DE CONTROL de un documento, si lo tiene.
+     *
+     * El control tiene una UNICA sede: la tabla de asignaciones.
+     */
+    private function controlNumber(int $documentId): ?string
+    {
+        $control = $this->connection->table('fiscal_document_control_assignments')
+            ->where('fiscal_document_id', $documentId)
+            ->value('control_number');
+
+        return $control === null ? null : (string) $control;
     }
 
     /**

@@ -47,6 +47,9 @@ enum Permission: string
     /** Reintentar la emision fiscal de una venta. */
     case SalesFiscalRetry = 'sales.fiscal_retry';
 
+    /** Anular una venta: la deja sin efecto con una nota de credito. */
+    case SalesVoid = 'sales.void';
+
     /** Ver el comprobante fiscal de una venta. */
     case ReceiptRead = 'receipt.read';
 
@@ -195,6 +198,7 @@ enum Permission: string
             self::SalesRead => 'View sales',
             self::SalesCreate => 'Charge a sale',
             self::SalesFiscalRetry => 'Retry the fiscal issuance',
+            self::SalesVoid => 'Void a sale',
             self::ReceiptRead => 'View receipts',
             self::ReceiptPrint => 'Print receipts',
             self::CashDayRead => 'View the cash day',

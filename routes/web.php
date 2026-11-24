@@ -10,6 +10,7 @@ use App\Http\Controllers\FiscalIssuanceController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\SalesController;
+use App\Http\Controllers\SaleVoidController;
 use App\Http\Controllers\StockReportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -70,6 +71,21 @@ Route::middleware(['auth'])->group(function () {
         ->whereNumber('sale')
         ->middleware('permission:sales.fiscal_retry')
         ->name('ventas.emision.reintentar');
+
+    // La ANULACION de una venta: la deja sin efecto y emite la NOTA DE
+    // CREDITO.
+    //
+    // ES UNA ESCRITURA, y por eso tiene su propio controlador (el de las
+    // ventas es de SOLO LECTURA). Responde 200 con el estado de la venta y
+    // su nota: `{ sale_id, status, reason, voided_at, note }`.
+    //
+    // Y LA ANULACION ES FISCAL Y CONTABLE, NO FISICA: la mercaderia NO
+    // vuelve al almacen (esa es la devolucion, otra unidad) y la caja del
+    // dia NO se toca (el dinero entro y sigue ahi). La pantalla lo dice.
+    Route::post('ventas/{sale}/anulacion', [SaleVoidController::class, 'anular'])
+        ->whereNumber('sale')
+        ->middleware('permission:sales.void')
+        ->name('ventas.anulacion');
 
     // El COMPROBANTE FISCAL: el HTML que se ve y se imprime.
     //

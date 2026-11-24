@@ -5,6 +5,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { postJson } from '@/lib/api';
 import { type FiscalStatus, fiscalLabel, fiscalVariant } from '@/lib/fiscal';
@@ -88,6 +97,20 @@ interface LedgerEntry {
     lines: LedgerLine[];
 }
 
+/**
+ * The VOID of a sale: what left it out of the books.
+ *
+ * It is `null` in a sale that was never voided. When it is there, it says
+ * WHEN it happened, WHY, which invoice lost its effect and which CREDIT NOTE
+ * carries the correction.
+ */
+interface SaleVoid {
+    reason: string | null;
+    voided_at: string | null;
+    document: { id: number; number: string; control_number: string | null } | null;
+    note: { id: number; number: string; issue_date: string | null } | null;
+}
+
 interface SaleDetail {
     id: number;
     invoice_no: string | null;
@@ -103,6 +126,7 @@ interface SaleDetail {
     payments: SalePayment[];
     payment_summary: SalePaymentSummary;
     ledger: LedgerEntry | null;
+    void: SaleVoid | null;
 }
 
 /**
@@ -139,6 +163,10 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
     const [retrying, setRetrying] = useState(false);
     const [printing, setPrinting] = useState(false);
     const [fiscalError, setFiscalError] = useState<string | null>(null);
+    const [voidOpen, setVoidOpen] = useState(false);
+    const [voidReason, setVoidReason] = useState('');
+    const [voiding, setVoiding] = useState(false);
+    const [voidError, setVoidError] = useState<string | null>(null);
 
     /**
      * The GAP between what the payments APPLIED and the total of the sale.
@@ -149,6 +177,18 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
     const descuadre = sale.payment_summary.difference;
     const sobra = descuadre !== null && !descuadre.startsWith('-');
     const absoluto = descuadre === null ? null : descuadre.replace('-', '');
+
+    /**
+     * The FISCAL STATUS of a VOIDED sale.
+     *
+     * The document of a voided sale is VOID: it was issued and it was
+     * annulled, and saying "not issued" would say that it never existed.
+     * The screen composes the two facts it has: the sale is cancelled and
+     * the void block tells the rest.
+     */
+    const anulada = sale.void !== null;
+    const etiquetaFiscal = anulada ? 'Voided' : fiscalLabel(sale.fiscal.status);
+    const colorFiscal = anulada ? 'destructive' : fiscalVariant(sale.fiscal.status);
 
     /**
      * The RETRY of the fiscal issuance.
@@ -168,6 +208,31 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
             setFiscalError((fallo as Error).message);
         } finally {
             setRetrying(false);
+        }
+    };
+
+    /**
+     * The VOID of the sale.
+     *
+     * It needs a REASON: the server rejects the void without one, and the
+     * reason is written in the audit trail.
+     *
+     * AND IT DOES NOT RETURN THE GOODS: the void is fiscal and accounting
+     * only. The screen says it, because a void that looks like a return is
+     * how the stock ends up wrong.
+     */
+    const voidSale = async () => {
+        setVoiding(true);
+        setVoidError(null);
+
+        try {
+            await postJson(`/ventas/${sale.id}/anulacion`, { reason: voidReason });
+
+            router.reload();
+        } catch (fallo) {
+            setVoidError((fallo as Error).message);
+        } finally {
+            setVoiding(false);
         }
     };
 
@@ -239,6 +304,19 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                                 </AlertDescription>
                             </Alert>
                         )}
+
+                        {/*
+                          The VOID: it is a SUPERVISION action, so the button
+                          only appears with its permission, and never in a
+                          sale that is already voided.
+                        */}
+                        {!anulada && can('sales.void') && (
+                            <div className="mt-4 flex justify-end">
+                                <Button variant="destructive" onClick={() => setVoidOpen(true)}>
+                                    Void this sale
+                                </Button>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -252,9 +330,7 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                             <div>
                                 <dt className="text-muted-foreground text-xs">Fiscal status</dt>
                                 <dd className="text-sm">
-                                    <Badge variant={fiscalVariant(sale.fiscal.status)}>
-                                        {fiscalLabel(sale.fiscal.status)}
-                                    </Badge>
+                                    <Badge variant={colorFiscal}>{etiquetaFiscal}</Badge>
                                 </dd>
                             </div>
 
@@ -302,6 +378,60 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                         </div>
                     </CardContent>
                 </Card>
+
+                {/*
+                  The VOID: the block that says this sale was annulled, WHY,
+                  and which credit note carries the correction.
+
+                  AND IT SAYS WHAT IT DID NOT DO: the goods are NOT back in
+                  the warehouse. A void that looks like a return is how the
+                  stock ends up wrong.
+                */}
+                {sale.void !== null && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Voided sale</CardTitle>
+                        </CardHeader>
+
+                        <CardContent>
+                            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                <Field label="Voided at" value={sale.void.voided_at ?? '—'} />
+                                <Field label="Reason" value={sale.void.reason ?? '—'} />
+                                <Field label="Invoice" value={sale.void.document?.number ?? '—'} />
+                                <Field
+                                    label="Control number"
+                                    value={sale.void.document?.control_number ?? '—'}
+                                />
+                                <Field label="Credit note" value={sale.void.note?.number ?? 'None'} />
+                                <Field
+                                    label="Credit note date"
+                                    value={sale.void.note?.issue_date ?? '—'}
+                                />
+                            </dl>
+
+                            <Alert variant="destructive" className="mt-4">
+                                <AlertTitle>The goods were not returned to the stock</AlertTitle>
+                                <AlertDescription>
+                                    This void is fiscal and accounting only: the merchandise stays out of the
+                                    warehouse and the money stays in the drawer. Returning the merchandise to the
+                                    exact lot it came from is a separate operation.
+                                </AlertDescription>
+                            </Alert>
+
+                            {/*
+                              NO CREDIT NOTE: the sale had no issued document, so there was nothing to
+                              annul before the authority. The screen says it, because a void without
+                              a note looks like a void that forgot to issue it.
+                            */}
+                            {sale.void.note === null && (
+                                <p className="text-muted-foreground mt-3 text-sm">
+                                    No credit note: this sale had no issued document, so there was nothing to
+                                    annul before the authority.
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
 
                 <Card>
                     <CardHeader>
@@ -517,6 +647,71 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                         Back to sales
                     </Link>
                 </p>
+
+                {/*
+                  The VOID DIALOG: the reason is REQUIRED, and the dialog says
+                  what the void does NOT do.
+
+                  The credit note takes a number of its own in the series of
+                  the invoice, and the invoice is voided: the number that was
+                  published is never published again.
+                */}
+                <Dialog
+                    open={voidOpen}
+                    onOpenChange={(value) => {
+                        setVoidOpen(value);
+
+                        if (!value) {
+                            setVoidReason('');
+                            setVoidError(null);
+                        }
+                    }}
+                >
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Void this sale</DialogTitle>
+                            <DialogDescription>
+                                The invoice is voided and a credit note is issued with its own number in the same
+                                series. The reason is required, and it is written in the audit trail with your name.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="void-reason">Reason</Label>
+                            <textarea
+                                id="void-reason"
+                                rows={3}
+                                value={voidReason}
+                                onChange={(event) => setVoidReason(event.target.value)}
+                                placeholder="Why is this sale being voided?"
+                                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+
+                            {voidError && <p className="text-destructive text-sm">{voidError}</p>}
+
+                            <Alert variant="destructive">
+                                <AlertTitle>The goods are not returned to the stock</AlertTitle>
+                                <AlertDescription>
+                                    This void is fiscal and accounting only. The merchandise stays out of the
+                                    warehouse and the money stays in the drawer.
+                                </AlertDescription>
+                            </Alert>
+                        </div>
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setVoidOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={voidSale}
+                                disabled={voiding || voidReason.trim() === ''}
+                            >
+                                {voiding ? 'Voiding…' : 'Void the sale'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

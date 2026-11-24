@@ -95,6 +95,7 @@ dataset('rutas protegidas', [
     'lista de ventas' => ['get', '/ventas', 'sales.read'],
     'detalle de una venta' => ['get', '/ventas/{sale}', 'sales.read'],
     'reintento de la emision fiscal' => ['post', '/ventas/{sale}/emision', 'sales.fiscal_retry'],
+    'anulacion de una venta' => ['post', '/ventas/{sale}/anulacion', 'sales.void'],
     'comprobante fiscal' => ['get', '/comprobantes/{documento}', 'receipt.read'],
     'imprimir el comprobante' => ['post', '/comprobantes/{documento}/imprimir', 'receipt.print'],
     'la caja' => ['get', '/caja', 'pos.access'],
