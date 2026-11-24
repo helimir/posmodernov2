@@ -22,12 +22,13 @@ use RuntimeException;
  * NEGATIVO es lo que ha pagado o devuelto. El `type` (`sale`, `payment`,
  * `return`, `adjustment`) dice QUE paso, no en que sentido.
  *
- * EL LIBRO DEL CLIENTE ES UN MINI-LIBRO: la VENTA SUMA y el COBRO RESTA.
- * Por eso una venta genera un movimiento de tipo `sale` con el importe
- * POSITIVO (el TOTAL de lo que el cliente debe) y un cobro genera uno de
- * tipo `payment` con el importe NEGATIVO (lo que el cliente paga). Un cliente
- * que compra por 100 y paga 100 en efectivo queda en CERO: ni deudor ni
- * acreedor.
+ * EL LIBRO DEL CLIENTE ES UN MINI-LIBRO: la VENTA SUMA, el COBRO RESTA y el
+ * REINTEGRO (la nota de credito de una venta anulada) TAMBIEN RESTA. Por eso
+ * una venta genera un movimiento de tipo `sale` con el importe POSITIVO (el
+ * TOTAL de lo que el cliente debe), un cobro genera uno de tipo `payment` con
+ * el importe NEGATIVO (lo que el cliente paga) y un reintegro genera uno de
+ * tipo `return`, tambien NEGATIVO. Un cliente que compra por 100 y paga 100
+ * en efectivo queda en CERO: ni deudor ni acreedor.
  *
  * `customer_stores.balance` y `customer_stores.due` son un CACHE con
  * invariante, como `product_stores.quantity_in_stock` con los lotes: se
@@ -271,6 +272,56 @@ final readonly class CustomerBalanceService
             customerId: $customerId,
             storeId: $storeId,
             type: 'payment',
+            amount: (string) $importe,
+            referenceNo: $referenceNo,
+            entryDate: $entryDate,
+            saleId: $saleId,
+        );
+    }
+
+    /**
+     * Registra un REINTEGRO del cliente y devuelve el id del movimiento.
+     *
+     * REGLAS que fija este metodo:
+     *
+     *  1. Un reintegro REDUCE la deuda: su importe es SIEMPRE NEGATIVO. El
+     *     signo del llamante no decide el signo del movimiento: un reintegro
+     *     es una devolucion, y una devolucion no es un cobro.
+     *  2. El TIPO es `return`, el PROPIO: un reintegro no es un cobro, y
+     *     registrarlo como `payment` seria una traza que miente sobre lo que
+     *     paso. El tipo dice QUE paso; el signo, en que sentido.
+     *  3. El `balance_after` es el saldo DERIVADO tras el movimiento, y el
+     *     cache se refresca en la MISMA transaccion del movimiento.
+     *
+     * Y EL SALDO A FAVOR: un reintegro puede dejar al cliente con un saldo
+     * NEGATIVO, y ese saldo es un CREDITO A FAVOR: no se debe nada y la
+     * deuda es cero. El saldo lo soporta con su signo, y el cache tambien.
+     *
+     * @param  string  $amount  El importe devuelto, como texto decimal.
+     * @param  string  $referenceNo  El comprobante del reintegro (la nota
+     *                               de credito).
+     * @param  DateTimeImmutable  $entryDate  La fecha del movimiento.
+     * @param  int|null  $saleId  La venta a la que se imputa el movimiento.
+     *
+     * @throws RuntimeException Cuando el cliente no tiene ficha en la tienda.
+     */
+    public function registerReturn(
+        int $customerId,
+        int $storeId,
+        string $amount,
+        string $referenceNo,
+        DateTimeImmutable $entryDate,
+        ?int $saleId = null,
+    ): int {
+        $importe = BigDecimal::of($this->decimal($amount))
+            ->abs()
+            ->multipliedBy('-1')
+            ->toScale(self::SCALE, RoundingMode::HALF_UP);
+
+        return $this->registraMovimiento(
+            customerId: $customerId,
+            storeId: $storeId,
+            type: 'return',
             amount: (string) $importe,
             referenceNo: $referenceNo,
             entryDate: $entryDate,

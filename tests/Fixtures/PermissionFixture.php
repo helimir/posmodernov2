@@ -95,6 +95,25 @@ final class PermissionFixture
     }
 
     /**
+     * Una PERSONA con un rol, su vinculo por la tienda y la CAJA DEL DIA
+     * ABIERTA.
+     *
+     * REGLA que fija este metodo: *el escenario de los permisos que cobra
+     * necesita la caja abierta*. `PosFixture::usuario()` la abre, y este
+     * metodo le pone el ROL encima: sin la caja abierta el cobro falla, y un
+     * test que no llega al dominio no prueba el dominio.
+     */
+    public static function usuarioConCaja(Role $rol, int $storeId): User
+    {
+        $usuario = PosFixture::usuario($storeId);
+
+        $usuario->group_id = $rol->id;
+        $usuario->save();
+
+        return $usuario;
+    }
+
+    /**
      * Una PERSONA con un rol y su vinculo por VARIAS tiendas.
      *
      * @param  list<int>  $storeIds

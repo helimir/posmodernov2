@@ -24,6 +24,10 @@ use Illuminate\Http\Request;
  *
  * Y LA VENTA ES DE UNA TIENDA: un reintento sobre una venta de otra tienda
  * es un 404, como el comprobante.
+ *
+ * Y UNA VENTA ANULADA NO SE REINTENTA: el comprobante de una venta anulada
+ * esta anulado, con su nota de credito, y reintentar su emision emitiria
+ * ante la autoridad un comprobante que ya no esta en pie.
  */
 final class FiscalIssuanceController extends Controller
 {
@@ -49,6 +53,16 @@ final class FiscalIssuanceController extends Controller
             ! $this->access->allows($request->user()?->id, (int) $model->store_id),
             404
         );
+
+        // UNA VENTA ANULADA NO SE REINTENTA: la anulacion es un HECHO, y el
+        // comprobante de una venta anulada esta anulado con su nota de
+        // credito. Reintentar la emision de un comprobante anulado emitiria
+        // un comprobante que la autoridad ya tiene por anulado.
+        if ((string) $model->status === 'cancelled') {
+            return response()->json([
+                'errorMsg' => 'La venta '.$sale.' esta anulada: no hay comprobante que reintentar.',
+            ], 422);
+        }
 
         if (! config('fiscal.emission_enabled')) {
             return response()->json(['fiscal' => FiscalIssuanceOutcome::noEmitido()->aArray()]);

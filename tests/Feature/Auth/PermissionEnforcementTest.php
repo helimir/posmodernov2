@@ -95,6 +95,7 @@ dataset('rutas protegidas', [
     'lista de ventas' => ['get', '/ventas', 'sales.read'],
     'detalle de una venta' => ['get', '/ventas/{sale}', 'sales.read'],
     'reintento de la emision fiscal' => ['post', '/ventas/{sale}/emision', 'sales.fiscal_retry'],
+    'anulacion de una venta' => ['post', '/ventas/{sale}/anulacion', 'sales.void'],
     'comprobante fiscal' => ['get', '/comprobantes/{documento}', 'receipt.read'],
     'imprimir el comprobante' => ['post', '/comprobantes/{documento}/imprimir', 'receipt.print'],
     'la caja' => ['get', '/caja', 'pos.access'],
@@ -147,6 +148,9 @@ dataset('rutas protegidas', [
     'api de proveedores fiscales' => ['get', '/api/fiscal/proveedores', 'fiscal.read'],
     'alta de proveedor fiscal' => ['post', '/api/fiscal/proveedores', 'fiscal.create'],
     'edicion de proveedor fiscal' => ['put', '/api/fiscal/proveedores/{provider}', 'fiscal.update'],
+    // Los TICKETS DEL CAJERO: la pantalla de SUS trabajos, con su permiso.
+    'los tickets del cajero' => ['get', '/impresion/mis-trabajos', 'printing.own'],
+    'los tickets del cajero por la api' => ['get', '/api/impresion/mis-trabajos', 'printing.own'],
 ]);
 
 /**

@@ -47,6 +47,9 @@ enum Permission: string
     /** Reintentar la emision fiscal de una venta. */
     case SalesFiscalRetry = 'sales.fiscal_retry';
 
+    /** Anular una venta: la deja sin efecto con una nota de credito. */
+    case SalesVoid = 'sales.void';
+
     /** Ver el comprobante fiscal de una venta. */
     case ReceiptRead = 'receipt.read';
 
@@ -137,6 +140,16 @@ enum Permission: string
     /** Reintentar un trabajo de impresion que fallo. */
     case PrintingRetry = 'printing.retry';
 
+    /**
+     * Ver SUS PROPIOS trabajos de impresion.
+     *
+     * Y ESTE PERMISO ES DISTINTO DE `printing.read` A PROPOSITO: el cajero
+     * tiene que poder mirar SI SU PAPEL SALIO, y eso no le da la configuracion
+     * de las impresoras ni la cola de sus compañeros. Es el permiso de SU
+     * pantalla, y solo de SU pantalla.
+     */
+    case PrintingOwn = 'printing.own';
+
     /** Cambiar los permisos o el ambito de tiendas de un rol. */
     case RoleUpdate = 'role.update';
 
@@ -195,6 +208,7 @@ enum Permission: string
             self::SalesRead => 'View sales',
             self::SalesCreate => 'Charge a sale',
             self::SalesFiscalRetry => 'Retry the fiscal issuance',
+            self::SalesVoid => 'Void a sale',
             self::ReceiptRead => 'View receipts',
             self::ReceiptPrint => 'Print receipts',
             self::CashDayRead => 'View the cash day',
@@ -226,6 +240,7 @@ enum Permission: string
             self::PrintingTest => 'Test the connection of a print destination',
             self::PrintingReprint => 'Reprint a ticket that already went out',
             self::PrintingRetry => 'Retry a print job that failed',
+            self::PrintingOwn => 'View your own print jobs',
             self::StoreRead => 'View the store settings',
             self::StoreUpdate => 'Change the store settings',
             self::FiscalRead => 'View the fiscal administration',

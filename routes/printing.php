@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\OwnPrintJobsController;
 use App\Http\Controllers\PrintAdministrationController;
 use App\Http\Controllers\PrintAgentAdministrationController;
 use App\Http\Controllers\PrintJobQueueController;
@@ -41,6 +42,17 @@ Route::middleware(['auth'])->group(function () {
     Route::get('impresion/trabajos', [PrintJobQueueController::class, 'jobs'])
         ->middleware('permission:printing.read')
         ->name('impresion.trabajos.index');
+
+    // Los TICKETS DEL CAJERO: los trabajos de impresion PROPIOS de quien
+    // pregunta, y los que no tienen actor (los del sistema).
+    //
+    // Y EL PERMISO ES `printing.own`, NO `printing.read`: el cajero tiene que
+    // poder mirar SI SU PAPEL SALIO, y eso no le abre la configuracion de las
+    // impresoras ni la cola de sus compañeros. La de arriba sigue siendo del
+    // que administra la tienda.
+    Route::get('impresion/mis-trabajos', [OwnPrintJobsController::class, 'index'])
+        ->middleware('permission:printing.own')
+        ->name('impresion.mis-trabajos.index');
 
     // Los AGENTES LAN de la tienda activa: su estado, su inventario y la
     // REVOCACION (que es definitiva y solo un operador la levanta).
@@ -88,6 +100,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('print-jobs', [PrintJobQueueController::class, 'index'])
             ->middleware('permission:printing.read')
             ->name('api.print-jobs.index');
+
+        // Los TICKETS DEL CAJERO, en JSON: los suyos y los del sistema.
+        Route::get('impresion/mis-trabajos', [OwnPrintJobsController::class, 'jobs'])
+            ->middleware('permission:printing.own')
+            ->name('api.impresion.mis-trabajos.index');
 
         // El REINTENTO: un trabajo fallido vuelve a la cola, con un intento
         // mas y con los MISMOS bytes.

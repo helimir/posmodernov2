@@ -1037,10 +1037,23 @@ export default function PosIndex({ store, catalog, payment_methods, business_dat
                             </dl>
 
                             {/*
-                              El ESTADO REAL del papel esta en la cola de
-                              trabajos: el enlace se muestra solo a quien
-                              puede abrirla.
+                              EL PAPEL, DESPUES: el estado real del ticket
+                              esta en la cola de trabajos, y la cola general
+                              esta detras de `printing.read`, que el cajero no
+                              tiene: un enlace ahi le daria un 403.
+
+                              El cajero tiene SU pantalla, con SUS tickets, y
+                              el enlace va ahi. La cola general se queda para
+                              quien la puede abrir.
                             */}
+                            {can('printing.own') && (
+                                <p className="mt-2 text-sm">
+                                    <a href="/impresion/mis-trabajos" target="_blank" rel="noreferrer" className="underline">
+                                        See your tickets
+                                    </a>
+                                </p>
+                            )}
+
                             {can('printing.read') && (
                                 <p className="mt-2 text-sm">
                                     <a href="/impresion/trabajos" target="_blank" rel="noreferrer" className="underline">

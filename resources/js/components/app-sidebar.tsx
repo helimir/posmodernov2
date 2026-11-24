@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Cpu, Folder, Hash, Landmark, LayoutGrid, ListChecks, Package, Plug, Printer, Radio, Receipt, ScanLine, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
+import { BookOpen, Cpu, Folder, Hash, Landmark, LayoutGrid, ListChecks, Package, Plug, Printer, Radio, Receipt, ScanLine, ShieldCheck, Ticket, TriangleAlert, Users } from 'lucide-react';
 import { usePermissions } from '@/lib/permissions';
 import AppLogo from './app-logo';
 
@@ -74,6 +74,12 @@ const mainNavItems: NavItem[] = [
         url: '/impresion/trabajos',
         icon: ListChecks,
         permission: 'printing.read',
+    },
+    {
+        title: 'My tickets',
+        url: '/impresion/mis-trabajos',
+        icon: Ticket,
+        permission: 'printing.own',
     },
     {
         title: 'Print agents',

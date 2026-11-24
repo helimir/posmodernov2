@@ -23,11 +23,17 @@ use Illuminate\Support\Facades\DB;
  *    de la configuracion (`auth.superuser_role_slug`), asi que el nombre del
  *    rol no esta escrito en el codigo de la aplicacion.
  *  - EL CAJERO es el mostrador: la caja, la caja del dia (abrir, ver y
- *    cerrar), las ventas, los clientes y el catalogo en lectura.
+ *    cerrar), las ventas, los clientes y el catalogo en lectura. Y SUS
+ *    PROPIOS TICKETS: los trabajos de impresion que el mismo creo (y los
+ *    que no tienen actor, que son los del sistema). NO la cola general ni
+ *    la configuracion de impresion: eso es de quien administra la tienda.
  *  - EL CONTADOR lee: las ventas, los clientes, la contabilidad, los reportes
  *    y la AUDITORIA FISCAL (las series, los perfiles y los proveedores) en
  *    lectura. Lee, pero NO instala: declarar una numeracion o un regimen es
- *    una instalacion, y de eso se ocupa el superusuario.
+ *    una instalacion, y de eso se ocupa el superusuario. Y SUPERVISA lo que
+ *    el mostrador hizo: reabre un dia cerrado y anula una venta, porque
+ *    deshacer el cierre sellado y dejar sin efecto una venta emitida son
+ *    correcciones de supervision, no del cajero que las hizo.
  *
  * Y LA MATRIZ SE APLICA, NO SE ANADE: los vinculos de un rol por defecto que
  * no esten en la matriz se BORRAN. Los roles por defecto son un contrato, y
@@ -151,6 +157,13 @@ class PermissionSeeder extends Seeder
             self::slugSuperuser() => Permission::cases(),
 
             // EL CAJERO: el mostrador.
+            //
+            // Y SUS PROPIOS TICKETS: `printing.own` y NO `printing.read`. El
+            // cajero tiene que poder mirar SI SU PAPEL SALIO, y para eso
+            // tiene su propia pantalla, con sus propios trabajos. Lo que NO
+            // se le da es la cola general (los tickets de sus compañeros) ni
+            // la configuracion de impresion (las impresoras y los destinos):
+            // el mostrador cobra, no administra la tienda.
             self::SLUG_CASHIER => [
                 Permission::DashboardRead,
                 Permission::PosAccess,
@@ -169,12 +182,19 @@ class PermissionSeeder extends Seeder
                 Permission::CustomerUpdate,
                 Permission::CustomerPayment,
                 Permission::CatalogRead,
+                Permission::PrintingOwn,
             ],
 
             // EL CONTADOR: lee. Las ventas y los clientes en lectura, la
             // contabilidad en lectura y los reportes. Y REABRE un dia
             // cerrado: deshacer un cierre sellado es una supervision, y el
             // que lo hizo el cajero no es quien lo deshace.
+            //
+            // Y ANULA UNA VENTA: por la misma regla. La anulacion deshace una
+            // venta que HIZO el mostrador, consume un correlativo de la
+            // serie (la nota de credito) y deja al cliente con un credito a
+            // favor: es una supervision, y el que lo hizo el cajero no es
+            // quien lo deshace.
             //
             // Y LA ADMINISTRACION FISCAL, EN LECTURA: el contador ve que
             // numeracion declara cada tienda y con que regimen y con que
@@ -185,6 +205,7 @@ class PermissionSeeder extends Seeder
             self::SLUG_ACCOUNTANT => [
                 Permission::DashboardRead,
                 Permission::SalesRead,
+                Permission::SalesVoid,
                 Permission::ReceiptRead,
                 Permission::CustomerRead,
                 Permission::CashDayRead,
