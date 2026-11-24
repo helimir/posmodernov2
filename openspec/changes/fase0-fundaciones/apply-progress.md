@@ -1778,6 +1778,29 @@ Tres permisos planos y del modulo `fiscal` (`fiscal.read`, `fiscal.create`, `fis
 
 - **La unicidad de la serie la comprueba la aplicacion, no la base**: dos POST simultaneos con el mismo papel pueden crear dos series y el resolvedor se queda con la primera. El indice UNIQUE sobre `(store_id, fiscal_profile_id, series_role)` es el arreglo.
 - **`fiscal_series.provider_id` se puede editar y NADIE lo lee**: el dominio resuelve la imprenta por `fiscal_profile_environments.provider_id`. Un campo editable que no cambia nada es una trampa: tiene que dejar de editarse o el dominio tiene que empezar a leerlo.
+### F3-02 — La cola de impresion dice la verdad sobre el papel (PR #153)
+
+Cuatro huecos, y uno de ellos era **doble**: la revocacion del agente **no tenia ningun test** y **la UI no la llamaba nunca**. Existia por API desde la F2-09 y el agente solo aparecia como una lista de lectura dentro de la pantalla de destinos.
+
+**La pantalla del agente** (`/impresion/agentes`) con el listado y con revocar y levantar, y un dialogo que dice que la revocacion es **definitiva** y que levantarla **no** devuelve el token. Y el listado **deja de estar duplicado**: vive en `PrintAgentDirectory` y lo consumen las dos pantallas, asi que el desajuste de inventario se avisa igual en las dos.
+
+**El POS ensena el estado del papel**: "encolado" / "no encolado" (en rojo), el numero de trabajo y, cuando no se pudo encolar, el **motivo traducido** y el mensaje del servidor. **Sin polling ni websocket**: el enlace va a la cola, que ya existia. Y el motivo es un **codigo cerrado del dominio** (`PrintQueueOutcome::motivos()`), con un test que comprueba que la caja traduce **todos** los motivos: un motivo nuevo del dominio no puede aparecer crudo.
+
+**El Z ensena el estado de sus trabajos**, no solo cuantas veces se imprimio. Y `CashDayController` **solo gana un dato**: la partida, el saldo en curso, el esperado y el contado quedan intactos, y hay un test que lo comprueba.
+
+**El latido cuenta lo que el agente puede tomar**, y el numero sale de la **misma consulta que el reclamo**: los dos caminos no pueden separarse, porque si divergen el agente espera trabajo que no va a llegar o toma trabajo que no le dijeron. En el caso concreto del test (tres trabajos en cola en una tienda: uno a `lan_agent`, uno a `browser` y uno a `server_socket`, mas uno impreso y otro de otra tienda): `pending_jobs` **era 3 y ahora es 1**, que es lo que el long poll le da de verdad.
+
+**Sin permisos nuevos** (el catalogo es cerrado y esta unidad no introduce ninguna accion nueva) y **sin tocar la matriz de roles**: el cajero y el contador siguen sin `printing.read`.
+
+**Una correccion a la premisa del encargo**: el reclamo **no** filtra por el inventario del agente, y **es a proposito** (una impresora apagada es un aviso, no un rechazo: rechazarlo seria perder un ticket imprimible). Por eso el numero honesto es "encolados de destinos `lan_agent`" y el desajuste se sigue avisando en `warnings`.
+
+**Suite**: 782 tests / 11 438 assertions, en verde (+12 tests, +165 assertions).
+
+### Las tres deudas que deja
+
+- **El cajero ve QUE el papel no salio y POR QUE, pero no ve el estado real de su ticket**: la cola es de `printing.read` y el cajero no lo tiene. Decision de negocio pendiente.
+- **`print_jobs` no tiene FK a la venta**: el estado *duradero* del ticket no se puede enseñar en la ficha de la venta. Es una migracion.
+- **Levantar una revocacion invalida el token anterior**: el agente tiene que volver a registrarse. El dialogo lo dice, pero quien lo quite deja de avisar.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).

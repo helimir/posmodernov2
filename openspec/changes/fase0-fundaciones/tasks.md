@@ -840,7 +840,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       perfil ya declara los tokens que el comprobante necesita (F2-02).
     - Mismo vocabulario que las demas pantallas: importes como **texto decimal**, fallo **422 con
       `{"errorMsg": ...}`** y permisos **declarados junto a la ruta**.
-- [ ] **F3-02** **La cola de impresion completa.** Cuatro huecos, y **ninguno es del canal**: (a)
+- [x] **F3-02** **La cola de impresion completa.** Cuatro huecos, y **ninguno es del canal**: (a)
   la **pantalla de agentes**, donde la revocacion y el restore existen **por API** y **la UI no los
   llama nunca** (el agente aparece solo como **lista de lectura** dentro de la pantalla de
   destinos); (b) el **estado del ticket en el POS**, porque el campo `print` viaja en la respuesta
@@ -964,6 +964,16 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
     - **`fiscal_series.provider_id` se puede editar y NADIE lo lee**: el dominio resuelve la imprenta
       por `fiscal_profile_environments.provider_id`. Un campo editable que no cambia nada es una
       trampa, asi que tiene que dejar de editarse o el dominio tiene que empezar a leerlo.
+    - **El cajero ve QUE el papel no salio y POR QUE, pero no ve el estado real de su ticket**
+      (`printed`/`failed`): la cola entera es de `printing.read`, que el cajero no tiene. Es una
+      **decision de negocio pendiente**: o se le abre la cola, o se le da una pantalla propia con el
+      estado de SUS tickets.
+    - **`print_jobs` no tiene ninguna FK a la venta**: el unico vinculo es `cash_close_id` (para el Z).
+      Por eso el estado *duradero* del ticket de una venta no se puede enseñar en la ficha de la
+      venta. Cerrarlo es una **migracion** (FK e indice).
+    - **Levantar una revocacion invalida el token anterior**, asi que un agente al que se le levante
+      tiene que **volver a registrarse** para volver a imprimir. Quien espere que "levantar" lo
+      reponga se queda con un agente mudo: el dialogo de la pantalla lo dice.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |
