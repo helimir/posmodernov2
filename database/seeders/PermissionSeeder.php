@@ -164,6 +164,12 @@ class PermissionSeeder extends Seeder
             // se le da es la cola general (los tickets de sus compañeros) ni
             // la configuracion de impresion (las impresoras y los destinos):
             // el mostrador cobra, no administra la tienda.
+            //
+            // Y `sales.void_request`: el cajero PIDE la anulacion de una
+            // venta, con su motivo. NO `sales.void`: el que hizo la venta no
+            // la deshace, la pide, y la ejecuta quien la puede deshacer (el
+            // contador). La peticion del cajero es la que explica la
+            // anulacion, y por eso lleva su motivo.
             self::SLUG_CASHIER => [
                 Permission::DashboardRead,
                 Permission::PosAccess,
@@ -171,6 +177,7 @@ class PermissionSeeder extends Seeder
                 Permission::SalesRead,
                 Permission::SalesCreate,
                 Permission::SalesFiscalRetry,
+                Permission::SalesVoidRequest,
                 Permission::ReceiptRead,
                 Permission::ReceiptPrint,
                 Permission::CashDayRead,

@@ -178,6 +178,10 @@ class SalesController extends Controller
                 // La ANULACION: el bloque que aparece cuando la venta esta
                 // anulada. Es `null` en una venta corriente.
                 'void' => $this->anulacion($model),
+                // La SOLICITUD de anulacion: la peticion que ha hecho el
+                // cajero para que le anulen la venta. Es `null` cuando no
+                // hay ninguna.
+                'void_request' => $this->solicitudDeAnulacion($model),
                 'ledger' => $asiento === null ? null : [
                     'id' => (int) $asiento->id,
                     'entry_type' => (string) ($asiento->entryType?->code ?? ''),
@@ -345,6 +349,45 @@ class SalesController extends Controller
         $motivo = $carga[$clave] ?? null;
 
         return $motivo === null ? null : (string) $motivo;
+    }
+
+    /**
+     * La SOLICITUD de anulacion de la venta, tal y como la ve la pantalla.
+     *
+     * REGLA que fija este metodo: *la solicitud es un dato de la venta*, y
+     * por eso vive en su cabecera. La pantalla la ensea porque quien pide
+     * tiene que ver que su peticion esta viva, con quien la hizo y por que.
+     *
+     * Y SOLO HAY UNA SOLICITUD PENDIENTE: cuando la venta queda anulada, la
+     * solicitud ya no espera nada (el hecho esta hecho), y la pantalla lo
+     * dice con el estado `done`.
+     *
+     * @return array{
+     *     status: string,
+     *     reason: string|null,
+     *     requested_at: string|null,
+     *     requested_by: array{id: int, name: string}|null
+     * }|null
+     */
+    private function solicitudDeAnulacion(Sale $model): ?array
+    {
+        $pedidaEl = $model->void_requested_at;
+
+        if ($pedidaEl === null) {
+            return null;
+        }
+
+        $solicitante = $model->voidRequestedBy;
+
+        return [
+            'status' => (string) $model->status === 'cancelled' ? 'done' : 'pending',
+            'reason' => $model->void_request_reason === null ? null : (string) $model->void_request_reason,
+            'requested_at' => $pedidaEl->toIso8601String(),
+            'requested_by' => $solicitante === null ? null : [
+                'id' => (int) $solicitante->id,
+                'name' => (string) $solicitante->name,
+            ],
+        ];
     }
 
     /**

@@ -512,6 +512,32 @@ final readonly class CashRegisterService
     }
 
     /**
+     * EL ESTADO de la caja de una tienda en una fecha de negocio.
+     *
+     * REGLA que fija este metodo: *el estado del dia es el de SU caja*, y la
+     * caja se resuelve por la CLAVE NATURAL `(store_id, business_date)`: una
+     * tienda tiene una caja por fecha de negocio, y su estado es el de esa
+     * fila.
+     *
+     * Y `null` ES UNA RESPUESTA, NO UN FALLO: una tienda que nunca abrio
+     * caja para esa fecha no tiene un dia cerrado, y por eso no hay nada
+     * que reabrir. Solo el `closed` cierra el dia.
+     *
+     * @param  int  $storeId  Tienda de la caja.
+     * @param  DateTimeImmutable  $businessDate  Fecha de negocio: un dato del llamante.
+     * @return string|null `open`, `closed`, o `null` si no hay caja para esa fecha.
+     */
+    public function statusFor(int $storeId, DateTimeImmutable $businessDate): ?string
+    {
+        $estado = $this->connection->table('cash_registers')
+            ->where('store_id', $storeId)
+            ->where('business_date', $businessDate->format('Y-m-d'))
+            ->value('status');
+
+        return $estado === null ? null : (string) $estado;
+    }
+
+    /**
      * El registro de caja de UNA tienda en UNA fecha de negocio.
      *
      * REGLAS que fija este metodo:

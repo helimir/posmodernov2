@@ -50,6 +50,17 @@ enum Permission: string
     /** Anular una venta: la deja sin efecto con una nota de credito. */
     case SalesVoid = 'sales.void';
 
+    /**
+     * PEDIR la anulacion de una venta.
+     *
+     * Y ESTE PERMISO ES DISTINTO DE `sales.void` A PROPOSITO: quien pide la
+     * anulacion NO la ejecuta. El cajero hizo la venta y no la deshace:
+     * deja la peticion con su motivo, y quien tiene `sales.void` la lleva a
+     * cabo. Anular sin motivo de quien pidio seria una anulacion que nadie
+     * puede defender despues.
+     */
+    case SalesVoidRequest = 'sales.void_request';
+
     /** Ver el comprobante fiscal de una venta. */
     case ReceiptRead = 'receipt.read';
 
@@ -209,6 +220,7 @@ enum Permission: string
             self::SalesCreate => 'Charge a sale',
             self::SalesFiscalRetry => 'Retry the fiscal issuance',
             self::SalesVoid => 'Void a sale',
+            self::SalesVoidRequest => 'Request the void of a sale',
             self::ReceiptRead => 'View receipts',
             self::ReceiptPrint => 'Print receipts',
             self::CashDayRead => 'View the cash day',

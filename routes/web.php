@@ -11,6 +11,7 @@ use App\Http\Controllers\PosController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\SaleVoidController;
+use App\Http\Controllers\SaleVoidRequestController;
 use App\Http\Controllers\StockReportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -54,10 +55,33 @@ Route::middleware(['auth'])->group(function () {
     Route::get('ventas', [SalesController::class, 'index'])
         ->middleware('permission:sales.read')
         ->name('ventas.index');
+
+    // Las SOLICITUDES de anulacion PENDIENTES: la mesa de trabajo de quien
+    // puede anular.
+    //
+    // ES LA LISTA DE QUIEN ANULA, y por eso lleva SU permiso (`sales.void`)
+    // y no el de quien pide: el cajero deja su peticion en la ficha de la
+    // venta, y la cola de las peticiones ajenas es del que las ejecuta.
+    Route::get('ventas/solicitudes-anulacion', [SaleVoidRequestController::class, 'index'])
+        ->middleware('permission:sales.void')
+        ->name('ventas.solicitudes-anulacion');
+
     Route::get('ventas/{sale}', [SalesController::class, 'show'])
         ->whereNumber('sale')
         ->middleware('permission:sales.read')
         ->name('ventas.show');
+
+    // La SOLICITUD de anulacion del cajero: pide que le anulen la venta, con
+    // su motivo.
+    //
+    // ES UNA ESCRITURA, y por eso tiene su propio permiso (`sales.void_request`):
+    // pedir la anulacion NO es anular. Quien pide deja la peticion con su
+    // motivo, y quien tiene `sales.void` la ejecuta con el endpoint de la
+    // anulacion.
+    Route::post('ventas/{sale}/solicitud-anulacion', [SaleVoidRequestController::class, 'solicitar'])
+        ->whereNumber('sale')
+        ->middleware('permission:sales.void_request')
+        ->name('ventas.solicitud-anulacion');
 
     // El REINTENTO de la emision fiscal de una venta.
     //
