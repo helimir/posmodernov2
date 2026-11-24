@@ -111,6 +111,20 @@ interface SaleVoid {
     note: { id: number; number: string; issue_date: string | null } | null;
 }
 
+/**
+ * The REQUEST to void a sale: what the cashier asked for, and why.
+ *
+ * It is `null` when nobody asked for it. When it is there, its `status` says
+ * whether it is still `pending` or already `done` (the sale is voided, so
+ * there is nothing left to wait for).
+ */
+interface SaleVoidRequest {
+    status: string;
+    reason: string | null;
+    requested_at: string | null;
+    requested_by: { id: number; name: string } | null;
+}
+
 interface SaleDetail {
     id: number;
     invoice_no: string | null;
@@ -127,6 +141,7 @@ interface SaleDetail {
     payment_summary: SalePaymentSummary;
     ledger: LedgerEntry | null;
     void: SaleVoid | null;
+    void_request: SaleVoidRequest | null;
 }
 
 /**
@@ -167,6 +182,10 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
     const [voidReason, setVoidReason] = useState('');
     const [voiding, setVoiding] = useState(false);
     const [voidError, setVoidError] = useState<string | null>(null);
+    const [requestOpen, setRequestOpen] = useState(false);
+    const [requestReason, setRequestReason] = useState('');
+    const [requesting, setRequesting] = useState(false);
+    const [requestError, setRequestError] = useState<string | null>(null);
 
     /**
      * The GAP between what the payments APPLIED and the total of the sale.
@@ -189,6 +208,14 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
     const anulada = sale.void !== null;
     const etiquetaFiscal = anulada ? 'Voided' : fiscalLabel(sale.fiscal.status);
     const colorFiscal = anulada ? 'destructive' : fiscalVariant(sale.fiscal.status);
+
+    /**
+     * The PENDING request to void this sale.
+     *
+     * When it is there, the reason of the request is the reason of the void:
+     * the cashier wrote why, and that is the explanation the void carries.
+     */
+    const solicitudPendiente = sale.void_request !== null && sale.void_request.status === 'pending' ? sale.void_request : null;
 
     /**
      * The RETRY of the fiscal issuance.
@@ -226,13 +253,39 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
         setVoidError(null);
 
         try {
-            await postJson(`/ventas/${sale.id}/anulacion`, { reason: voidReason });
+            await postJson(`/ventas/${sale.id}/anulacion`, {
+                reason: solicitudPendiente !== null ? solicitudPendiente.reason : voidReason,
+            });
 
             router.reload();
         } catch (fallo) {
             setVoidError((fallo as Error).message);
         } finally {
             setVoiding(false);
+        }
+    };
+
+    /**
+     * The REQUEST to void this sale.
+     *
+     * It needs a REASON: the server rejects a request without one, and the
+     * reason written is the one the void will carry.
+     *
+     * AND IT DOES NOT VOID ANYTHING: the sale stays in place until whoever
+     * may void picks the request up.
+     */
+    const requestVoid = async () => {
+        setRequesting(true);
+        setRequestError(null);
+
+        try {
+            await postJson(`/ventas/${sale.id}/solicitud-anulacion`, { reason: requestReason });
+
+            router.reload();
+        } catch (fallo) {
+            setRequestError((fallo as Error).message);
+        } finally {
+            setRequesting(false);
         }
     };
 
@@ -309,12 +362,35 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                           The VOID: it is a SUPERVISION action, so the button
                           only appears with its permission, and never in a
                           sale that is already voided.
+
+                          AND THE REQUEST: the cashier that made the sale does
+                          not undo it, they ASK for it with their reason, and
+                          whoever may void picks the request up. That is why
+                          the request has its own permission, and why the two
+                          buttons are not the same thing.
                         */}
-                        {!anulada && can('sales.void') && (
-                            <div className="mt-4 flex justify-end">
-                                <Button variant="destructive" onClick={() => setVoidOpen(true)}>
-                                    Void this sale
-                                </Button>
+                        {!anulada && (
+                            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                                {can('sales.void') && (
+                                    <Link
+                                        href="/ventas/solicitudes-anulacion"
+                                        className="text-sm underline underline-offset-4"
+                                    >
+                                        Pending void requests
+                                    </Link>
+                                )}
+
+                                {can('sales.void_request') && solicitudPendiente === null && (
+                                    <Button variant="outline" onClick={() => setRequestOpen(true)}>
+                                        Request the void
+                                    </Button>
+                                )}
+
+                                {can('sales.void') && (
+                                    <Button variant="destructive" onClick={() => setVoidOpen(true)}>
+                                        {solicitudPendiente !== null ? 'Void the requested sale' : 'Void this sale'}
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </CardContent>
@@ -429,6 +505,45 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                                     annul before the authority.
                                 </p>
                             )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/*
+                  The PENDING REQUEST: what the cashier asked for, and why.
+
+                  AND IT SAYS WHO HAS TO ACT: the request is not an approval,
+                  it is a queue entry. Whoever may void picks it up from the
+                  sale and voids it there.
+                */}
+                {solicitudPendiente !== null && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Void requested</CardTitle>
+                        </CardHeader>
+
+                        <CardContent>
+                            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                <Field label="Requested at" value={solicitudPendiente.requested_at ?? '—'} />
+                                <Field
+                                    label="Requested by"
+                                    value={solicitudPendiente.requested_by?.name ?? '—'}
+                                />
+                                <Field label="Status" value="Pending" />
+                            </dl>
+
+                            <div className="mt-4">
+                                <dt className="text-muted-foreground text-xs">Reason</dt>
+                                <dd className="text-sm">{solicitudPendiente.reason ?? '—'}</dd>
+                            </div>
+
+                            <Alert className="mt-4">
+                                <AlertTitle>This sale is not voided yet</AlertTitle>
+                                <AlertDescription>
+                                    The request is waiting for whoever may void the sales. Its reason is the reason
+                                    the void will carry.
+                                </AlertDescription>
+                            </Alert>
                         </CardContent>
                     </Card>
                 )}
@@ -649,6 +764,60 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                 </p>
 
                 {/*
+                  The REQUEST DIALOG: the reason is REQUIRED, because the
+                  reason written here is the reason the void will carry.
+                */}
+                <Dialog
+                    open={requestOpen}
+                    onOpenChange={(value) => {
+                        setRequestOpen(value);
+
+                        if (!value) {
+                            setRequestReason('');
+                            setRequestError(null);
+                        }
+                    }}
+                >
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Request the void of this sale</DialogTitle>
+                            <DialogDescription>
+                                You are asking whoever may void the sales to undo this one. The reason is required,
+                                and it is written in the audit trail with your name: it is the reason the void will
+                                carry.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="void-request-reason">Reason</Label>
+                            <textarea
+                                id="void-request-reason"
+                                rows={3}
+                                value={requestReason}
+                                onChange={(event) => setRequestReason(event.target.value)}
+                                placeholder="Why is this sale being asked to be voided?"
+                                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+
+                            {requestError && <p className="text-destructive text-sm">{requestError}</p>}
+                        </div>
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setRequestOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={requestVoid}
+                                disabled={requesting || requestReason.trim() === ''}
+                            >
+                                {requesting ? 'Requesting…' : 'Request the void'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/*
                   The VOID DIALOG: the reason is REQUIRED, and the dialog says
                   what the void does NOT do.
 
@@ -681,11 +850,25 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                             <textarea
                                 id="void-reason"
                                 rows={3}
-                                value={voidReason}
+                                value={solicitudPendiente !== null ? (solicitudPendiente.reason ?? '') : voidReason}
                                 onChange={(event) => setVoidReason(event.target.value)}
+                                disabled={solicitudPendiente !== null}
                                 placeholder="Why is this sale being voided?"
                                 className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             />
+
+                            {/*
+                              The REASON of a pending request is not rewritten:
+                              it is the reason the cashier wrote, and it is the
+                              reason the void carries.
+                            */}
+                            {solicitudPendiente !== null && (
+                                <p className="text-muted-foreground text-sm">
+                                    This is the reason of the pending request, written by{' '}
+                                    {solicitudPendiente.requested_by?.name ?? 'the cashier'}. It is the reason the void
+                                    carries.
+                                </p>
+                            )}
 
                             {voidError && <p className="text-destructive text-sm">{voidError}</p>}
 
@@ -705,7 +888,7 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                             <Button
                                 variant="destructive"
                                 onClick={voidSale}
-                                disabled={voiding || voidReason.trim() === ''}
+                                disabled={voiding || (solicitudPendiente === null && voidReason.trim() === '')}
                             >
                                 {voiding ? 'Voiding…' : 'Void the sale'}
                             </Button>

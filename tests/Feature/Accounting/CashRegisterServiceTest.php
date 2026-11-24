@@ -161,6 +161,36 @@ test('test_una_caja_cerrada_no_admite_mas_movimientos', function () {
         ->toThrow(RuntimeException::class, 'no existe');
 });
 
+test('test_el_estado_del_dia_es_el_de_su_caja', function () {
+    $servicio = new CashRegisterService(DB::connection());
+    $tienda = Store::create(['name' => 'Tienda del estado del dia']);
+
+    // El PLAN DE CUENTAS: al abrir la caja, el saldo de partida se asienta,
+    // y un asiento necesita dos cuentas.
+    PosFixture::planDeCaja((int) $tienda->id);
+
+    // Un dia SIN caja no tiene dia: la respuesta es `null`, no un fallo.
+    expect($servicio->statusFor((int) $tienda->id, new DateTimeImmutable('2026-11-04')))->toBeNull();
+
+    $caja = $servicio->open($tienda->id, new DateTimeImmutable('2026-11-04'), '100.0000');
+
+    // Con caja, el estado del dia es el de ESA caja.
+    expect($servicio->statusFor((int) $tienda->id, new DateTimeImmutable('2026-11-04')))->toBe('open');
+
+    $servicio->close($caja, '100.0000');
+
+    // Y cerrada, el dia esta CERRADO.
+    expect($servicio->statusFor((int) $tienda->id, new DateTimeImmutable('2026-11-04')))->toBe('closed');
+
+    // Y el estado es POR TIENDA: la caja de otra tienda no dice nada del
+    // dia de esta.
+    $otra = Store::create(['name' => 'Tienda que no tiene caja']);
+
+    PosFixture::planDeCaja((int) $otra->id);
+
+    expect($servicio->statusFor((int) $otra->id, new DateTimeImmutable('2026-11-04')))->toBeNull();
+});
+
 test('test_la_caja_guarda_quien_la_abrio_y_quien_la_cerro', function () {
     $servicio = new CashRegisterService(DB::connection());
     $tienda = Store::create(['name' => 'Tienda con responsables']);

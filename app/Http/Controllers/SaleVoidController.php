@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Accounting\CashRegisterService;
 use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Fiscal\Contracts\ElectronicInvoiceProvider;
 use App\Domain\Fiscal\DerivedDocumentService;
@@ -16,6 +17,7 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use RuntimeException;
 
 /**
@@ -41,6 +43,17 @@ use RuntimeException;
  * Y LA CAJA DEL DIA NO SE TOCA: el dinero entro en el cajon y sigue ahi. Una
  * venta anulada sigue siendo caja, y el Z del dia no cambia. Devolver el
  * dinero es otra operacion.
+ *
+ * Y UNA VENTA DE UN DIA CERRADO NO SE ANULA SIN REABRIR ESE DIA: el Z
+ * sellado es el cierre HECHO, con las cifras de ese dia, y corregir la venta
+ * sin reabrirlo dejaria un Z que ya no describe el dia. Por eso la
+ * anulacion falla con un 422 que dice que hay que reabrir, y el que la
+ * ejecuta tiene el permiso de reabrir (`cash_day.reopen`), con su motivo.
+ *
+ * Y EL MOTIVO DE LA ANULACION es el de la SOLICITUD si la venta tiene una
+ * pendiente (lo escribio quien pidio que le anulen), y el del cuerpo si no
+ * la tiene. Quien pide explica por que, y esa explicacion es la que queda
+ * escrita en la nota de credito y en la auditoria.
  */
 final class SaleVoidController extends Controller
 {
@@ -63,6 +76,7 @@ final class SaleVoidController extends Controller
         private readonly Container $container,
         private readonly CustomerBalanceService $balances,
         private readonly StoreAccess $access,
+        private readonly CashRegisterService $registers,
     ) {
         $this->derived = new DerivedDocumentService(
             $connection,
@@ -81,23 +95,20 @@ final class SaleVoidController extends Controller
      * Y UN FALLO NO PIERDE LA VENTA: si la nota no se puede emitir, la
      * operacion se revierte entera y la venta sigue como estaba. El numero
      * quemado tampoco: la numeracion esta dentro de la misma unidad atomica.
+     *
+     * Y EL MOTIVO: el de la SOLICITUD si la venta tiene una pendiente, y el
+     * del cuerpo si no la tiene. Quien pidio explico POR QUE, y esa
+     * explicacion es la que lleva la anulacion.
+     *
+     * Y EL DIA DE NEGOCIO DE LA VENTA NO PUEDE ESTAR CERRADO: una venta de
+     * un dia cerrado se corrige REABRIENDO ese dia, y el Z sellado se
+     * queda en el historial.
      */
     public function anular(Request $request, int $sale): JsonResponse
     {
         $datos = $request->all();
 
-        // 1. EL MOTIVO es OBLIGATORIO: una venta anulada sin motivo es una
-        //    venta que nadie sabe por que se toco.
-        $motivo = trim((string) ($datos['reason'] ?? ''));
-
-        if ($motivo === '') {
-            return response()->json([
-                'errorMsg' => 'Una venta se anula con un MOTIVO: '
-                    .'una venta anulada sin motivo es una venta que nadie sabe por que se toco.',
-            ], 422);
-        }
-
-        // 2. LA VENTA. Una venta que no existe, o de una tienda a la que el
+        // 1. LA VENTA. Una venta que no existe, o de una tienda a la que el
         //    usuario no tiene acceso, es un 404: no se le dice que existe.
         $venta = $this->connection->table('sales')->where('id', $sale)->first();
 
@@ -108,12 +119,51 @@ final class SaleVoidController extends Controller
             404
         );
 
-        // 3. UNA VENTA ANULADA NO SE ANULA DOS VECES: la anulacion es un
+        // 2. UNA VENTA ANULADA NO SE ANULA DOS VECES: la anulacion es un
         //    HECHO, y un hecho repetido es una segunda nota de credito y un
         //    segundo reintegro en el libro del cliente.
         if ((string) $venta->status === 'cancelled') {
             return response()->json([
                 'errorMsg' => 'La venta '.$sale.' ya esta anulada: no se anula dos veces.',
+            ], 422);
+        }
+
+        // 3. EL MOTIVO es OBLIGATORIO: una venta anulada sin motivo es una
+        //    venta que nadie sabe por que se toco.
+        //
+        //    Y EL MOTIVO DE LA SOLICITUD es EL DEL MOTIVO: cuando el cajero
+        //    ha pedido la anulacion, la razon que explica la anulacion es la
+        //    que escribio el. Quien ejecuta la anulacion no reescribe la voz
+        //    de quien pidio.
+        $solicitud = $this->solicitudDeAnulacion($venta);
+
+        $motivoDelCuerpo = trim((string) ($datos['reason'] ?? ''));
+
+        $motivoDeLaSolicitud = $solicitud === null
+            ? ''
+            : trim((string) $solicitud['reason']);
+
+        $motivo = $motivoDeLaSolicitud !== '' ? $motivoDeLaSolicitud : $motivoDelCuerpo;
+
+        if ($motivo === '') {
+            return response()->json([
+                'errorMsg' => 'Una venta se anula con un MOTIVO: '
+                    .'una venta anulada sin motivo es una venta que nadie sabe por que se toco.',
+            ], 422);
+        }
+
+        // 4. EL DIA DE NEGOCIO DE LA VENTA NO PUEDE ESTAR CERRADO. El Z
+        //    sellado es el cierre HECHO, con las cifras de ese dia: anular
+        //    una venta sin reabrirlo dejaria un Z que ya no describe el dia.
+        //    Y reabrir un dia exige su motivo, y deja el Z anterior en el
+        //    historial: por eso la anulacion falla y dice que hay que
+        //    reabrir, en vez de reabrir por su cuenta.
+        if ($this->diaCerrado($venta)) {
+            return response()->json([
+                'errorMsg' => 'El dia de negocio '.(string) $venta->sale_date.' de la tienda '
+                    .(int) $venta->store_id.' esta CERRADO: una venta de un dia cerrado no se anula sin '
+                    .'reabrirlo. Reabre el dia con su motivo (el Z sellado se queda en el historial) '
+                    .'y vuelve a intentarlo.',
             ], 422);
         }
 
@@ -141,8 +191,8 @@ final class SaleVoidController extends Controller
                         );
                     }
 
-                    // 4. EL COMPROBANTE: se anula, y su numero queda
-                    //    CONSUMADO. Un numero publicado no vuelve al
+                    // 5. EL COMPROBANTE: se anula, y su numero queda
+                    //    CONSUMIDO. Un numero publicado no vuelve al
                     //    correlativo, jams.
                     $this->anulaElComprobante(
                         (int) $documento->id,
@@ -152,7 +202,7 @@ final class SaleVoidController extends Controller
                         $actorId,
                     );
 
-                    // 5. LA NOTA DE CREDITO: el documento DERIVADO que
+                    // 6. LA NOTA DE CREDITO: el documento DERIVADO que
                     //    lleva la correccion ante la autoridad, con su
                     //    PROPIA numeracion en la MISMA serie.
                     $notaId = $this->derived->issueNote(
@@ -163,13 +213,13 @@ final class SaleVoidController extends Controller
                     );
                 }
 
-                // 6. LA VENTA queda anulada.
+                // 7. LA VENTA queda anulada.
                 $this->connection->table('sales')->where('id', $sale)->update([
                     'status' => 'cancelled',
                     'updated_at' => now(),
                 ]);
 
-                // 7. EL LIBRO DEL CLIENTE: la nota de credito RESTA el total
+                // 8. EL LIBRO DEL CLIENTE: la nota de credito RESTA el total
                 //    de la venta, y el reintegro es de SU propio tipo.
                 $this->compensaElCredito($venta, $notaId);
 
@@ -188,7 +238,7 @@ final class SaleVoidController extends Controller
             return response()->json(['errorMsg' => $fallo->getMessage()], 422);
         }
 
-        // 8. LA AUDITORIA: quien anulo la venta y por que. Una venta anulada
+        // 9. LA AUDITORIA: quien anulo la venta y por que. Una venta anulada
         //    sin rastro es una venta que nadie puede defender despues.
         (new AuditWriter($this->connection))->recordFor(
             $request,
@@ -200,11 +250,82 @@ final class SaleVoidController extends Controller
                 'invoice_no' => (string) ($venta->invoice_no ?? ''),
                 'credit_note_id' => $resultado['note']['id'] ?? null,
                 'credit_note_number' => $resultado['note']['number'] ?? null,
+                // Y SI LA ANULACION VIENE DE UNA SOLICITUD: quien la pidio y
+                // cuando. Y el motivo que escribio quien ANULO, si escribio
+                // otro que no es el de la solicitud: no se pierde, pero no
+                // sustituye al del que pidio.
+                'void_requested_by' => $solicitud['requested_by'] ?? null,
+                'void_requested_at' => $solicitud['requested_at'] ?? null,
+                'voided_by_reason' => $motivoDelCuerpo !== '' && $motivoDelCuerpo !== $motivo
+                    ? $motivoDelCuerpo
+                    : null,
             ],
             (int) $venta->store_id
         );
 
         return response()->json($resultado);
+    }
+
+    /**
+     * La SOLICITUD de anulacion que tiene la venta, si la tiene.
+     *
+     * REGLA que fija este metodo: *la solicitud es un dato de la venta*, y
+     * por eso vive en su cabecera (`void_requested_at`,
+     * `void_request_reason`, `void_requested_by`). Una venta sin solicitud
+     * no tiene nada pendiente: por eso se devuelve `null` y no un motivo
+     * vacio.
+     *
+     * @return array{reason: string, requested_at: string|null, requested_by: int|null}|null
+     */
+    private function solicitudDeAnulacion(object $venta): ?array
+    {
+        $pedidaEl = $venta->void_requested_at ?? null;
+
+        if ($pedidaEl === null) {
+            return null;
+        }
+
+        return [
+            'reason' => (string) ($venta->void_request_reason ?? ''),
+            'requested_at' => $this->instanteDeLaFila($pedidaEl),
+            'requested_by' => $venta->void_requested_by === null
+                ? null
+                : (int) $venta->void_requested_by,
+        ];
+    }
+
+    /**
+     * ¿El dia de negocio de la VENTA esta cerrado?
+     *
+     * REGLA que fija este metodo: *el estado del dia es el de SU caja*, y lo
+     * pregunta el dominio (`CashRegisterService`), que es el dueno de esa
+     * tabla. La fecha es la de la VENTA (`sale_date`), no la de hoy: lo que
+     * se corrige es el dia en el que se cobro.
+     */
+    private function diaCerrado(object $venta): bool
+    {
+        $fecha = (string) $venta->sale_date;
+
+        if ($fecha === '') {
+            return false;
+        }
+
+        return $this->registers->statusFor(
+            (int) $venta->store_id,
+            new DateTimeImmutable($fecha)
+        ) === 'closed';
+    }
+
+    /**
+     * Un INSTANTE de la base, en ISO 8601.
+     */
+    private function instanteDeLaFila(mixed $valor): ?string
+    {
+        if ($valor === null) {
+            return null;
+        }
+
+        return Carbon::parse((string) $valor)->toIso8601String();
     }
 
     /**
