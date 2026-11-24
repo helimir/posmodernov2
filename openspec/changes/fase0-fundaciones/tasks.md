@@ -1000,6 +1000,19 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       reabrirlo (la regla del legacy dice que si; la anulacion no escribe asiento ni toca la caja, y sus
       efectos caen hoy, no el dia de la venta); y (b) si el **cajero** puede anular su propia venta, o solo
       el contador (hoy solo el contador: `sales.void`).
+    - ⚠️ **LA LECTURA DE VENTAS NO FILTRA POR TIENDA (preexistente, y es una fuga)**: `/ventas` y
+      `/ventas/{id}` devuelven ventas de cualquier tienda, asi que un cajero de la tienda 1 ve las
+      ventas de la tienda 2. Las **escrituras** si lo guardan con `StoreAccess`, asi que el problema
+      es de solo lectura, y la propiedad `sale.void_request` **hereda ese filtro**. Es una unidad
+      propia y **no puede esperar**: es el unico agujero de multitienda que queda abierto.
+    - **Una solicitud de anulacion NO se puede rechazar ni cancelar**: no hay endpoint para ninguna de
+      las dos cosas y no hay estado "rechazada". Si el contador no esta de acuerdo, la solicitud
+      **se queda pendiente para siempre**. Y **una solicitud que nadie atiende tampoco caduca**.
+    - **El motivo del cajero no se puede reescribir**: si el contador discrepa, su texto solo queda en
+      la auditoria (`voided_by_reason`), no en el motivo de la nota de credito. Es trazabilidad, pero
+      conviene saberlo.
+    - **Reorden 404/422 en la anulacion**: una venta inexistente **sin motivo** ahora responde 404 y no
+      422. Es mas correcto (un 404 no filtra nada), pero es un cambio de contrato observable.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |

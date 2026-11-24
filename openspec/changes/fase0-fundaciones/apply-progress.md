@@ -1827,6 +1827,30 @@ No habia **ninguna** via para anular una venta: `SalesController` esta declarado
 - **Dos decisiones de negocio sin tomar**: si anular una venta de un dia cerrado exige reabrirlo, y si el cajero puede anular su propia venta o solo el contador.
 - El comprobante imprimible de la nota de credito (el papel diria "Factura") es un hueco del **dominio fiscal**.
 - La **matriz de roles se aplica**, no se anade: el seeder borra lo que no esta en la matriz, asi que `printing.own` hay que mantenerlo en los dos sitios.
+### F3-03 (ampliacion) — El cajero pide la anulacion, y un dia cerrado se reabre (PR #157)
+
+Las dos decisiones del mantenedor sobre la anulacion, como unidad aparte.
+
+**El cajero PIDE.** No anula: registra una solicitud con su motivo, la venta queda con una solicitud **pendiente**, y quien **puede** anular (el contador, con `sales.void`) ve la cola y anula con el endpoint **que ya existia**. **No hay estado "aprobada"**: la solicitud esta pendiente o esta hecha, y una solicitud que no se atiende espera.
+
+La solicitud vive en **tres columnas de `sales`** (`void_requested_at`, `void_request_reason`, `void_requested_by`), en **una migracion aditiva y reversible**. No una tabla propia: una venta tiene **una** solicitud, sus tres datos son **de esa venta**, y una tabla aparte seria una segunda fuente de verdad sobre la misma venta.
+
+El permiso es **nuevo** (`sales.void_request`) porque no hay nada que reusar: `sales.update` no existe en el catalogo, `sales.fiscal_retry` es el reintento de una emision fallida (no cambia el estado legal ni deja una peticion viva) y `cash_day.reopen` es del contador y del dia de caja.
+
+**Un dia cerrado se reabre.** La comprobacion se **pregunta al dominio**: `CashRegisterService::statusFor()` resuelve la caja por su clave natural y devuelve `open`/`closed`/`null`, y la fecha es el `sale_date` **de la venta**, no el de hoy. **`CashDayController` no se toco.** Y el fallo ocurre **antes de la transaccion**: no hay venta anulada a medias, ni nota, ni evento fiscal, ni auditoria de una anulacion que no ocurrio, y el Z sellado sigue sellado.
+
+⚠️ **Y la solicitud SI se puede registrar para una venta de un dia cerrado**: la guarda es de la anulacion, no de la peticion. La solicitud espera a que el dia se reabra.
+
+**El motivo de la solicitud es el motivo de la anulacion**: lo que escribio el cajero es lo que dice la nota de credito, y si el contador discrepa, su texto queda en la auditoria (`voided_by_reason`). Un motivo que un supervisor puede reescribir no es un motivo.
+
+**Suite**: 828 tests / 11 848 assertions, en verde.
+
+### Lo que esta ampliacion deja abierto
+
+- ⚠️ **La lectura de ventas no filtra por tienda (preexistente)**: `/ventas` y `/ventas/{id}` devuelven ventas de cualquier tienda. Es el **unico agujero de multitienda que queda abierto** y es una unidad propia.
+- **Una solicitud no se puede rechazar ni cancelar**, y tampoco caduca: si el contador no esta de acuerdo, la solicitud se queda pendiente para siempre.
+- El motivo del cajero no se puede reescribir (el del contador solo queda en la auditoria).
+- El reorden 404/422 de la anulacion es un cambio de contrato observable.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
