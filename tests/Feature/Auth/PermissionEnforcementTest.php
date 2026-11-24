@@ -148,6 +148,9 @@ dataset('rutas protegidas', [
     'api de proveedores fiscales' => ['get', '/api/fiscal/proveedores', 'fiscal.read'],
     'alta de proveedor fiscal' => ['post', '/api/fiscal/proveedores', 'fiscal.create'],
     'edicion de proveedor fiscal' => ['put', '/api/fiscal/proveedores/{provider}', 'fiscal.update'],
+    // Los TICKETS DEL CAJERO: la pantalla de SUS trabajos, con su permiso.
+    'los tickets del cajero' => ['get', '/impresion/mis-trabajos', 'printing.own'],
+    'los tickets del cajero por la api' => ['get', '/api/impresion/mis-trabajos', 'printing.own'],
 ]);
 
 /**

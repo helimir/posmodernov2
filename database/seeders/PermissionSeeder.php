@@ -23,7 +23,10 @@ use Illuminate\Support\Facades\DB;
  *    de la configuracion (`auth.superuser_role_slug`), asi que el nombre del
  *    rol no esta escrito en el codigo de la aplicacion.
  *  - EL CAJERO es el mostrador: la caja, la caja del dia (abrir, ver y
- *    cerrar), las ventas, los clientes y el catalogo en lectura.
+ *    cerrar), las ventas, los clientes y el catalogo en lectura. Y SUS
+ *    PROPIOS TICKETS: los trabajos de impresion que el mismo creo (y los
+ *    que no tienen actor, que son los del sistema). NO la cola general ni
+ *    la configuracion de impresion: eso es de quien administra la tienda.
  *  - EL CONTADOR lee: las ventas, los clientes, la contabilidad, los reportes
  *    y la AUDITORIA FISCAL (las series, los perfiles y los proveedores) en
  *    lectura. Lee, pero NO instala: declarar una numeracion o un regimen es
@@ -154,6 +157,13 @@ class PermissionSeeder extends Seeder
             self::slugSuperuser() => Permission::cases(),
 
             // EL CAJERO: el mostrador.
+            //
+            // Y SUS PROPIOS TICKETS: `printing.own` y NO `printing.read`. El
+            // cajero tiene que poder mirar SI SU PAPEL SALIO, y para eso
+            // tiene su propia pantalla, con sus propios trabajos. Lo que NO
+            // se le da es la cola general (los tickets de sus compañeros) ni
+            // la configuracion de impresion (las impresoras y los destinos):
+            // el mostrador cobra, no administra la tienda.
             self::SLUG_CASHIER => [
                 Permission::DashboardRead,
                 Permission::PosAccess,
@@ -172,6 +182,7 @@ class PermissionSeeder extends Seeder
                 Permission::CustomerUpdate,
                 Permission::CustomerPayment,
                 Permission::CatalogRead,
+                Permission::PrintingOwn,
             ],
 
             // EL CONTADOR: lee. Las ventas y los clientes en lectura, la
