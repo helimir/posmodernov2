@@ -10,6 +10,7 @@ import AppLayout from '@/layouts/app-layout';
 import { postJson } from '@/lib/api';
 import { usePermissions } from '@/lib/permissions';
 import { type PosCurrency, addAmount, compareAmounts, formatAmount, formatPlainAmount, multiplyAmount, subtractAmount } from '@/lib/pos';
+import { printJobLabel, printJobVariant } from '@/lib/print';
 import { useState, type FormEvent } from 'react';
 
 /**
@@ -113,6 +114,25 @@ export interface CashDayCount {
 export type CashDayState = 'not_opened' | 'open' | 'closed';
 
 /**
+ * A PRINT JOB of the Z: the state of the paper of the closing.
+ *
+ * The state is the one the state machine writes (`queued`, `claimed`,
+ * `printing`, `printed`, `failed`), read as it is.
+ */
+export interface CashDayPrintJob {
+    id: number;
+    status: string;
+    target_id: number;
+    target_name: string;
+    transport: string;
+    attempts: number;
+    reason: string | null;
+    reprint_of_job_id: number | null;
+    last_error: string | null;
+    created_at: string | null;
+}
+
+/**
  * The SEALED Z: the closing of the day as a FACT.
  *
  * It is `null` when the day is not closed: there is nothing sealed to read.
@@ -140,9 +160,9 @@ export interface CashDayZ {
     last_control_number: string | null;
     payments: CashDayPayment[];
     /**
-     * The REASON of the closing: why the day was closed the way it was. It
-     * is there because a difference over the threshold is not closed without
-     * an explanation.
+     * The REASON of the closing: why the day was closed the way it was. It is
+     * there because a difference over the threshold is not closed without an
+     * explanation.
      */
     close_reason: string | null;
     /**
@@ -159,6 +179,13 @@ export interface CashDayZ {
      * document of the closing, and taking it out twice has to say why.
      */
     print_count: number;
+    /**
+     * The PRINT JOBS of the Z, with their state.
+     *
+     * A counter is not a state: the operator has to know whether the paper
+     * of the closing is still in the queue, being printed, or failed.
+     */
+    print_jobs: CashDayPrintJob[];
 }
 
 /**
@@ -750,6 +777,46 @@ export default function CashDay({
                                             />
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {/*
+                              EL ESTADO DE LOS TRABAJOS del Z: un contador no
+                              es un estado. El operador tiene que saber si el
+                              papel del cierre sigue en la cola, se esta
+                              imprimiendo o fallo.
+
+                              Y SE VE SIN PODER IMPRIMIR: el estado es una
+                              LECTURA, y leer la caja del dia no es imprimir
+                              el Z.
+                            */}
+                            {z.print_jobs.length > 0 && (
+                                <div className="mt-3 overflow-x-auto border-t pt-3">
+                                    <table className="w-full text-xs">
+                                        <thead>
+                                            <tr className="border-b">
+                                                <th className="px-2 py-1 text-left font-medium">Job</th>
+                                                <th className="px-2 py-1 text-left font-medium">Status</th>
+                                                <th className="px-2 py-1 text-left font-medium">Destination</th>
+                                                <th className="px-2 py-1 text-right font-medium">Attempts</th>
+                                                <th className="px-2 py-1 text-left font-medium">Failure</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            {z.print_jobs.map((job) => (
+                                                <tr key={job.id} className="border-b last:border-0">
+                                                    <td className="px-2 py-1 font-mono">#{job.id}</td>
+                                                    <td className="px-2 py-1">
+                                                        <Badge variant={printJobVariant(job.status)}>{printJobLabel(job.status)}</Badge>
+                                                    </td>
+                                                    <td className="px-2 py-1">{job.target_name}</td>
+                                                    <td className="px-2 py-1 text-right tabular-nums">{job.attempts}</td>
+                                                    <td className="px-2 py-1">{job.last_error ?? '—'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             )}
                         </CardContent>

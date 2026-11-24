@@ -436,6 +436,11 @@ export default function PrintTargetsIndex({ targets, printers, profiles, store, 
                                 Print agents
                                 <span className="text-muted-foreground ml-2 text-sm font-normal">in {store.name}</span>
                             </CardTitle>
+
+                            <CardDescription className="mt-1.5">
+                                The agent declares the printers it can reach in its heartbeat. A destination that its inventory does not cover is
+                                a warning, not a rejection: a printer may be off at that moment.
+                            </CardDescription>
                         </CardHeader>
 
                         <CardContent>
@@ -462,6 +467,14 @@ export default function PrintTargetsIndex({ targets, printers, profiles, store, 
                                     )}
                                 </div>
                             ))}
+
+                            {can('printing.read') && (
+                                <p className="mt-3 text-sm">
+                                    <a href="/impresion/agentes" className="underline">
+                                        Manage the print agents
+                                    </a>
+                                </p>
+                            )}
                         </CardContent>
                     </Card>
                 )}

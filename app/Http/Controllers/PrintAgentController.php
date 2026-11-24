@@ -264,14 +264,15 @@ final class PrintAgentController extends Controller
         $inventario = $agente->printers ?? [];
         $capacidades = $agente->capabilities ?? [];
 
-        $pendientes = $this->connection->table('print_jobs')
-            ->where('store_id', $storeId)
-            ->where('status', 'queued')
-            ->count();
+        // EL NUMERO HONESTO: los trabajos en cola que ESTE agente puede
+        // tomar, ni mas ni menos. El contador y el reclamo tienen que
+        // contar LO MISMO: si divergen, el agente espera trabajo que no va a
+        // llegar, o toma trabajo que no le dijeron.
+        $pendientes = $this->trabajosReclamables($storeId);
 
         return response()->json([
             'status' => 'ok',
-            'pending_jobs' => $pendientes,
+            'pending_jobs' => count($pendientes),
             'poll_after_ms' => self::POLL_AFTER_MS,
             'server_time' => now()->toIso8601String(),
             // Lo que el servidor tiene guardado del agente: el agente ve su
@@ -483,9 +484,43 @@ final class PrintAgentController extends Controller
     }
 
     /**
-     * Los trabajos de la tienda que este agente puede tomar: los encolados
+     * Los TRABAJOS de la tienda que este agente puede tomar: los encolados
      * y con destino de tipo `lan_agent`.
      *
+     * REGLA que fija este metodo: *el numero que se le dice al agente es el
+     * numero de trabajos que ese agente puede tomar*.
+     *
+     * El unico trabajo que el agente toma es el de un destino `lan_agent`: el
+     * `browser` no se escribe en bytes, y el `server_socket` los escribe el
+     * servidor. Contarlos tambien era decirle al agente que tenia trabajo
+     * que no iba a poder tomar nunca.
+     *
+     * Y EL INVENTARIO NO FILTRA: una impresora apagada no es un destino
+     * descartado. El desajuste se AVISA (los `warnings` del latido), pero el
+     * trabajo se toma igual: rechazarlo seria perder un ticket que si se
+     * puede imprimir.
+     *
+     * @param  int|null  $limite  Cuantos se Devuelven; `null` es todos.
+     * @return list<int> Los identificadores de los trabajos reclamables.
+     */
+    private function trabajosReclamables(int $storeId, ?int $limite = null): array
+    {
+        $consulta = $this->connection->table('print_jobs')
+            ->join('print_targets', 'print_targets.id', '=', 'print_jobs.print_target_id')
+            ->where('print_jobs.store_id', $storeId)
+            ->where('print_jobs.status', 'queued')
+            ->where('print_targets.transport', 'lan_agent')
+            ->orderBy('print_jobs.created_at')
+            ->orderBy('print_jobs.id');
+
+        if ($limite !== null) {
+            $consulta->limit($limite);
+        }
+
+        return $consulta->pluck('print_jobs.id')->all();
+    }
+
+    /**
      * El trabajo se RECLAMA con la maquina de estados, que es la unica via:
      * si otro agente lo toma primero, la maquina lo rechaza y aqui se
      * salta.
@@ -494,16 +529,7 @@ final class PrintAgentController extends Controller
      */
     private function reclamarTrabajos(int $storeId, int $agentId, int $limite): array
     {
-        $ids = $this->connection->table('print_jobs')
-            ->join('print_targets', 'print_targets.id', '=', 'print_jobs.print_target_id')
-            ->where('print_jobs.store_id', $storeId)
-            ->where('print_jobs.status', 'queued')
-            ->where('print_targets.transport', 'lan_agent')
-            ->orderBy('print_jobs.created_at')
-            ->orderBy('print_jobs.id')
-            ->limit($limite)
-            ->pluck('print_jobs.id')
-            ->all();
+        $ids = $this->trabajosReclamables($storeId, $limite);
 
         $trabajos = [];
 

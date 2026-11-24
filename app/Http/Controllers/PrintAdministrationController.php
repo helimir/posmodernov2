@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Printer;
 use App\Models\PrintTarget;
 use App\Models\Store;
-use App\Print\PrintAgentInventory;
+use App\Print\PrintAgentDirectory;
 use App\Print\PrintConnectionTester;
 use App\Print\PrinterCatalog;
 use App\Print\PrintProfiles;
@@ -81,7 +81,7 @@ class PrintAdministrationController extends Controller
         private readonly PrinterCatalog $printers,
         private readonly PrintTargetRegistry $targets,
         private readonly PrintConnectionTester $tester,
-        private readonly PrintAgentInventory $inventory,
+        private readonly PrintAgentDirectory $agents,
     ) {}
 
     /**
@@ -468,41 +468,17 @@ class PrintAdministrationController extends Controller
      * Los AGENTES de la tienda, con lo que declaran y lo que NO cubren.
      *
      * El inventario lo declara el agente en su latido. Un destino que el
-     * inventario no cubre NO se rechaza: una impresora puede estar apagada
-     * en ese momento. La pantalla AVISA, para que el desajuste sea visible.
+     * inventario no cubre NO se rechaza: una impresora puede estar apagada en
+     * ese momento. La pantalla AVISA, para que el desajuste sea visible.
+     *
+     * Y LA LISTA VIENE DEL DIRECTORIO: la misma que enseña la pantalla de
+     * agentes, para que el agente se vea igual en las dos pantallas.
      *
      * @return list<array<string, mixed>>
      */
     private function agentes(int $storeId): array
     {
-        $filas = $this->connection->table('print_agents')
-            ->where('store_id', $storeId)
-            ->orderBy('name')
-            ->get();
-
-        $agentes = [];
-
-        foreach ($filas as $fila) {
-            $inventario = json_decode((string) ($fila->printers ?? '[]'), true);
-            $inventario = is_array($inventario) ? $inventario : [];
-
-            $capacidades = json_decode((string) ($fila->capabilities ?? '[]'), true);
-            $capacidades = is_array($capacidades) ? $capacidades : [];
-
-            $agentes[] = [
-                'id' => (int) $fila->id,
-                'name' => (string) $fila->name,
-                'instance_id' => $fila->instance_id === null ? null : (string) $fila->instance_id,
-                'is_active' => (bool) $fila->is_active,
-                'revoked' => $fila->revoked_at !== null,
-                'last_heartbeat_at' => $fila->last_heartbeat_at === null ? null : (string) $fila->last_heartbeat_at,
-                'printers' => $inventario,
-                'capabilities' => $capacidades,
-                'uncovered_targets' => $this->inventory->destinosNoCubiertos($storeId, $inventario),
-            ];
-        }
-
-        return $agentes;
+        return $this->agents->agentes($storeId);
     }
 
     /**
