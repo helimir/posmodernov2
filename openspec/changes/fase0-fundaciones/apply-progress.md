@@ -1910,7 +1910,6 @@ De los **siete** tipos de asiento, solo se escribian **tres** (`sale`, `sale_pay
 ### Lo que queda abierto, con nombre
 
 - ⚠️ **El ingreso comparte tipo con el traspaso**: **F3-08 tiene que separar por cuenta o por `reference_type`**, no por tipo.
-- ⚠️ **El rol `liability` es opcional, asi que la deuda de F3-03 SOLO se cierra si la tienda lo tiene asignado**: sin pasivo no se escribe la reversa, la anulacion **no falla** (responde con un `warning` y `reversal_written: false` en la auditoria) y los dos libros siguen difiriendo. **Decision pendiente del mantenedor.**
 - La ficha de la venta no enseña la reversa (F3-08 o una unidad de la ficha).
 - No hay cuentas de demostracion separadas para "credito a favor" y "deuda a proveedor".
 ### F3-08 — El motor de reportes (PR #167)
@@ -1967,6 +1966,7 @@ El plan **ya tenia** un pasivo obligatorio (`tax_payable`, el impuesto por pagar
 **Y LA PANTALLA DEL PLAN DISTINGUE LOS DOS HUECOS**: sin eso decia "la caja no puede cobrar sin estos roles: Liability", que es **mentira**.
 
 **Suite**: 949 tests / 12 936 assertions, en verde.
+- **RESUELTO (2026-11-25): el rol `liability` es OBLIGATORIO** del plan completo, y la anulacion de una venta **cobrada** falla con **422** si la tienda no tiene cuenta de pasivo (la unidad "El rol liability es obligatorio", PR #171). El `warning` desaparecio: **una anulacion no se hace a medias**. Y la regla sale del **asiento**, no del medio de pago: la reversa sustituye la linea de efectivo, asi que hace falta pasivo cuando el cliente **entrego** dinero, y no cuando solo **debe**.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
