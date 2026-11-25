@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductStore;
 use App\Models\User;
 use App\Support\Pos\PosContext;
+use Database\Seeders\AccountingCatalogSeeder;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\DemoStoreSeeder;
 use Database\Seeders\FiscalProfileSeeder;
@@ -103,6 +104,10 @@ final class PosFixture
         // tienda y la caja no cobra. Es parte del escenario, como la tienda y
         // su perfil fiscal.
         (new ChartOfAccountsSeeder)->run();
+        // Los CATALOGOS del modulo de gastos, ingresos y banca: las categorias
+        // de gasto, los origenes de ingreso y la cuenta bancaria. Sin ellos
+        // no hay donde cargar un gasto ni donde abonarlo.
+        (new AccountingCatalogSeeder)->run();
         (new FiscalProfileSeeder)->run();
         // El CANAL FISCAL: el proveedor local y su entorno. Sin ellos, el
         // perfil no tiene por donde emitir, y la emision fiscal no se puede

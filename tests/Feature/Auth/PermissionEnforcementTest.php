@@ -52,6 +52,10 @@ function escenario_de_rutas(): array
         'account_id' => PermissionFixture::cuenta(),
         'role_id' => (int) ($rol?->id ?? 0),
         'user_id' => (int) $usuario->id,
+        // El MODULO DE GASTOS, INGRESOS Y BANCA: el gasto y el ingreso que
+        // las rutas de la unidad necesitan.
+        'expense_id' => PermissionFixture::gasto($escenario['store_id']),
+        'income_id' => PermissionFixture::ingreso($escenario['store_id']),
         // La ADMINISTRACION FISCAL: la serie, el perfil y el proveedor que
         // las rutas de la unidad necesitan resolver.
         'series_id' => (int) $escenario['document_series_id'],
@@ -76,6 +80,8 @@ function uri_de_la_ruta(string $uri, array $escenario): string
         '{customer}' => (string) $escenario['customer_id'],
         '{product}' => (string) $escenario['product_id'],
         '{account}' => (string) $escenario['account_id'],
+        '{expense}' => (string) $escenario['expense_id'],
+        '{income}' => (string) $escenario['income_id'],
         '{user}' => (string) $escenario['user_id'],
         '{role}' => (string) $escenario['role_id'],
         '{series}' => (string) $escenario['series_id'],
@@ -123,6 +129,14 @@ dataset('rutas protegidas', [
     'apagado de una cuenta' => ['post', '/api/contabilidad/cuentas/{account}/desactivar', 'accounting.update'],
     'encendido de una cuenta' => ['post', '/api/contabilidad/cuentas/{account}/encender', 'accounting.update'],
     'borrado de una cuenta' => ['delete', '/api/contabilidad/cuentas/{account}', 'accounting.delete'],
+    'gastos' => ['get', '/contabilidad/gastos', 'expense.read'],
+    'ingresos' => ['get', '/contabilidad/ingresos', 'income.read'],
+    'banca' => ['get', '/contabilidad/banca', 'banking.read'],
+    'alta de gasto' => ['post', '/api/contabilidad/gastos', 'expense.create'],
+    'anulacion de un gasto' => ['post', '/api/contabilidad/gastos/{expense}/anular', 'expense.cancel'],
+    'alta de ingreso' => ['post', '/api/contabilidad/ingresos', 'income.create'],
+    'anulacion de un ingreso' => ['post', '/api/contabilidad/ingresos/{income}/anular', 'income.cancel'],
+    'alta de movimiento bancario' => ['post', '/api/contabilidad/banca', 'banking.create'],
     'catalogo' => ['get', '/catalogo', 'catalog.read'],
     'alta de producto' => ['get', '/catalogo/nuevo', 'catalog.create'],
     'alta de producto por la escritura' => ['post', '/catalogo', 'catalog.create'],

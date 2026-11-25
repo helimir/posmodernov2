@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * NO lleva los diez flags contables del legacy: la clasificacion contable
  * vive en `ledger_entry_types` y se CONSULTA. Aqui solo queda `is_active`,
  * que es de INTERFAZ (permitir ocultar una categoria), no un flag contable.
+ *
+ * Y `account_code` es la CUENTA CONTABLE en la que se carga el gasto: un
+ * DATO del negocio (cada tienda decide en que cuenta carga sus gastos), y no
+ * un codigo escrito en el codigo.
  */
 class ExpenseCategory extends Model
 {
@@ -20,6 +24,7 @@ class ExpenseCategory extends Model
     protected $fillable = [
         'code',
         'name',
+        'account_code',
         'is_active',
     ];
 
@@ -28,6 +33,7 @@ class ExpenseCategory extends Model
         return [
             'code' => 'string',
             'name' => 'string',
+            'account_code' => 'string',
             'is_active' => 'boolean',
         ];
     }

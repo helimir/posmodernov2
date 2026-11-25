@@ -83,6 +83,9 @@ test('test_la_resolucion_devuelve_el_mapa_de_rol_a_codigo_de_la_tienda', functio
         'receivable' => '1200000',
         'revenue' => '4010000',
         'tax_payable' => '2110000',
+        // El PASIVO: lo que la tienda debe (el credito a favor del cliente y
+        // las deudas a proveedores).
+        'liability' => '2100000',
         // El CAPITAL: la contrapartida del saldo de partida de la caja.
         'equity' => '3100000',
     ]);

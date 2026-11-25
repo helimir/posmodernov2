@@ -15,6 +15,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * gasto inventaba uno.
  *
  * `business_date` es la FECHA DE NEGOCIO y es un dato, no un calculo.
+ *
+ * Y EL GASTO SE ANULA, NO SE BORRA: `status` pasa a `cancelled` con su
+ * motivo, su instante y su responsable, y el asiento del ajuste lo deja todo
+ * como estaba. Una fuente de verdad que se borra deja al libro contable con
+ * un movimiento sin hecho que lo respalde.
+ *
+ * Y `payment_type` dice DE DONDE se pago el gasto: la caja o una cuenta
+ * bancaria. Es lo que decide que cuenta se acredita en el asiento, y por eso
+ * es la regla que separa el gasto de la caja del gasto del banco.
  */
 class Expense extends Model
 {
@@ -28,6 +37,12 @@ class Expense extends Model
         'reference',
         'business_date',
         'incurred_at',
+        'payment_type',
+        'bank_account_id',
+        'status',
+        'cancelled_at',
+        'cancelled_by',
+        'cancellation_reason',
         'created_by',
     ];
 
@@ -37,11 +52,17 @@ class Expense extends Model
             'store_id' => 'integer',
             'expense_category_id' => 'integer',
             'created_by' => 'integer',
+            'cancelled_by' => 'integer',
+            'bank_account_id' => 'integer',
             'amount' => 'decimal:4',
             'description' => 'string',
             'reference' => 'string',
             'business_date' => 'date',
             'incurred_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+            'cancellation_reason' => 'string',
+            'payment_type' => 'string',
+            'status' => 'string',
         ];
     }
 
@@ -58,5 +79,21 @@ class Expense extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Quien ANULO el gasto.
+     */
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /**
+     * La cuenta bancaria que PAGA el gasto, cuando se paga desde el banco.
+     */
+    public function bankAccount(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class, 'bank_account_id');
     }
 }

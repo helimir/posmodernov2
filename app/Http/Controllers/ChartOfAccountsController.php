@@ -440,6 +440,7 @@ class ChartOfAccountsController extends Controller
             AccountRole::Receivable->value => 'Receivable',
             AccountRole::Revenue->value => 'Revenue',
             AccountRole::TaxPayable->value => 'Tax payable',
+            AccountRole::Liability->value => 'Liability',
             AccountRole::Equity->value => 'Equity',
         ];
 

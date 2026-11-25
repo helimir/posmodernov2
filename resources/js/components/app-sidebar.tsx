@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Cpu, FileWarning, Folder, Hash, Landmark, LayoutGrid, ListChecks, Package, Plug, Printer, Radio, Receipt, ScanLine, ShieldCheck, Ticket, TriangleAlert, Users } from 'lucide-react';
+import { ArrowLeftRight, Banknote, BookOpen, Cpu, FileWarning, Folder, Hash, Landmark, LayoutGrid, ListChecks, Package, Plug, Printer, Radio, Receipt, ScanLine, ShieldCheck, Ticket, TriangleAlert, Users, Wallet } from 'lucide-react';
 import { usePermissions } from '@/lib/permissions';
 import AppLogo from './app-logo';
 
@@ -44,6 +44,24 @@ const mainNavItems: NavItem[] = [
         url: '/caja/dia',
         icon: ScanLine,
         permission: 'cash_day.read',
+    },
+    {
+        title: 'Expenses',
+        url: '/contabilidad/gastos',
+        icon: Wallet,
+        permission: 'expense.read',
+    },
+    {
+        title: 'Incomes',
+        url: '/contabilidad/ingresos',
+        icon: Banknote,
+        permission: 'income.read',
+    },
+    {
+        title: 'Bank movements',
+        url: '/contabilidad/banca',
+        icon: ArrowLeftRight,
+        permission: 'banking.read',
     },
     {
         title: 'Low stock',

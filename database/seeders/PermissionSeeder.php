@@ -27,13 +27,16 @@ use Illuminate\Support\Facades\DB;
  *    PROPIOS TICKETS: los trabajos de impresion que el mismo creo (y los
  *    que no tienen actor, que son los del sistema). NO la cola general ni
  *    la configuracion de impresion: eso es de quien administra la tienda.
+ *    Y EL DINERO DEL DIA: el gasto que paga, el ingreso que entra en el
+ *    cajon y el deposito que lleva al banco.
  *  - EL CONTADOR lee: las ventas, los clientes, la contabilidad, los reportes
  *    y la AUDITORIA FISCAL (las series, los perfiles y los proveedores) en
  *    lectura. Lee, pero NO instala: declarar una numeracion o un regimen es
  *    una instalacion, y de eso se ocupa el superusuario. Y SUPERVISA lo que
- *    el mostrador hizo: reabre un dia cerrado y anula una venta, porque
- *    deshacer el cierre sellado y dejar sin efecto una venta emitida son
- *    correcciones de supervision, no del cajero que las hizo.
+ *    el mostrador hizo: reabre un dia cerrado, anula una venta y anula un
+ *    gasto, porque deshacer el cierre sellado, dejar sin efecto una venta
+ *    emitida y marcar un gasto son correcciones de supervision, no del
+ *    cajero que las hizo.
  *
  * Y LA MATRIZ SE APLICA, NO SE ANADE: los vinculos de un rol por defecto que
  * no esten en la matriz se BORRAN. Los roles por defecto son un contrato, y
@@ -190,6 +193,16 @@ class PermissionSeeder extends Seeder
                 Permission::CustomerPayment,
                 Permission::CatalogRead,
                 Permission::PrintingOwn,
+                // El MOSTRADOR tambien lleva el dinero de la tienda: el gasto
+                // que paga en el mostrador, el ingreso que entra en el cajon y
+                // el deposito que lleva al banco. Son los movimientos del DIA
+                // a DIA, y quien esta en el mostrador es quien los hace.
+                Permission::ExpenseRead,
+                Permission::ExpenseCreate,
+                Permission::IncomeRead,
+                Permission::IncomeCreate,
+                Permission::BankingRead,
+                Permission::BankingCreate,
             ],
 
             // EL CONTADOR: lee. Las ventas y los clientes en lectura, la
@@ -221,6 +234,16 @@ class PermissionSeeder extends Seeder
                 Permission::ReportRead,
                 Permission::AuditRead,
                 Permission::FiscalRead,
+                // El CONTADOR ANULA lo que el mostrador registro: el gasto y
+                // el ingreso se MARCAN, no se borran, y para eso hace falta
+                // alguien que pueda deshacer lo que otro hizo. Y los LEE, para
+                // supervisionar el libro. Lo que NO hace es REGISTRARLOS: el
+                // contador no lleva el mostrador.
+                Permission::ExpenseRead,
+                Permission::ExpenseCancel,
+                Permission::IncomeRead,
+                Permission::IncomeCancel,
+                Permission::BankingRead,
             ],
         ];
     }

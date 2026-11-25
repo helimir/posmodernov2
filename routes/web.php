@@ -1,12 +1,15 @@
 <?php
 
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\BankMovementController;
 use App\Http\Controllers\CashCloseController;
 use App\Http\Controllers\CashDayController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\ChartOfAccountsController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FiscalIssuanceController;
+use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\SalesController;
@@ -300,6 +303,28 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('permission:audit.read')
         ->name('contabilidad.auditoria.index');
 
+    // EL MODULO DE GASTOS, INGRESOS Y BANCA: las tres pantallas y sus
+    // escrituras.
+    //
+    // LA REGLA que separa las dos cosas: *las PAGINAS son Inertia y las
+    // ESCRITURAS son JSON*. La pantalla se pide con un GET y se dibuja en el
+    // navegador; lo que se escribe (el alta y la anulacion) viaja por la API,
+    // con el mismo contrato de siempre (422 con `{"errorMsg": "..."}`).
+    //
+    // Y CADA ESCRITURA TIENE SU PERMISO, y no son los mismos: quien registra
+    // el gasto NO lo anula (anular es una correccion de supervision), y quien
+    // registra un movimiento bancario no lo deshace (un movimiento se
+    // compensa con el movimiento contrario).
+    Route::get('contabilidad/gastos', [ExpenseController::class, 'index'])
+        ->middleware('permission:expense.read')
+        ->name('contabilidad.gastos.index');
+    Route::get('contabilidad/ingresos', [IncomeController::class, 'index'])
+        ->middleware('permission:income.read')
+        ->name('contabilidad.ingresos.index');
+    Route::get('contabilidad/banca', [BankMovementController::class, 'index'])
+        ->middleware('permission:banking.read')
+        ->name('contabilidad.banca.index');
+
     Route::prefix('api')->group(function () {
         // El ROL de una cuenta en la tienda activa: se asigna o se quita. Un
         // rol `null` quita el rol de la cuenta.
@@ -329,6 +354,35 @@ Route::middleware(['auth'])->group(function () {
             ->whereNumber('account')
             ->middleware('permission:accounting.delete')
             ->name('api.contabilidad.cuentas.destroy');
+
+        // EL GASTO: el alta y la anulacion.
+        //
+        // EL ALTA escribe el gasto Y su asiento (el gasto NACE en `expenses`
+        // y el asiento es la consecuencia), y la ANULACION lo MARCA con su
+        // motivo y escribe el ajuste.
+        Route::post('contabilidad/gastos', [ExpenseController::class, 'store'])
+            ->middleware('permission:expense.create')
+            ->name('api.contabilidad.gastos.store');
+        Route::post('contabilidad/gastos/{expense}/anular', [ExpenseController::class, 'cancel'])
+            ->whereNumber('expense')
+            ->middleware('permission:expense.cancel')
+            ->name('api.contabilidad.gastos.cancel');
+
+        // EL INGRESO: el alta y la anulacion, con las mismas reglas que el
+        // gasto.
+        Route::post('contabilidad/ingresos', [IncomeController::class, 'store'])
+            ->middleware('permission:income.create')
+            ->name('api.contabilidad.ingresos.store');
+        Route::post('contabilidad/ingresos/{income}/anular', [IncomeController::class, 'cancel'])
+            ->whereNumber('income')
+            ->middleware('permission:income.cancel')
+            ->name('api.contabilidad.ingresos.cancel');
+
+        // EL MOVIMIENTO BANCARIO: el alta. Un movimiento no se "anula": se
+        // compensa con el movimiento contrario, que es un hecho nuevo.
+        Route::post('contabilidad/banca', [BankMovementController::class, 'store'])
+            ->middleware('permission:banking.create')
+            ->name('api.contabilidad.banca.store');
     });
 
     // El CATALOGO: el maestro de productos y su precio por tienda. El

@@ -53,7 +53,7 @@ class ChartOfAccountsSeeder extends Seeder
         ['code' => '1200000', 'name' => 'Cuentas por cobrar a clientes', 'type' => 'asset'],
         ['code' => '1300000', 'name' => 'Inventario de mercaderia', 'type' => 'asset'],
         ['code' => '1400000', 'name' => 'Cuentas por cobrar a proveedores', 'type' => 'asset'],
-        ['code' => '2100000', 'name' => 'Cuentas por pagar a proveedores', 'type' => 'liability'],
+        ['code' => '2100000', 'name' => 'Cuentas por pagar y creditos a favor de clientes', 'type' => 'liability'],
         ['code' => '2110000', 'name' => 'Impuesto por pagar', 'type' => 'liability'],
         ['code' => '3100000', 'name' => 'Capital social', 'type' => 'equity'],
         ['code' => '4010000', 'name' => 'Ventas', 'type' => 'income'],
@@ -72,6 +72,12 @@ class ChartOfAccountsSeeder extends Seeder
         'receivable' => '1200000',
         'revenue' => '4010000',
         'tax_payable' => '2110000',
+        // El PASIVO: lo que la tienda debe. Es UN rol para las dos cosas
+        // (el credito a favor del cliente y las deudas a proveedores), porque
+        // las cuentas concretas son DATOS: la tienda decide en que cuenta lo
+        // asienta. Y es OPCIONAL: el plan completo son los cuatro roles que
+        // el cobro exige.
+        'liability' => '2100000',
         // El CAPITAL: la contrapartida del saldo de partida de la caja. Sin
         // el, al abrir la caja el saldo de partida no tiene donde abonarse.
         'equity' => '3100000',
