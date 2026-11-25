@@ -1013,6 +1013,31 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       conviene saberlo.
     - **Reorden 404/422 en la anulacion**: una venta inexistente **sin motivo** ahora responde 404 y no
       422. Es mas correcto (un 404 no filtra nada), pero es un cambio de contrato observable.
+    - ⚠️ **LA BOMBA DE RELOJERIA (ARREGLADA, pero el testigo tiene que quedarse)**: la suite fallaba
+      **entre las 00:00 y las 04:00 UTC**, porque los fixtures usaban la fecha de la **aplicacion**
+      (UTC) donde debian usar la **fecha de negocio de la tienda** (`America/Caracas`, el dia
+      anterior). Produccion lo hacia bien (`PosContext::businessDate()`); los fixtures mentian. Y lo
+      peor: la guarda del dia cerrado comparaba el `sale_date` de la venta con el `business_date` de
+      la caja, o sea **dos dias distintos**, asi que el test pasaba **por el motivo equivocado**
+      cuando las fechas coincidian. **El testigo** es `test_la_fecha_de_negocio_es_la_de_la_tienda_y_
+      no_la_del_servidor`: **congela el reloj** y **mueve la zona del servidor a `Pacific/Kiritimati`**
+      (UTC+14), porque mover solo la zona NO basta (dos offsets distintos siempre coinciden en la
+      fecha durante una parte del dia, y el test seria una loteria). **Quien toque una fecha en un
+      fixture, que mire ese test.**
+    - **`PosContext::timezoneOf()` y `businessDateOf()` duplican `SaleVoidController::zonaDeLaTienda()`**:
+      la resolucion de la zona de la tienda sigue en dos sitios. No se unifico porque es otro fichero
+      y otra unidad.
+    - **`PosContext::issuedAt()` paso de `DateTimeImmutable` a `Carbon::now($tz)`**: mismo instante y
+      zona en produccion y microsegundos conservados, pero es un cambio **en el nucleo** a cambio de
+      poder **congelar el reloj** en las pruebas.
+    - **`PermissionFixture::documento()` sigue con `issue_date = now()`** (latente): la produccion dice
+      `issue_date = sale.sale_date`. No rompe nada hoy.
+    - **`PosScreenTest` y `PosProductSearchTest` tienen `America/Caracas` escrito a mano** (latente):
+      deberian resolver la zona de la tienda.
+    - **El rechazo no se ofrece en la cola**, se rechaza desde la ficha de la venta (donde esta el
+      motivo de la peticion). Anadirlo a la cola es una unidad aparte.
+    - **La peticion atendida se queda en `pending` en la tabla** y su estado efectivo se deriva de
+      `sales.status`: "hecha" no es un estado de la peticion, es un hecho de la venta.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |

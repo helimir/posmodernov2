@@ -1851,6 +1851,27 @@ El permiso es **nuevo** (`sales.void_request`) porque no hay nada que reusar: `s
 - **Una solicitud no se puede rechazar ni cancelar**, y tampoco caduca: si el contador no esta de acuerdo, la solicitud se queda pendiente para siempre.
 - El motivo del cajero no se puede reescribir (el del contador solo queda en la auditoria).
 - El reorden 404/422 de la anulacion es un cambio de contrato observable.
+### F3-03 (ampliacion II) — La solicitud se puede rechazar y cancelar, y el historial se conserva (PR #160)
+
+Una solicitud de anulacion **no se podia rechazar ni cancelar, y no caducaba**: si el contador no estaba de acuerdo, se quedaba pendiente para siempre. Y el cajero no podia retirar la suya.
+
+**Rechazar** (con `sales.void`, motivo obligatorio) · **cancelar la propia** (con `sales.void_request`, y **solo la propia**: el permiso abre la puerta, la fila dice de quien es) · **volver a pedir** tras un rechazo, con el motivo nuevo y **el historial conservado**.
+
+**La solicitud pasa a una TABLA propia** (`sale_void_requests`, una fila por solicitud) y **las tres columnas de `sales` desaparecen**: con columnas solo cabia una peticion, y una venta con una rechazada y otra nueva es legal. La migracion copia las filas, **borra las columnas** (dejarlas seria una segunda fuente de verdad) y es **reversible**.
+
+**El esquema prohibe los estados imposibles**: CHECKs (nunca dos decisiones a la vez, motivo no vacio) y un indice unico parcial (una peticion pendiente por venta), con la violacion traducida a un **422** y no a un 500. Y **"hecha" NO es un estado de la peticion**: es `sales.status`. Dos fuentes de verdad sobre el mismo hecho es como un sistema empieza a mentir.
+
+**Lo que ve el cajero al rechazarsele**: el motivo de su peticion (el rechazo no la reescribe), el motivo del rechazo, quien lo rechazo, cuando, y que **la venta sigue en pie**. Debajo, el historial.
+
+### La bomba de relojería que esta unidad destapo
+
+La suite fallaba **entre las 00:00 y las 04:00 UTC**: los fixtures usaban la fecha de la **aplicacion** (UTC) donde debian usar la **fecha de negocio de la tienda** (`America/Caracas`, el dia anterior). **Produccion lo hacia bien**; los fixtures mentian. Y lo peor: la guarda del dia cerrado comparaba dos dias distintos, asi que el test pasaba **por el motivo equivocado** cuando las fechas coincidian.
+
+**`main` estaba rojo** desde el merge del PR #157 (su CI corrio a las 21:00 UTC). El arreglo: los fixtures **resuelven la fecha por el dominio** y **el fixture resuelve la fecha, no el test**, para que un test ya no pueda nombrar la fecha equivocada.
+
+**Y el testigo**: `test_la_fecha_de_negocio_es_la_de_la_tienda_y_no_la_del_servidor` **congela el reloj** y **mueve la zona del servidor a `Pacific/Kiritimati`**, porque mover solo la zona no basta (dos offsets distintos siempre coinciden en la fecha durante una parte del dia, y el test seria una loteria).
+
+**Suite**: 851 tests / 12 098 assertions, en verde (antes: 844 y 3 fallando).
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
