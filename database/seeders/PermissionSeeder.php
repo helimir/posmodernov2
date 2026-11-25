@@ -44,8 +44,10 @@ use Illuminate\Support\Facades\DB;
  * eso sembrar dos veces deja EXACTAMENTE el mismo estado.
  *
  * EL AMBITO DE TIENDAS del cajero es la tienda de demostracion: asi el
- * aislamiento por tienda se puede probar de verdad. El superusuario y el
- * contador no tienen ambito, y su alcance son todas las tiendas.
+ * aislamiento por tienda se puede probar de verdad. Y LOS ROLES DE ALCANCE
+ * GLOBAL NO TIENEN AMBITO: el superusuario y el contador alcanzan todas las
+ * tiendas. Que roles son de alcance global esta en la LISTA de abajo, que es
+ * un dato y no un comentario.
  *
  * Es IDEMPOTENTE: los permisos y los roles se apoyan en la restriccion unica
  * del `slug`, y los vinculos en la de `(role_id, permission_id)`.
@@ -63,6 +65,41 @@ class PermissionSeeder extends Seeder
     public const SLUG_ACCOUNTANT = 'accountant';
 
     /**
+     * El slug del rol SUPERUSUARIO por defecto.
+     *
+     * Y EL DE LA INSTALACION PUEDE SER OTRO: el de la configuracion
+     * (`auth.superuser_role_slug`), que es el que manda. Los dos son de
+     * alcance global, y `esDeAlcanceGlobal()` los mira a los dos.
+     */
+    public const SLUG_SUPERUSER = 'superuser';
+
+    /**
+     * Los ROLES de ALCANCE GLOBAL: los que alcanzan TODAS las tiendas.
+     *
+     * REGLA que fija este seeder: *que roles tienen alcance global es un
+     * DATO, y este dato es CODIGO*. La lista esta aqui, al lado de los slugs
+     * de los roles por defecto, y NO en un comentario: un comentario no se
+     * consulta, y un rol nuevo no sabe si es global.
+     *
+     * Y LA LISTA ES DE CODIGO, Y POR ESO LA PROTECCION ES POR CONSTRUCCION:
+     * no es un permiso del catalogo ni una fila de una tabla, asi que nadie
+     * la puede editar desde la aplicacion. Un permiso o una tabla los puede
+     * cambiar quien tenga el permiso de editar roles, y el recorte del
+     * superusuario volveria.
+     *
+     * Y LOS DOS SON DE ALCANCE GLOBAL: el superusuario y el contador. Los dos
+     * tienen el alcance de todas las tiendas, y por eso sus filas de ambito
+     * (`role_store_scopes`) son CERO: escribirlas recorta el alcance de la
+     * caja, del POS, de las colas de impresion y de la lectura de ventas.
+     *
+     * @var list<string>
+     */
+    public const ROLES_DE_ALCANCE_GLOBAL = [
+        self::SLUG_ACCOUNTANT,
+        self::SLUG_SUPERUSER,
+    ];
+
+    /**
      * La clave natural de la tienda de demostracion.
      */
     private const CODE_NAME_TIENDA = 'DEMO';
@@ -76,6 +113,7 @@ class PermissionSeeder extends Seeder
         $this->roles();
         $this->escribeLaMatriz();
         $this->ambito();
+        $this->limpiaElAmbitoDeAlcanceGlobal();
     }
 
     /**
@@ -297,8 +335,8 @@ class PermissionSeeder extends Seeder
     /**
      * El AMBITO DE TIENDAS del rol cajero: la tienda de demostracion.
      *
-     * El superusuario y el contador no tienen ambito, y su alcance son todas
-     * las tiendas.
+     * Y LOS ROLES DE ALCANCE GLOBAL NO TIENEN AMBITO: su alcance son todas
+     * las tiendas, y sus filas las quita `limpiaElAmbitoDeAlcanceGlobal()`.
      */
     private function ambito(): void
     {
@@ -340,11 +378,72 @@ class PermissionSeeder extends Seeder
     }
 
     /**
+     * El AMBITO de los roles de ALCANCE GLOBAL: NINGUNO.
+     *
+     * Y LAS FILAS QUE TUVIERAN SE QUITAN: el ambito de un rol de alcance
+     * global son CERO filas, y las que hubiera recortaban el alcance de la
+     * caja, del POS, de las colas de impresion y de la lectura de ventas. Es
+     * el MISMO PATRON que la matriz: lo que no esta en el contrato se borra.
+     */
+    private function limpiaElAmbitoDeAlcanceGlobal(): void
+    {
+        foreach (self::slugsDeAlcanceGlobal() as $slug) {
+            $roleId = $this->idDelRol($slug);
+
+            if ($roleId === null) {
+                continue;
+            }
+
+            DB::table('role_store_scopes')->where('role_id', $roleId)->delete();
+        }
+    }
+
+    /**
+     * ¿Este rol tiene ALCANCE GLOBAL?
+     *
+     * REGLA que fija este metodo: *el alcance global se decide con la LISTA
+     * de `ROLES_DE_ALCANCE_GLOBAL`, y con nada mas*. Un slug que no esta en
+     * la lista no es de alcance global, y por eso su ambito se acorta como
+     * el de cualquier otro rol.
+     *
+     * Y EL SUPERUSUARIO DE LA INSTALACION TAMBIEN: su slug sale de la
+     * configuracion, asi que puede no ser el de la lista, y sigue siendo de
+     * alcance global.
+     */
+    public static function esDeAlcanceGlobal(?string $slug): bool
+    {
+        if ($slug === null || $slug === '') {
+            return false;
+        }
+
+        return in_array($slug, self::slugsDeAlcanceGlobal(), true);
+    }
+
+    /**
+     * Los SLUGS de los roles de ALCANCE GLOBAL, con el superusuario de la
+     * INSTALACION incluido.
+     *
+     * @return list<string>
+     */
+    public static function slugsDeAlcanceGlobal(): array
+    {
+        $slugs = self::ROLES_DE_ALCANCE_GLOBAL;
+
+        $superusuario = self::slugSuperuser();
+
+        if (! in_array($superusuario, $slugs, true)) {
+            $slugs[] = $superusuario;
+        }
+
+        return $slugs;
+    }
+
+    /**
      * El SLUG del rol superusuario: el de la configuracion.
      */
     public static function slugSuperuser(): string
     {
-        return (string) config('auth.superuser_role_slug', 'superuser');
+        return (string) config('auth.superuser_role_slug', self::SLUG_SUPERUSER);
     }
 
     /**

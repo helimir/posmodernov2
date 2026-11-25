@@ -6,6 +6,7 @@ use App\Domain\Auth\Enums\Permission;
 use App\Models\Role;
 use App\Models\Store;
 use App\Support\Audit\AuditWriter;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,14 @@ use Inertia\Response;
  * del `Gate::before`, que se lo concede entero. Editar su matriz seria
  * escribir algo que no cambia nada, asi que el servidor lo dice y no lo
  * escribe.
+ *
+ * Y LOS ROLES DE ALCANCE GLOBAL NO SE ACOTAN: su alcance son todas las
+ * tiendas, asi que su ambito son CERO filas. Que roles son de alcance global
+ * lo dice la LISTA del sembrador (`PermissionSeeder::ROLES_DE_ALCANCE_GLOBAL`),
+ * que es un DATO y no un comentario: el ambito del rol lo consumen la caja,
+ * el POS, la cola de trabajos de impresion, la cola de tickets del cajero y
+ * la lectura de ventas, y acotar un rol de alcance global recorta el
+ * sistema entero.
  *
  * Y TODO CAMBIO SE AUDITA: quien lo hizo, sobre que rol, con que lista y
  * desde donde.
@@ -150,6 +159,14 @@ class RoleAdministrationController extends Controller
      * Una lista VACIA significa que el alcance son todas las tiendas: es la
      * regla del ambito, y por eso una lista vacia no es "ninguna tienda" sino
      * "todas".
+     *
+     * Y UN ROL DE ALCANCE GLOBAL NO SE ACOTA: su alcance son todas las
+     * tiendas, asi que no se le anade ninguna fila y las que tuviera se
+     * limpian. Quien tiene alcance global lo dice la LISTA del sembrador
+     * (`PermissionSeeder::ROLES_DE_ALCANCE_GLOBAL`), que es un DATO y no un
+     * comentario: el ambito del rol lo consumen la caja, el POS, la cola de
+     * trabajos de impresion, la cola de tickets del cajero y la lectura de
+     * ventas, y acotar un rol de alcance global recorta el sistema entero.
      */
     public function updateStores(Request $request, Role $role): JsonResponse
     {
@@ -159,6 +176,29 @@ class RoleAdministrationController extends Controller
         ]);
 
         $ids = array_values(array_unique(array_map('intval', $datos['stores'])));
+
+        // EL ROL DE ALCANCE GLOBAL NO SE ACOTA: es el MISMO PATRON que
+        // `updatePermissions()`: se lee lo que hay, se resetea, y al rol de
+        // alcance global no se le aplica. Su ambito son CERO filas, y las que
+        // tuviera son un ambito invalido que hay que quitar.
+        if (PermissionSeeder::esDeAlcanceGlobal((string) $role->slug)) {
+            $this->escribeElAmbito((int) $role->id, []);
+
+            $this->audit->recordFor(
+                $request,
+                self::ACCION_TIENDAS,
+                self::ENTIDAD,
+                (int) $role->id,
+                [
+                    'role_slug' => (string) $role->slug,
+                    'stores' => [],
+                ],
+            );
+
+            return response()->json([
+                'errorMsg' => 'This role has a global scope: its scope is all the stores, and it cannot be narrowed.',
+            ], 422);
+        }
 
         $this->escribeElAmbito((int) $role->id, $ids);
 
