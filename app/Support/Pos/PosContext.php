@@ -10,6 +10,7 @@ use App\Models\Store;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Database\Connection;
+use Illuminate\Support\Carbon;
 use RuntimeException;
 
 /**
@@ -326,8 +327,25 @@ final class PosContext
             return $this->timezone;
         }
 
+        return $this->timezone = $this->timezoneOf((int) $this->store()->id);
+    }
+
+    /**
+     * La ZONA HORARIA de una TIENDA CONCRETA.
+     *
+     * Y POR QUE ES PARA UNA TIENDA Y NO SOLO PARA LA ACTIVA: *el reloj del
+     * negocio es el de la tienda*, y hay quien tiene que preguntarle a una
+     * tienda que no es la activa: la venta de ayer, el informe de otra
+     * tienda, y los escenarios de las pruebas, que tienen que escribir la
+     * fecha de negocio de la TIENDA que les da y no la del servidor.
+     *
+     * Y SI LA TIENDA NO LA DECLARA, LA DE LA APLICACION: una tienda sin zona
+     * declarada no tiene reloj propio, y el del servidor es el que hay.
+     */
+    public function timezoneOf(int $storeId): DateTimeZone
+    {
         $timezone = $this->connection->table('store_settings')
-            ->where('store_id', $this->store()->id)
+            ->where('store_id', $storeId)
             ->value('timezone');
 
         $nombre = is_string($timezone) ? trim($timezone) : '';
@@ -336,15 +354,41 @@ final class PosContext
             $nombre = (string) config('app.timezone');
         }
 
-        return $this->timezone = new DateTimeZone($nombre);
+        return new DateTimeZone($nombre);
+    }
+
+    /**
+     * La FECHA DE NEGOCIO de una TIENDA CONCRETA: el dia de esa tienda.
+     *
+     * Y ES EL DIA DE LA TIENDA, NO EL DEL SERVIDOR: una venta cobrada a las
+     * once de la noche pertenece al dia de la tienda, no al del servidor. Y
+     * por eso los escenarios tienen que escribir ESTA fecha: una venta con la
+     * fecha del servidor y una caja con la fecha de la tienda son DOS dias
+     * distintos, y la guarda del dia cerrado compararia dos dias que no son
+     * el mismo (y pasaria por el motivo equivocado).
+     *
+     * @param  int  $storeId  La tienda cuyo dia de negocio se quiere.
+     */
+    public function businessDateOf(int $storeId): DateTimeImmutable
+    {
+        $zona = $this->timezoneOf($storeId);
+
+        $ahora = Carbon::now($zona);
+
+        return new DateTimeImmutable($ahora->format('Y-m-d'), $zona);
     }
 
     /**
      * El INSTANTE de emision del documento: el ahora de la tienda.
+     *
+     * Y EL AHORA ES DE CARBON, NO DE LA BIBLIOTECA NATIVA: asi el reloj se
+     * puede CONGELAR en una prueba (`travelTo`), que es lo que permite
+     * probar el dia de negocio sin depender de la hora en que corra la
+     * suite.
      */
     public function issuedAt(): DateTimeImmutable
     {
-        return $this->issuedAt ??= new DateTimeImmutable('now', $this->timezone());
+        return $this->issuedAt ??= Carbon::now($this->timezone())->toDateTimeImmutable();
     }
 
     /**

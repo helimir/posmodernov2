@@ -241,6 +241,28 @@ final class PosFixture
     }
 
     /**
+     * La FECHA DE NEGOCIO de una tienda: el dia de la TIENDA, no el del
+     * servidor.
+     *
+     * REGLA que fija este metodo: *los escenarios escriben la fecha de la
+     * TIENDA*. El reloj del negocio es el de la tienda, con su zona horaria,
+     * y el del servidor no tiene nada que ver con el: una venta escrita con
+     * la fecha del servidor es una venta de OTRO dia que la caja de la tienda
+     * no cubre, y la guarda del dia cerrado compararia dos dias que no son
+     * el mismo (y pasaria por el motivo equivocado).
+     *
+     * Y LA RESOLUCION ES LA DEL DOMINIO (`PosContext`), no una cuenta de
+     * `now()`: el escenario y la aplicacion tienen que hablar del mismo
+     * reloj, o uno de los dos miente.
+     */
+    public static function businessDate(int $storeId): string
+    {
+        return (new PosContext(DB::connection()))
+            ->businessDateOf($storeId)
+            ->format('Y-m-d');
+    }
+
+    /**
      * EL PLAN DE CUENTAS de una tienda que no es la de demostracion.
      *
      * Es el plan MINIMO que la caja necesita: la cuenta donde asentar el

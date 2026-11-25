@@ -331,7 +331,7 @@ test('test_la_anulacion_de_una_venta_de_un_dia_cerrado_falla_y_exige_reabrir_el_
     $venta = VoidRequestFixture::venta($contexto['store_id'], 'SOL-0007');
 
     // El dia se CIERRA: el cierre sella el Z, y el Z es el cierre hecho.
-    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id'], now()->format('Y-m-d'));
+    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id']);
 
     VoidRequestFixture::cierraLaCaja((int) $caja->id, '0.0000', (int) $contexto['contador']->id);
 
@@ -375,7 +375,7 @@ test('test_la_anulacion_de_una_venta_de_un_dia_reabierto_pasa', function () {
 
     $venta = VoidRequestFixture::venta($contexto['store_id'], 'SOL-0008');
 
-    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id'], now()->format('Y-m-d'));
+    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id']);
 
     VoidRequestFixture::cierraLaCaja((int) $caja->id, '0.0000', (int) $contexto['contador']->id);
 
@@ -415,7 +415,7 @@ test('test_la_solicitud_de_anulacion_de_una_venta_de_un_dia_cerrado_se_registra_
 
     $venta = VoidRequestFixture::venta($contexto['store_id'], 'SOL-0009');
 
-    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id'], now()->format('Y-m-d'));
+    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id']);
 
     VoidRequestFixture::cierraLaCaja((int) $caja->id, '0.0000', (int) $contexto['contador']->id);
 

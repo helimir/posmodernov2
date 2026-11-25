@@ -60,25 +60,34 @@ final class VoidRequestFixture
      *
      * Es una venta SIN comprobante fiscal: lo que se prueba con ella es el
      * flujo de la solicitud, no la emision.
+     *
+     * Y SU FECHA ES LA DE NEGOCIO DE LA TIENDA: la fecha del servidor es
+     * otro dia, y una venta de otro dia que la caja no cubre haria que la
+     * guarda del dia cerrado comparase dos dias distintos.
      */
     public static function venta(int $storeId, string $invoiceNo): Sale
     {
         return Sale::query()->create([
             'store_id' => $storeId,
             'invoice_no' => $invoiceNo,
-            'sale_date' => now()->format('Y-m-d'),
+            'sale_date' => PosFixture::businessDate($storeId),
             'status' => 'paid',
         ]);
     }
 
     /**
      * La CAJA del dia de la tienda.
+     *
+     * Y LA FECHA LA RESUELVE EL FIXTURE, NO EL TEST: la caja esta abierta
+     * con la FECHA DE NEGOCIO de la tienda, y un test que nombrara la fecha
+     * por su cuenta podria usar la del servidor (que es otro dia) y no
+     * encontraria nada. Preguntar aqui es no poder equivocarse.
      */
-    public static function cajaDelDia(int $storeId, string $businessDate): object
+    public static function cajaDelDia(int $storeId): object
     {
         $caja = DB::table('cash_registers')
             ->where('store_id', $storeId)
-            ->where('business_date', $businessDate)
+            ->where('business_date', PosFixture::businessDate($storeId))
             ->first();
 
         expect($caja)->not->toBeNull('La caja del dia no existe: el escenario no la abrio.');
