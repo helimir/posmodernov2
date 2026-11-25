@@ -1889,6 +1889,30 @@ La suite fallaba **entre las 00:00 y las 04:00 UTC**: los fixtures usaban la fec
 - ⚠️ **El ambito del rol superusuario se puede acotar** (`RoleAdministrationController::updateStores()` no lo excluye, si lo hace `updatePermissions()`), y `scopeIds()` lo recortaria a **todos** los consumidores, no solo a la lectura de ventas.
 - **La lectura es mas ancha que la escritura**: una tienda en el ambito del rol pero sin vinculo `user_stores` es legible pero no escribible. Consecuencia del criterio impuesto, y **reduce** la exposicion.
 - **El scope solo protege `Sale`**: `StoreScope` es generico (`store_id`), asi que adoptarlo en las demas tablas por tienda es **una linea por modelo**.
+### F3-07 — Los gastos, los ingresos y la banca escriben su asiento (PR #165)
+
+De los **siete** tipos de asiento, solo se escribian **tres** (`sale`, `sale_payment`, `opening_balance`). Los **cuatro que nunca se escribian** son `expense`, `bank_movement`, `refund` y `adjustment`: por eso los reportes de "ingresos y gastos" darian ceros.
+
+**EL ROL `liability`.** El plan de cuentas tenia cinco roles y **ningun pasivo**, y esa era la razon de que F3-03 no pudiera escribir la reversa: el credito a favor del cliente no tenia cuenta y **los dos libros se contradecian**. Ahora el rol existe (opcional, como `equity`: su ausencia no impide cobrar) y la demostracion lo declara en `2100000`.
+
+**LA REVERSA DE UNA VENTA ANULADA ES EL ESPEJO DEL ASIENTO DE LA VENTA CON EL EFECTIVO SUSTITUIDO POR EL PASIVO**: se anula el ingreso y el impuesto y se cancela la cartera, y la linea del efectivo **no revierte** — la sustituye el pasivo, por lo que el cliente entrego. **La caja del dia no cambia**, el Z sellado no cambia, y **los dos libros ahora dicen lo mismo**: el cliente tiene un credito de 30 (pago 30 de 58) y la tienda le debe exactamente 30.
+
+**LA CAJA DEL DIA NO ES UNA CONVENCION QUE EL CODIGO RECUERDA: ES LA CUENTA.** Un gasto en efectivo acredita la cuenta con rol `cash` y el saldo en curso baja exactamente lo gastado; un gasto pagado **desde el banco** acredita la cuenta bancaria y **la caja no se mueve** (el dinero nunca estuvo en el cajon); un traspaso entre dos bancos tampoco, y el que toca la caja si. **La logica de `CashDay` no se toco.** Y un gasto en efectivo de un dia **sin caja abierta** no se registra.
+
+**Las cuatro cuentas**: el gasto se carga en la cuenta de su categoria contra la que **lo financia**; el movimiento bancario es cuenta que recibe contra cuenta que cede; la **anulacion es el espejo** del asiento original (mismas lineas, debe y haber cambiados), asi que es exacta aunque la categoria cambie despues; y la reversa es el espejo de la venta con el efectivo hacia el pasivo.
+
+**`expenses` es la FUENTE DE VERDAD del gasto** (el asiento es la consecuencia) y un gasto anulado **se marca, no se borra**. Los ingresos viven en una tabla propia, simetrica.
+
+**Permisos**: 8 slugs (`expense.*`, `income.*`, `banking.*`). El **cajero registra** (el gasto que paga, el ingreso que entra, el deposito que lleva al banco) y el **contador anula**: la misma regla que ya existe con las ventas, *quien lo hizo el cajero no es quien lo deshace*.
+
+**Suite**: 900 tests / 12 541 assertions, en verde.
+
+### Lo que queda abierto, con nombre
+
+- ⚠️ **El ingreso comparte tipo con el traspaso**: **F3-08 tiene que separar por cuenta o por `reference_type`**, no por tipo.
+- ⚠️ **El rol `liability` es opcional, asi que la deuda de F3-03 SOLO se cierra si la tienda lo tiene asignado**: sin pasivo no se escribe la reversa, la anulacion **no falla** (responde con un `warning` y `reversal_written: false` en la auditoria) y los dos libros siguen difiriendo. **Decision pendiente del mantenedor.**
+- La ficha de la venta no enseña la reversa (F3-08 o una unidad de la ficha).
+- No hay cuentas de demostracion separadas para "credito a favor" y "deuda a proveedor".
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).

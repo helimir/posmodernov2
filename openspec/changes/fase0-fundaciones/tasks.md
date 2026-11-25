@@ -883,7 +883,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
     - La conciliacion a **D+1** (registro de los documentos fisicos y remision de los PDF **al dia
       siguiente**) es la regla que ya esta escrita en 0.3.9.
     - El QR es la forma de **consultar el comprobante**, que hoy no existe (F3-12).
-- [ ] **F3-07** **Los gastos, los ingresos y la banca.** Escribe los **cuatro tipos de asiento que
+- [x] **F3-07** **Los gastos, los ingresos y la banca.** Escribe los **cuatro tipos de asiento que
   hoy NO se escriben**: `expense`, `bank_movement`, `refund` y `adjustment` (hoy solo se escriben
   `sale`, `sale_payment` y `opening_balance`, tres de los siete del catalogo). `expenses` es la
   **fuente de verdad del gasto** y las tablas **ya estan vacias** (`expenses`,
@@ -1052,6 +1052,25 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       acotar. `StoreScope` es generico (`store_id`), asi que adoptarlo es **una linea por modelo**.
     - **Sin sesion no hay filtro** (un comando de consola ve todas las ventas): es lo correcto, porque
       la consola no pregunta en nombre de nadie. En web la pantalla exige sesion.
+    - ⚠️ **EL INGRESO COMPARTE TIPO CON EL TRASPASO**: se asienta como `bank_movement` porque el catalogo
+      de tipos es un conjunto **cerrado de siete** y no hay tipo "ingreso". Se distinguen por su
+      **contrapartida de ingreso** y por su `reference_type`. **F3-08 tiene que separar los ingresos por
+      cuenta o por `reference_type`, NO por `entry_type`.**
+    - ⚠️ **EL ROL `liability` ES OPCIONAL, ASI QUE LA DEUDA DE F3-03 SOLO SE CIERRA SI LA TIENDA LO TIENE
+      ASIGNADO**: sin cuenta de pasivo **no se escribe la reversa**, y el libro del cliente y el contable
+      **siguen difiriendo**. La anulacion **no falla** (es un hecho fiscal, no una cuenta): responde con
+      un `warning` y la auditoria registra `reversal_written: false`. **Decision pendiente del
+      mantenedor**: ¿la anulacion **exige** el rol (422) o el rol es **obligatorio** en el plan? (El rol
+      `equity` se hizo opcional en la F2-13b, pero su ausencia no dejaba dos libros que se contradicen.)
+    - **La reversa presupone que el cliente pago en la misma cuenta `cash` del plan**: si una tienda
+      cobrara con tarjeta a otra cuenta, el espejo moveria la linea de esa cuenta al pasivo (mismo
+      criterio, distinto saldo).
+    - **La ficha de la venta no enseña la reversa**: el asiento original y la reversa (`refund`) solo se
+      ven en el libro. Lo enseanan F3-08 (reportes) o una unidad de la ficha.
+    - **No hay cuentas de demostracion separadas** para "credito a favor" y "deuda a proveedor": el rol
+      `liability` es uno y la demostracion lo apunta a `2100000`. La deuda a proveedor la escribira
+      F3-04, que puede apuntar el rol a la cuenta que use.
+    - **No hay pantalla de libro mayor ni de saldos de cuentas bancarias**: son reportes de F3-08.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |
