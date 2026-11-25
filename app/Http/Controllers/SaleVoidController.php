@@ -20,6 +20,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -56,6 +57,14 @@ use RuntimeException;
  * pendiente (lo escribio quien pidio que le anulen), y el del cuerpo si no
  * la tiene. Quien pide explica por que, y esa explicacion es la que queda
  * escrita en la nota de credito y en la auditoria.
+ *
+ * Y LA ANULACION DE UNA VENTA COBRADA NECESITA LA CUENTA DE PASIVO: la
+ * reversa es el espejo del asiento de la venta con el efectivo sustituido
+ * por el pasivo (el credito a favor del cliente), y sin esa cuenta la
+ * anulacion NO se escribe. Y no se deja a medias: la anulacion falla con un
+ * 422 que dice que cuenta falta y COMO se resuelve (asignar el rol
+ * `liability` a una cuenta de tipo liability en el plan de cuentas), y el
+ * intento NO se audita como anulacion, porque no ocurrio.
  */
 final class SaleVoidController extends Controller
 {
@@ -90,10 +99,13 @@ final class SaleVoidController extends Controller
     /**
      * ANULA una venta, con su MOTIVO.
      *
-     * Responde 200 con `{ sale_id, status, reason, voided_at, note }`: el
-     * estado de la venta y su nota de credito (`null` si la venta no tenia
-     * comprobante emitido, porque entonces no hay nada que anular ante la
-     * autoridad).
+     * Responde 200 con `{ sale_id, status, reason, voided_at, note,
+     * reversal_entry_id, reversal_written }`: el estado de la venta, su nota
+     * de credito (`null` si la venta no tenia comprobante emitido, porque
+     * entonces no hay nada que anular ante la autoridad) y si la REVERSA se
+     * escribio (`reversal_written` es `false` solo cuando la venta no tiene
+     * asiento que espejar: sin asiento no hay reversa que escribir, y eso no
+     * es lo mismo que no tener pasivo).
      *
      * Y UN FALLO NO PIERDE LA VENTA: si la nota no se puede emitir, la
      * operacion se revierte entera y la venta sigue como estaba. El numero
@@ -170,6 +182,33 @@ final class SaleVoidController extends Controller
             ], 422);
         }
 
+        // 4 bis. EL PASIVO. La REVERSA de una venta COBRADA necesita la
+        //       cuenta de pasivo: es el CREDITO A FAVOR del cliente (el
+        //       dinero que el cliente entrego y que la tienda le debe).
+        //       Y SIN ESA CUENTA LA ANULACION NO SE ESCRIBE: se dice que
+        //       falta y COMO se resuelve.
+        //
+        //       Y SE COMPRUEBA ANTES DE LA TRANSACCION, y no dentro: la
+        //       comprobacion no escribe nada, y si espera al final, la nota
+        //       de credito ya habria salido. Una anulacion a medias es una
+        //       venta que nadie sabe lo que es.
+        try {
+            (new SaleReversal($this->connection))->exigePasivo(
+                (int) $venta->id,
+                (int) $venta->store_id,
+            );
+        } catch (RuntimeException $fallo) {
+            // El intento NO es una anulacion: no ocurrio, y por eso no se
+            // audita como tal. Lo que queda es el aviso, en el log.
+            Log::warning('anulacion rechazada: la tienda no tiene cuenta de pasivo', [
+                'store_id' => (int) $venta->store_id,
+                'sale_id' => (int) $venta->id,
+                'user_id' => $request->user()?->id,
+            ]);
+
+            return response()->json(['errorMsg' => $fallo->getMessage()], 422);
+        }
+
         $actorId = $request->user()?->id;
 
         try {
@@ -234,10 +273,8 @@ final class SaleVoidController extends Controller
                 //      credito dejo: los dos libros dicen lo mismo.
                 //
                 //      Y SI LA TIENDA NO TIENE CUENTA DE PASIVO, la reversa
-                //      NO se escribe y la anulacion sigue adelante: la
-                //      anulacion de una venta es un HECHO FISCAL, y no
-                //      depende del plan de cuentas. El hueco se dice en la
-                //      respuesta y en la auditoria.
+                //      NO se escribe: la anulacion se rechaza ANTES de
+                //      empezar (el paso 4 bis), y no se deja a medias.
                 $reversaId = (new SaleReversal($this->connection))->write(
                     (int) $venta->id,
                     (int) $venta->store_id,
@@ -285,21 +322,13 @@ final class SaleVoidController extends Controller
                     ? $motivoDelCuerpo
                     : null,
                 // Y LA REVERSA: si se escribio, el libro del cliente y el
-                // contable dicen lo mismo. Si NO se escribio, es porque la
-                // tienda no tiene cuenta de pasivo, y el hueco se ve aqui.
+                // contable dicen lo mismo. Y si NO se escribio, es porque la
+                // venta no tiene asiento que espejar.
                 'reversal_entry_id' => $resultado['reversal_entry_id'] ?? null,
                 'reversal_written' => $resultado['reversal_written'] ?? false,
             ],
             (int) $venta->store_id
         );
-
-        // Y EL AVISO: si la tienda no tiene cuenta de pasivo, la reversa NO
-        // se escribio y el libro del cliente y el contable siguen diciendo
-        // cosas distintas. El hueco se ve, no se esconde.
-        $resultado['warning'] = ($resultado['reversal_written'] ?? false)
-            ? null
-            : 'La tienda no tiene cuenta de pasivo: la reversa no se escribio y el libro del cliente y el contable '
-                .'siguen diciendo cosas distintas. Asigne el rol liability a una cuenta de tipo liability.';
 
         return response()->json($resultado);
     }

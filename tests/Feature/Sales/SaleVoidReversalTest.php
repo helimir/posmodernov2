@@ -19,8 +19,9 @@ use Tests\Fixtures\PosFixture;
  *  - con eso el LIBRO DEL CLIENTE y el LIBRO CONTABLE dicen lo MISMO: el
  *    reintegro de la nota de credito deja al cliente con un credito a favor y
  *    el pasivo de la tienda tiene exactamente ese importe;
- *  - una tienda SIN cuenta de pasivo NO escribe la reversa, pero la anulacion
- *    sigue siendo valida: es un hecho fiscal, no una cuenta.
+ *  - y una tienda SIN cuenta de pasivo NO ANULA una venta cobrada: la
+ *    anulacion falla con un 422 que dice que cuenta falta. Esa regla vive en
+ *    `tests/Feature/Sales/SaleVoidLiabilityTest.php`.
  */
 
 /**
@@ -203,62 +204,4 @@ test('test_el_libro_del_cliente_y_el_pasivo_de_la_tienda_dicen_el_mismo_credito_
         ->value('credit');
 
     expect((string) $pasivo)->toBe('30.0000');
-});
-
-/**
- * Una tienda SIN cuenta de pasivo no escribe la reversa, pero la anulacion
- * sigue siendo valida.
- */
-test('test_una_tienda_sin_cuenta_de_pasivo_no_escribe_la_reversa_y_la_anulacion_sigue_valida', function () {
-    $escenario = PosFixture::escenario();
-
-    PermissionFixture::catalogo();
-
-    $rol = PermissionFixture::rol('anulador-'.uniqid(), ['sales.void', 'sales.create', 'sales.read']);
-
-    $usuario = PermissionFixture::usuarioConCaja($rol, $escenario['store_id']);
-
-    $clienteId = CreditFixture::customer((int) $escenario['store_id']);
-
-    // La tienda se queda SIN cuenta de pasivo: el rol es OPCIONAL.
-    DB::table('store_accounts')
-        ->where('store_id', $escenario['store_id'])
-        ->where('role', 'liability')
-        ->delete();
-
-    $cobro = $this->actingAs($usuario)
-        ->postJson('/caja/cobrar', [
-            'lines' => [
-                [
-                    'product_id' => $escenario['product_id'],
-                    'quantity' => '2',
-                    'unit_price' => '25.0000',
-                ],
-            ],
-            'payments' => [
-                ['payment_method_id' => $escenario['payment_method_id'], 'amount' => '30.0000'],
-            ],
-            'customer_id' => $clienteId,
-        ]);
-
-    $cobro->assertCreated();
-
-    $saleId = (int) $cobro->json('sale_id');
-
-    // La ANULACION sigue adelante: es un hecho fiscal, no una cuenta.
-    $respuesta = $this->actingAs($usuario)
-        ->postJson('/ventas/'.$saleId.'/anulacion', ['reason' => 'Error en el monto facturado']);
-
-    $respuesta->assertOk()
-        ->assertJsonPath('reversal_written', false)
-        ->assertJsonPath('status', 'cancelled');
-
-    // Y el AVISO dice que los dos libros siguen diciendo cosas distintas.
-    expect($respuesta->json('warning'))->toContain('no tiene cuenta de pasivo');
-
-    // Y NO se escribio ninguna reversa.
-    expect(DB::table('ledger_entries')
-        ->where('reference_type', 'sale_void')
-        ->where('reference_id', $saleId)
-        ->count())->toBe(0);
 });

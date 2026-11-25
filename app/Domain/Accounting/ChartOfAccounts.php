@@ -11,14 +11,17 @@ use RuntimeException;
  * El PLAN DE CUENTAS de una tienda: que cuenta cumple cada rol.
  *
  * REGLA que fija esta clase: *el plan de cuentas de una tienda se lee de sus
- * vinculos, y si le falta un rol, el cobro falla con un mensaje util*. NO hay
- * un plan por defecto: un plan incompleto es un plan que hay que ver.
+ * vinculos, y si le falta un rol DEL COBRO, el cobro falla con un mensaje
+ * util*. NO hay un plan por defecto: un plan incompleto es un plan que hay que
+ * ver.
  *
- * EL PLAN COMPLETO SON CUATRO ROLES: la caja, la cartera, los ingresos y el
- * impuesto por pagar. El rol del CAPITAL (`equity`) es OPCIONAL: es la
- * contrapartida del saldo de partida, y solo hace falta cuando la caja se
- * abre con una partida DISTINTA DE CERO. Un plan de cuatro roles cobra igual
- * que uno de cinco.
+ * EL PLAN COMPLETO SON CINCO ROLES: la caja, la cartera, los ingresos, el
+ * impuesto por pagar y el pasivo. El rol del CAPITAL (`equity`) es OPCIONAL:
+ * es la contrapartida del saldo de partida, y solo hace falta cuando la caja
+ * se abre con una partida DISTINTA DE CERO. Y EL COBRO EXIGE SU PROPIO
+ * CONJUNTO (los cuatro del cobro): una tienda con un plan de cuatro roles
+ * cobra igual que una con cinco, porque la decision de la F2-13b sigue en
+ * pie: NINGUNA TIENDA DEJA DE COBRAR.
  *
  * POR QUE el plan es DATO y no configuracion: el negocio decide que cuenta
  * es su caja, cual su cartera y cual su ingreso, y esa decision cambia con el
@@ -72,18 +75,26 @@ final readonly class ChartOfAccounts
      * El PLAN de la tienda: rol => codigo de cuenta.
      *
      * REGLA que fija este metodo: *el plan sale de los vinculos ACTIVOS de la
-     * tienda, y si le falta un rol, este metodo FALLA*. No hay un plan por
-     * defecto y no hay un plan de otra tienda: el plan de una tienda es suyo.
+     * tienda, y si le falta un rol del COBRO, este metodo FALLA*. No hay un
+     * plan por defecto y no hay un plan de otra tienda: el plan de una tienda
+     * es suyo.
+     *
+     * Y QUE ROLES FALTAN PARA QUE FALLE: los del COBRO (`AccountRole::
+     * delCobro()`), NO los del plan completo. La diferencia es la decision de
+     * la F2-13b: NINGUNA TIENDA DEJA DE COBRAR. Una tienda sin pasivo (o sin
+     * capital) cobra igual, y lo que no puede es deshacer una venta cobrada
+     * por error.
      *
      * @return array<string, string>
      *
-     * @throws RuntimeException Cuando al plan de la tienda le falta un rol.
+     * @throws RuntimeException Cuando al plan de la tienda le falta un rol del
+     *                          cobro.
      */
     public function plan(int $storeId): array
     {
         $roles = $this->roles($storeId);
 
-        $faltan = $this->missingRoles($storeId);
+        $faltan = $this->missingRolesForCharge($storeId);
 
         if ($faltan !== []) {
             throw new RuntimeException($this->mensajeIncompleto($storeId, $faltan, $roles));
@@ -129,21 +140,53 @@ final readonly class ChartOfAccounts
     /**
      * Los ROLES que le faltan al plan de la tienda.
      *
-     * REGLA que fija este metodo: *el plan COMPLETO son CUATRO roles* (los
-     * `obligatorios()`: la caja, la cartera, los ingresos y el impuesto por
-     * pagar). El rol del CAPITAL es OPCIONAL: su ausencia ya no impide
-     * cobrar, porque solo hace falta cuando la caja se abre con una partida
-     * distinta de cero, y ahi lo exige el propio asiento de apertura.
+     * REGLA que fija este metodo: *el plan COMPLETO son CINCO roles* (los de
+     * `AccountRole::obligatorios()`: la caja, la cartera, los ingresos, el
+     * impuesto por pagar y el pasivo). El rol del CAPITAL es OPCIONAL: su
+     * ausencia ya no impide cobrar, porque solo hace falta cuando la caja se
+     * abre con una partida distinta de cero, y ahi lo exige el propio asiento
+     * de apertura.
+     *
+     * Y QUE ESTE METODO NO ES EL QUE FALLA EL COBRO: el cobro exige su
+     * propio conjunto (`missingRolesForCharge()`), y la diferencia es la
+     * decision de la F2-13b: NINGUNA TIENDA DEJA DE COBRAR.
      *
      * @return list<string>
      */
     public function missingRoles(int $storeId): array
     {
+        return $this->faltanDe($storeId, AccountRole::obligatorios());
+    }
+
+    /**
+     * Los ROLES que le faltan al plan de la tienda Y QUE EL COBRO EXIGE.
+     *
+     * REGLA que fija este metodo: *sin estos roles no se cobra, y con los
+     * demas se cobra igual*. Son los cuatro del cobro (la caja, la cartera,
+     * los ingresos y el impuesto por pagar). El pasivo NO esta aqui: su
+     * ausencia no impide cobrar, y lo que impide es deshacer una venta
+     * cobrada por error.
+     *
+     * @return list<string>
+     */
+    public function missingRolesForCharge(int $storeId): array
+    {
+        return $this->faltanDe($storeId, AccountRole::delCobro());
+    }
+
+    /**
+     * Los ROLES de una lista que la tienda NO tiene.
+     *
+     * @param  list<AccountRole>  $roles
+     * @return list<string>
+     */
+    private function faltanDe(int $storeId, array $roles): array
+    {
         $presentes = array_keys($this->roles($storeId));
 
         $faltan = [];
 
-        foreach (AccountRole::obligatorios() as $rol) {
+        foreach ($roles as $rol) {
             if (! in_array($rol->value, $presentes, true)) {
                 $faltan[] = $rol->value;
             }

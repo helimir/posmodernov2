@@ -60,6 +60,7 @@ test('test_la_pantalla_del_plan_de_cuentas_responde_con_su_contrato', function (
             // necesitan para saber que ofrecer.
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1100000')['is_active'] === true)
             ->where('missing_roles', [])
+            ->where('missing_charge_roles', [])
             ->where('store.id', $escenario['store_id'])
             ->etc());
 });
@@ -161,6 +162,36 @@ test('test_la_pantalla_avisa_que_el_plan_quedo_incompleto_al_apagar_una_cuenta',
             ->where('missing_roles', ['cash'])
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1100000')['is_active'] === false)
             ->etc());
+});
+
+/**
+ * APAGAR la cuenta de PASIVO no detiene la caja, y el aviso lo dice.
+ *
+ * REGLA que fija este test: *el aviso dice la consecuencia REAL del rol que se
+ * apago*. Apagar la cuenta de efectivo detiene la caja; apagar la de pasivo no
+ * la detiene: lo que impide es deshacer una venta cobrada por error.
+ */
+test('test_apagar_la_cuenta_de_pasivo_avisa_que_la_caja_sigue_cobrando', function () {
+    $escenario = PosFixture::escenario();
+    $usuario = PosFixture::usuario($escenario['store_id']);
+
+    $pasivo = Account::query()->where('code', '2100000')->firstOrFail();
+
+    $apagada = $this->actingAs($usuario)
+        ->postJson('/api/contabilidad/cuentas/'.$pasivo->id.'/desactivar');
+
+    $apagada->assertOk()
+        // El plan DECLARA el hueco...
+        ->assertJsonPath('missing_roles', ['liability'])
+        // ...y el COBRO no lo exige: la caja cobra igual.
+        ->assertJsonPath('missing_charge_roles', []);
+
+    // Y el AVISO dice la consecuencia real, no la del rol de la caja.
+    $avisos = implode(' ', $apagada->json('warnings'));
+
+    expect($avisos)->toContain('has left the plan')
+        ->and($avisos)->toContain('the till can still charge')
+        ->and($avisos)->not->toContain('the till cannot charge');
 });
 
 /**

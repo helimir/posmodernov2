@@ -12,10 +12,10 @@ use Tests\Fixtures\PosFixture;
  *
  * Reglas que fija:
  *
- *  - el plan COMPLETO son CUATRO roles (la caja, la cartera, los ingresos y el
- *    impuesto por pagar): una tienda con un plan de cuatro roles NO deja de
- *    cobrar. El rol `equity` sigue existiendo y siendo asignable, pero su
- *    ausencia ya no es un plan incompleto;
+ *  - el plan COMPLETO son CINCO roles (la caja, la cartera, los ingresos, el
+ *    impuesto por pagar y el pasivo): una tienda con un plan de CUATRO roles
+ *    (los del cobro) NO deja de cobrar. El rol `equity` sigue existiendo y
+ *    siendo asignable, pero su ausencia ya no es un plan incompleto;
  *  - al ABRIR la caja con una PARTIDA DISTINTA DE CERO hace falta una cuenta
  *    de capital, porque ahi es donde el asiento de apertura necesita la
  *    contrapartida. Y el fallo lo dice: que cuenta falta y que hay que hacer;
@@ -24,7 +24,10 @@ use Tests\Fixtures\PosFixture;
  */
 
 /**
- * El PLAN de una tienda SIN cuenta de capital: los cuatro roles obligatorios.
+ * El PLAN de una tienda SIN cuenta de capital: los cuatro roles DEL COBRO.
+ *
+ * Y NO el pasivo: el plan completo son cinco roles, y el pasivo se declara
+ * aparte (su ausencia no impide cobrar).
  */
 function plan_sin_capital(int $storeId): void
 {
@@ -69,21 +72,25 @@ function plan_sin_capital(int $storeId): void
 }
 
 /**
- * El plan COMPLETO son CUATRO roles, y el del capital es OPCIONAL.
+ * El plan COMPLETO son CINCO roles, y el del capital es OPCIONAL.
  *
  * REGLA que fija este test: *una tienda con un plan de cuatro roles cobra*.
  * El rol `equity` sigue existiendo (es un rol valido y asignable), pero su
  * ausencia ya no es un plan incompleto.
  */
-test('test_el_plan_completo_son_cuatro_roles_y_el_del_capital_es_opcional', function () {
+test('test_el_plan_completo_son_cinco_roles_y_el_del_capital_es_opcional', function () {
     $tienda = Store::create(['name' => 'Tienda con plan de cuatro roles']);
 
     plan_sin_capital((int) $tienda->id);
 
     $plan = new ChartOfAccounts(DB::connection());
 
-    // El plan NO le falta ningun rol: los cuatro obligatorios estan.
-    expect($plan->missingRoles((int) $tienda->id))->toBe([]);
+    // El plan DECLARA el hueco del PASIVO, y NO el del capital: el pasivo es
+    // obligatorio del plan completo, y el capital es opcional.
+    expect($plan->missingRoles((int) $tienda->id))->toBe(['liability']);
+
+    // Y el COBRO no exige nada mas: la tienda cobra igual (la F2-13b).
+    expect($plan->missingRolesForCharge((int) $tienda->id))->toBe([]);
 
     // Y el plan RESUELVE: una tienda con cuatro roles no deja de cobrar.
     $resuelto = $plan->plan((int) $tienda->id);
@@ -97,7 +104,7 @@ test('test_el_plan_completo_son_cuatro_roles_y_el_del_capital_es_opcional', func
     expect(AccountRole::tryFrom('equity'))->not->toBeNull()
         ->and(AccountRole::Equity->esObligatorio())->toBeFalse()
         ->and(AccountRole::Cash->esObligatorio())->toBeTrue()
-        ->and(AccountRole::obligatorios())->toHaveCount(4);
+        ->and(AccountRole::obligatorios())->toHaveCount(5);
 });
 
 /**
