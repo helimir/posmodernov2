@@ -1038,6 +1038,20 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       motivo de la peticion). Anadirlo a la cola es una unidad aparte.
     - **La peticion atendida se queda en `pending` en la tabla** y su estado efectivo se deriva de
       `sales.status`: "hecha" no es un estado de la peticion, es un hecho de la venta.
+    - ⚠️ **El ambito del rol superusuario se puede acotar, y recorta a TODOS los consumidores**:
+      `RoleAdministrationController::updateStores()` **no excluye al rol superusuario** (solo lo hace
+      `updatePermissions()`). Un administrador puede dejarle al superusuario un ambito, y `scopeIds()`
+      lo recortaria a **todo**: la caja, el POS, las dos colas y la lectura de ventas. Es el mismo
+      patron que el del ambito que si se excluye en los permisos. Es una unidad aparte.
+    - **La lectura es mas ancha que la escritura**: una tienda dentro del ambito del rol pero **sin**
+      vinculo `user_stores` activo es **legible pero no escribible**. Es consecuencia del criterio
+      (`scopeIds()` es el ambito del ROL y `StoreAccess` exige ademas el vinculo del usuario), y
+      **reduce** la exposicion (antes: todas las tiendas). Documentado, no "arreglado", porque
+      inventar otro criterio seria romper la caja.
+    - **El scope solo protege `Sale`**: cualquier otra tabla por tienda leida con Eloquent sigue sin
+      acotar. `StoreScope` es generico (`store_id`), asi que adoptarlo es **una linea por modelo**.
+    - **Sin sesion no hay filtro** (un comando de consola ve todas las ventas): es lo correcto, porque
+      la consola no pregunta en nombre de nadie. En web la pantalla exige sesion.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |

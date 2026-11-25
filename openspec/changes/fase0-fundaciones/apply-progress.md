@@ -1872,6 +1872,23 @@ La suite fallaba **entre las 00:00 y las 04:00 UTC**: los fixtures usaban la fec
 **Y el testigo**: `test_la_fecha_de_negocio_es_la_de_la_tienda_y_no_la_del_servidor` **congela el reloj** y **mueve la zona del servidor a `Pacific/Kiritimati`**, porque mover solo la zona no basta (dos offsets distintos siempre coinciden en la fecha durante una parte del dia, y el test seria una loteria).
 
 **Suite**: 851 tests / 12 098 assertions, en verde (antes: 844 y 3 fallando).
+### La fuga de multitienda en la lectura de ventas (PR #162, issue #158)
+
+`SalesController::index()` y `SalesController::show()` **no filtraban por tienda**: devolvian ventas de **cualquier** tienda. Un cajero de la tienda 1 abria la ficha de una venta de la tienda 2 y **la leia** (cliente, importes, pago, estado fiscal). Las escrituras si lo guardaban (`StoreAccess`), asi que era un agujero **de solo lectura**, y la propiedad `sale.void_request` lo heredaba.
+
+**EL FILTRO NO ESTA EN LA PANTALLA, ESTA EN LA TABLA.** Un **scope global de Eloquent** sobre `Sale` (`app/Support/Pos/StoreScope.php`) aplica `whereIn(store_id, scopeIds())` a **toda** consulta: `SalesController` no lleva **ni un `where` de tienda**, asi que no hay nada que una pantalla futura pueda olvidar, y un `Sale::find()` de otra tienda **no puede** saltarselo por descuido. De regalo, **la lista y la ficha quedan con el MISMO criterio por construccion** (y la ficha ajena es un **404**, no un 403, que le confirmaria al cajero que la venta existe).
+
+**El criterio es UNO**: `PosContext::scopeIds()`, el **ambito del ROL**, el mismo que ya usaban la caja, la cola de impresion, el POS y la cola de solicitudes. **No se toco**, porque ya resuelve el superusuario y el contador sin ambito (su rol no tiene filas en `role_store_scopes`) y tocarlo habria movido tambien la caja y el POS.
+
+**Cinco tests de COMPORTAMIENTO, no un grep del codigo**: la lista no enseña las ventas de otra tienda; la ficha de otra tienda no existe; **el scope no deja leerla con `Sale::query()->find()`**; un rol sin ambito ve todas; el superusuario ve todas. Los tres primeros **fallaron antes** (la lista traia 2 ventas en vez de 1, la ficha ajena respondia 200, y el modelo la encontraba).
+
+**Suite**: 856 tests / 12 163 assertions, en verde.
+
+### Los hallazgos que esta unidad destapo
+
+- ⚠️ **El ambito del rol superusuario se puede acotar** (`RoleAdministrationController::updateStores()` no lo excluye, si lo hace `updatePermissions()`), y `scopeIds()` lo recortaria a **todos** los consumidores, no solo a la lectura de ventas.
+- **La lectura es mas ancha que la escritura**: una tienda en el ambito del rol pero sin vinculo `user_stores` es legible pero no escribible. Consecuencia del criterio impuesto, y **reduce** la exposicion.
+- **El scope solo protege `Sale`**: `StoreScope` es generico (`store_id`), asi que adoptarlo en las demas tablas por tienda es **una linea por modelo**.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
