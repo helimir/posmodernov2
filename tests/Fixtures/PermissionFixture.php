@@ -196,6 +196,10 @@ final class PermissionFixture
 
     /**
      * Una VENTA de la tienda.
+     *
+     * Y SU FECHA ES LA DE NEGOCIO DE LA TIENDA: la fecha del servidor es
+     * otro dia, y una venta de otro dia que la caja no cubre haria que la
+     * guarda del dia cerrado comparase dos dias distintos.
      */
     public static function venta(int $storeId, ?int $customerId = null): Sale
     {
@@ -203,7 +207,7 @@ final class PermissionFixture
             'store_id' => $storeId,
             'customer_id' => $customerId,
             'invoice_no' => 'PERM-0001',
-            'sale_date' => now()->format('Y-m-d'),
+            'sale_date' => PosFixture::businessDate($storeId),
             'status' => 'paid',
         ]);
     }

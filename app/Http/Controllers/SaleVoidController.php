@@ -9,6 +9,7 @@ use App\Domain\Fiscal\DerivedDocumentService;
 use App\Domain\Fiscal\FiscalIssuanceService;
 use App\Domain\Fiscal\FiscalProviderScope;
 use App\Domain\Fiscal\NumberSeries;
+use App\Domain\Sales\SaleVoidRequests;
 use App\Support\Audit\AuditWriter;
 use App\Support\Fiscal\StoreAccess;
 use DateTimeImmutable;
@@ -77,6 +78,7 @@ final class SaleVoidController extends Controller
         private readonly CustomerBalanceService $balances,
         private readonly StoreAccess $access,
         private readonly CashRegisterService $registers,
+        private readonly SaleVoidRequests $requests,
     ) {
         $this->derived = new DerivedDocumentService(
             $connection,
@@ -267,30 +269,29 @@ final class SaleVoidController extends Controller
     }
 
     /**
-     * La SOLICITUD de anulacion que tiene la venta, si la tiene.
+     * La SOLICITUD de anulacion PENDIENTE que tiene la venta, si la tiene.
      *
-     * REGLA que fija este metodo: *la solicitud es un dato de la venta*, y
-     * por eso vive en su cabecera (`void_requested_at`,
-     * `void_request_reason`, `void_requested_by`). Una venta sin solicitud
-     * no tiene nada pendiente: por eso se devuelve `null` y no un motivo
-     * vacio.
+     * REGLA que fija este metodo: *el motivo de la anulacion es el de la
+     * peticion PENDIENTE*. Solo de la pendiente: una peticion ya cerrada
+     * (rechazada o cancelada) no explica la anulacion, y el motivo de la
+     * anulacion es el del cuerpo si no hay ninguna pendiente.
      *
      * @return array{reason: string, requested_at: string|null, requested_by: int|null}|null
      */
     private function solicitudDeAnulacion(object $venta): ?array
     {
-        $pedidaEl = $venta->void_requested_at ?? null;
+        $solicitud = $this->requests->pending((int) $venta->id);
 
-        if ($pedidaEl === null) {
+        if ($solicitud === null) {
             return null;
         }
 
         return [
-            'reason' => (string) ($venta->void_request_reason ?? ''),
-            'requested_at' => $this->instanteDeLaFila($pedidaEl),
-            'requested_by' => $venta->void_requested_by === null
+            'reason' => (string) $solicitud->reason,
+            'requested_at' => $this->instanteDeLaFila($solicitud->requested_at),
+            'requested_by' => $solicitud->requested_by === null
                 ? null
-                : (int) $venta->void_requested_by,
+                : (int) $solicitud->requested_by,
         ];
     }
 

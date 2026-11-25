@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Tests\Fixtures\CreditFixture;
 use Tests\Fixtures\VoidRequestFixture;
@@ -97,11 +96,12 @@ test('test_la_lista_de_solicitudes_pendientes_no_muestra_las_ventas_de_otra_tien
 
     $ventaAjena = VoidRequestFixture::venta((int) CreditFixture::store(), 'PANT-AJENA-1');
 
-    DB::table('sales')->where('id', $ventaAjena->id)->update([
-        'void_requested_at' => now(),
-        'void_request_reason' => 'Solicitud de otra tienda',
-        'void_requested_by' => (int) $contexto['cajero']->id,
-    ]);
+    VoidRequestFixture::solicitud(
+        $ventaAjena->id,
+        (int) $ventaAjena->store_id,
+        'Solicitud de otra tienda',
+        (int) $contexto['cajero']->id,
+    );
 
     $this->actingAs($contexto['contador'])
         ->get('/ventas/solicitudes-anulacion')

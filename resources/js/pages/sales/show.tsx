@@ -1,5 +1,5 @@
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -115,14 +115,26 @@ interface SaleVoid {
  * The REQUEST to void a sale: what the cashier asked for, and why.
  *
  * It is `null` when nobody asked for it. When it is there, its `status` says
- * whether it is still `pending` or already `done` (the sale is voided, so
- * there is nothing left to wait for).
+ * where the request stands:
+ *
+ *  - `pending`: it waits for whoever may void the sales;
+ *  - `rejected`: whoever may void said NO, and the rejection carries the
+ *    reason, who said it and when;
+ *  - `cancelled`: whoever asked for it took it back, with the reason;
+ *  - `done`: the sale is voided, so there is nothing left to wait for.
  */
 interface SaleVoidRequest {
+    id: number;
     status: string;
     reason: string | null;
     requested_at: string | null;
     requested_by: { id: number; name: string } | null;
+    rejected_at: string | null;
+    rejected_by: { id: number; name: string } | null;
+    rejection_reason: string | null;
+    cancelled_at: string | null;
+    cancelled_by: { id: number; name: string } | null;
+    cancellation_reason: string | null;
 }
 
 interface SaleDetail {
@@ -142,6 +154,8 @@ interface SaleDetail {
     ledger: LedgerEntry | null;
     void: SaleVoid | null;
     void_request: SaleVoidRequest | null;
+    /** EVERY request of this sale, from the newest to the oldest. */
+    void_request_history: SaleVoidRequest[];
 }
 
 /**
@@ -159,6 +173,64 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
         default:
             return 'outline';
     }
+}
+
+/**
+ * The LABEL of the state of a void request.
+ *
+ * The states are the ones of the domain (`pending`, `rejected`, `cancelled`
+ * and `done`, which is not a state of the request but the voided sale).
+ */
+function requestStatusLabel(status: string): string {
+    switch (status) {
+        case 'pending':
+            return 'Pending';
+        case 'rejected':
+            return 'Rejected';
+        case 'cancelled':
+            return 'Cancelled';
+        case 'done':
+            return 'Voided';
+        default:
+            return status;
+    }
+}
+
+/**
+ * The COLOR of the state of a void request.
+ */
+function requestStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+    switch (status) {
+        case 'pending':
+            return 'secondary';
+        case 'rejected':
+            return 'destructive';
+        case 'done':
+            return 'default';
+        default:
+            return 'outline';
+    }
+}
+
+/**
+ * The OUTCOME of a void request: what closed it.
+ *
+ * A pending request has no outcome yet: it is waiting.
+ */
+function requestOutcome(request: SaleVoidRequest): string {
+    if (request.status === 'rejected') {
+        return request.rejection_reason ?? 'Rejected';
+    }
+
+    if (request.status === 'cancelled') {
+        return request.cancellation_reason ?? 'Cancelled';
+    }
+
+    if (request.status === 'done') {
+        return 'The sale was voided';
+    }
+
+    return 'Waiting';
 }
 
 /**
@@ -186,6 +258,14 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
     const [requestReason, setRequestReason] = useState('');
     const [requesting, setRequesting] = useState(false);
     const [requestError, setRequestError] = useState<string | null>(null);
+    const [rejectOpen, setRejectOpen] = useState(false);
+    const [rejectReason, setRejectReason] = useState('');
+    const [rejecting, setRejecting] = useState(false);
+    const [rejectError, setRejectError] = useState<string | null>(null);
+    const [cancelOpen, setCancelOpen] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
+    const [cancelling, setCancelling] = useState(false);
+    const [cancelError, setCancelError] = useState<string | null>(null);
 
     /**
      * The GAP between what the payments APPLIED and the total of the sale.
@@ -216,6 +296,35 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
      * the cashier wrote why, and that is the explanation the void carries.
      */
     const solicitudPendiente = sale.void_request !== null && sale.void_request.status === 'pending' ? sale.void_request : null;
+
+    /**
+     * The REJECTED request: whoever may void said NO.
+     *
+     * It is the notification of the rejection: the cashier sees it here,
+     * with the reason, who rejected it and when. A request that is closed in
+     * silence is a request the cashier never learns about.
+     */
+    const solicitudRechazada = sale.void_request !== null && sale.void_request.status === 'rejected' ? sale.void_request : null;
+
+    /**
+     * The CANCELLED request: whoever asked for it took it back.
+     */
+    const solicitudCancelada = sale.void_request !== null && sale.void_request.status === 'cancelled' ? sale.void_request : null;
+
+    /**
+     * The USER of the session: the request is MINE only when I asked for it.
+     *
+     * Only the one who asked can take the request back: the permission opens
+     * the door, the row says whose it is.
+     */
+    const { auth } = usePage<SharedData>().props;
+
+    const usuarioActual = auth?.user?.id ?? null;
+
+    const peticionEsMia =
+        solicitudPendiente !== null &&
+        solicitudPendiente.requested_by !== null &&
+        solicitudPendiente.requested_by.id === usuarioActual;
 
     /**
      * The RETRY of the fiscal issuance.
@@ -286,6 +395,55 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
             setRequestError((fallo as Error).message);
         } finally {
             setRequesting(false);
+        }
+    };
+
+    /**
+     * The REJECTION of the request: whoever may void says NO.
+     *
+     * It needs a REASON: the server rejects the rejection without one, and
+     * the reason is what the cashier reads in his sale, with the name of
+     * whoever wrote it.
+     *
+     * AND IT DOES NOT VOID ANYTHING: the sale stays in place. A rejection is
+     * "I will not do it", and the void is "I did it": they are different
+     * facts.
+     */
+    const rejectRequest = async () => {
+        setRejecting(true);
+        setRejectError(null);
+
+        try {
+            await postJson(`/ventas/${sale.id}/solicitud-anulacion/rechazo`, { reason: rejectReason });
+
+            router.reload();
+        } catch (fallo) {
+            setRejectError((fallo as Error).message);
+        } finally {
+            setRejecting(false);
+        }
+    };
+
+    /**
+     * The CANCELLATION of the request: the one who asked takes it back.
+     *
+     * It needs a REASON: a request that is taken back without an explanation
+     * does not say why it was taken back.
+     *
+     * AND IT DOES NOT VOID ANYTHING either: the sale stays in place.
+     */
+    const cancelRequest = async () => {
+        setCancelling(true);
+        setCancelError(null);
+
+        try {
+            await postJson(`/ventas/${sale.id}/solicitud-anulacion/cancelacion`, { reason: cancelReason });
+
+            router.reload();
+        } catch (fallo) {
+            setCancelError((fallo as Error).message);
+        } finally {
+            setCancelling(false);
         }
     };
 
@@ -368,6 +526,11 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                           whoever may void picks the request up. That is why
                           the request has its own permission, and why the two
                           buttons are not the same thing.
+
+                          AND THE THREE WAYS OUT OF A REQUEST: the person who
+                          may void can REJECT it (with a reason), and the one
+                          who asked can TAKE IT BACK (with a reason). A request
+                          that could not be closed would wait forever.
                         */}
                         {!anulada && (
                             <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
@@ -383,6 +546,18 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                                 {can('sales.void_request') && solicitudPendiente === null && (
                                     <Button variant="outline" onClick={() => setRequestOpen(true)}>
                                         Request the void
+                                    </Button>
+                                )}
+
+                                {can('sales.void') && solicitudPendiente !== null && (
+                                    <Button variant="outline" onClick={() => setRejectOpen(true)}>
+                                        Reject the request
+                                    </Button>
+                                )}
+
+                                {can('sales.void_request') && peticionEsMia && (
+                                    <Button variant="outline" onClick={() => setCancelOpen(true)}>
+                                        Cancel the request
                                     </Button>
                                 )}
 
@@ -544,6 +719,144 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                                     the void will carry.
                                 </AlertDescription>
                             </Alert>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/*
+                  The REJECTED REQUEST: the notification of the rejection.
+
+                  It is what the cashier sees when whoever may void said NO:
+                  the reason of the request, the reason of the rejection, who
+                  rejected it and when. A rejection that is not on the screen
+                  is a rejection the cashier never learns about.
+                */}
+                {solicitudRechazada !== null && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Void request rejected</CardTitle>
+                        </CardHeader>
+
+                        <CardContent>
+                            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                <Field label="Requested at" value={solicitudRechazada.requested_at ?? '—'} />
+                                <Field
+                                    label="Requested by"
+                                    value={solicitudRechazada.requested_by?.name ?? '—'}
+                                />
+                                <Field label="Rejected at" value={solicitudRechazada.rejected_at ?? '—'} />
+                                <Field
+                                    label="Rejected by"
+                                    value={solicitudRechazada.rejected_by?.name ?? '—'}
+                                />
+                            </dl>
+
+                            <div className="mt-4">
+                                <dt className="text-muted-foreground text-xs">Reason of the request</dt>
+                                <dd className="text-sm">{solicitudRechazada.reason ?? '—'}</dd>
+                            </div>
+
+                            <div className="mt-4">
+                                <dt className="text-muted-foreground text-xs">Reason of the rejection</dt>
+                                <dd className="text-sm">{solicitudRechazada.rejection_reason ?? '—'}</dd>
+                            </div>
+
+                            <Alert className="mt-4">
+                                <AlertTitle>This sale is not voided</AlertTitle>
+                                <AlertDescription>
+                                    The request was rejected, so the sale stays in place. A new request can be made
+                                    with a new reason, and this one stays in the history of the sale.
+                                </AlertDescription>
+                            </Alert>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/*
+                  The CANCELLED REQUEST: whoever asked for it took it back.
+
+                  It says who and when, and why: a request that is taken back
+                  without an explanation does not say why it was taken back.
+                */}
+                {solicitudCancelada !== null && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Void request cancelled</CardTitle>
+                        </CardHeader>
+
+                        <CardContent>
+                            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                <Field label="Requested at" value={solicitudCancelada.requested_at ?? '—'} />
+                                <Field
+                                    label="Requested by"
+                                    value={solicitudCancelada.requested_by?.name ?? '—'}
+                                />
+                                <Field label="Cancelled at" value={solicitudCancelada.cancelled_at ?? '—'} />
+                                <Field
+                                    label="Cancelled by"
+                                    value={solicitudCancelada.cancelled_by?.name ?? '—'}
+                                />
+                            </dl>
+
+                            <div className="mt-4">
+                                <dt className="text-muted-foreground text-xs">Reason of the request</dt>
+                                <dd className="text-sm">{solicitudCancelada.reason ?? '—'}</dd>
+                            </div>
+
+                            <div className="mt-4">
+                                <dt className="text-muted-foreground text-xs">Reason of the cancellation</dt>
+                                <dd className="text-sm">{solicitudCancelada.cancellation_reason ?? '—'}</dd>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/*
+                  The HISTORY: EVERY request of this sale, from the newest to
+                  the oldest.
+
+                  A request that is replaced by another one does not
+                  disappear: the sale keeps the story of what was asked, who
+                  asked it and how it ended.
+                */}
+                {sale.void_request_history.length > 1 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Void request history</CardTitle>
+                        </CardHeader>
+
+                        <CardContent>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b">
+                                            <th className="px-2 py-2 text-left font-medium">Status</th>
+                                            <th className="px-2 py-2 text-left font-medium">Requested at</th>
+                                            <th className="px-2 py-2 text-left font-medium">Requested by</th>
+                                            <th className="px-2 py-2 text-left font-medium">Reason</th>
+                                            <th className="px-2 py-2 text-left font-medium">Outcome</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        {sale.void_request_history.map((request) => (
+                                            <tr key={request.id} className="border-b last:border-0">
+                                                <td className="px-2 py-2">
+                                                    <Badge variant={requestStatusVariant(request.status)}>
+                                                        {requestStatusLabel(request.status)}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-2 py-2 whitespace-nowrap">
+                                                    {request.requested_at ?? '—'}
+                                                </td>
+                                                <td className="px-2 py-2">{request.requested_by?.name ?? '—'}</td>
+                                                <td className="px-2 py-2">{request.reason ?? '—'}</td>
+                                                <td className="px-2 py-2">{requestOutcome(request)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </CardContent>
                     </Card>
                 )}
@@ -812,6 +1125,118 @@ export default function SaleShow({ sale }: { sale: SaleDetail }) {
                                 disabled={requesting || requestReason.trim() === ''}
                             >
                                 {requesting ? 'Requesting…' : 'Request the void'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/*
+                  The REJECTION DIALOG: the reason is REQUIRED, because the
+                  cashier reads it in his sale, with the name of whoever wrote
+                  it.
+
+                  And it says what a rejection is NOT: the sale is not
+                  voided.
+                */}
+                <Dialog
+                    open={rejectOpen}
+                    onOpenChange={(value) => {
+                        setRejectOpen(value);
+
+                        if (!value) {
+                            setRejectReason('');
+                            setRejectError(null);
+                        }
+                    }}
+                >
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Reject the void request</DialogTitle>
+                            <DialogDescription>
+                                The request is closed with your reason, and the cashier sees it in the sale with your
+                                name and the date. The sale is NOT voided: a rejection is "I will not do it", and the
+                                void is a different operation.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="void-reject-reason">Reason of the rejection</Label>
+                            <textarea
+                                id="void-reject-reason"
+                                rows={3}
+                                value={rejectReason}
+                                onChange={(event) => setRejectReason(event.target.value)}
+                                placeholder="Why is this void request rejected?"
+                                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+
+                            {rejectError && <p className="text-destructive text-sm">{rejectError}</p>}
+                        </div>
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setRejectOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={rejectRequest}
+                                disabled={rejecting || rejectReason.trim() === ''}
+                            >
+                                {rejecting ? 'Rejecting…' : 'Reject the request'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/*
+                  The CANCELLATION DIALOG: the reason is REQUIRED, because a
+                  request that is taken back without an explanation does not
+                  say why it was taken back.
+                */}
+                <Dialog
+                    open={cancelOpen}
+                    onOpenChange={(value) => {
+                        setCancelOpen(value);
+
+                        if (!value) {
+                            setCancelReason('');
+                            setCancelError(null);
+                        }
+                    }}
+                >
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Cancel the void request</DialogTitle>
+                            <DialogDescription>
+                                You take your own request back, with your reason. The sale is NOT voided, and the
+                                request stays in the history of the sale.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="void-cancel-reason">Reason of the cancellation</Label>
+                            <textarea
+                                id="void-cancel-reason"
+                                rows={3}
+                                value={cancelReason}
+                                onChange={(event) => setCancelReason(event.target.value)}
+                                placeholder="Why are you taking the request back?"
+                                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+
+                            {cancelError && <p className="text-destructive text-sm">{cancelError}</p>}
+                        </div>
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setCancelOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={cancelRequest}
+                                disabled={cancelling || cancelReason.trim() === ''}
+                            >
+                                {cancelling ? 'Cancelling…' : 'Cancel the request'}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

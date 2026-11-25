@@ -16,9 +16,12 @@ use Tests\Fixtures\VoidRequestFixture;
  *  - la solicitud la registra quien NO puede anular: el cajero pide, y la
  *    anulacion la hace quien tiene el permiso de anular. El cajero que
  *    anula no esta pidiendo nada: esta deshaciendo su propia venta;
- *  - la solicitud PENDIENTE no se duplica: una venta tiene UNA solicitud, y
- *    la segunda no pisa la primera (el motivo del primero es el que explica
- *    la anulacion);
+ *  - la solicitud PENDIENTE no se duplica: una venta tiene UNA solicitud
+ *    PENDIENTE, y la segunda no pisa la primera (el motivo del primero es el
+ *    que explica la anulacion);
+ *  - una solicitud CERRADA (rechazada o cancelada) NO bloquea la venta: el
+ *    cajero puede pedir la anulacion otra vez, con un motivo nuevo, y el
+ *    historial se conserva;
  *  - la solicitud de una venta de OTRA TIENDA es un 404: no se le dice que
  *    existe;
  *  - la ANULACION de una venta con solicitud pendiente usa el MOTIVO que
@@ -56,9 +59,8 @@ test('test_la_solicitud_de_anulacion_exige_un_motivo', function () {
     // 3. La venta NO se toco: no hay solicitud.
     $fila = DB::table('sales')->where('id', $venta->id)->first();
 
-    expect($fila->void_requested_at)->toBeNull()
-        ->and($fila->void_request_reason)->toBeNull()
-        ->and($fila->void_requested_by)->toBeNull()
+    expect((string) $fila->status)->toBe('paid')
+        ->and(DB::table('sale_void_requests')->where('sale_id', $venta->id)->count())->toBe(0)
         ->and(DB::table('audit_logs')->where('action', 'sale.void_requested')->count())->toBe(0);
 });
 
@@ -86,16 +88,17 @@ test('test_el_cajero_registra_una_solicitud_de_anulacion_con_su_motivo', functio
         ->assertJsonPath('reason', 'El cliente devolvio la mercaderia')
         ->assertJsonPath('requested_by.id', (int) $contexto['cajero']->id);
 
-    // 1. La VENTA queda con la solicitud: el momento, el motivo y quien la
-    //    pido.
-    $fila = DB::table('sales')->where('id', $venta->id)->first();
+    // 1. La SOLICITUD queda con su motivo y con quien la pidio.
+    $solicitud = DB::table('sale_void_requests')->where('sale_id', $venta->id)->first();
 
-    expect($fila->void_requested_at)->not->toBeNull()
-        ->and((string) $fila->void_request_reason)->toBe('El cliente devolvio la mercaderia')
-        ->and((int) $fila->void_requested_by)->toBe((int) $contexto['cajero']->id);
+    expect($solicitud)->not->toBeNull()
+        ->and((string) $solicitud->status)->toBe('pending')
+        ->and((string) $solicitud->reason)->toBe('El cliente devolvio la mercaderia')
+        ->and((int) $solicitud->requested_by)->toBe((int) $contexto['cajero']->id)
+        ->and($solicitud->requested_at)->not->toBeNull();
 
     // 2. Y la VENTA sigue en pie: pedir la anulacion no anula nada.
-    expect((string) $fila->status)->toBe('paid');
+    expect((string) DB::table('sales')->where('id', $venta->id)->value('status'))->toBe('paid');
 
     // 3. Y la AUDITORIA: quien pidio, sobre que venta, en que tienda y por
     //    que.
@@ -137,8 +140,8 @@ test('test_una_venta_anulada_no_admite_una_solicitud_de_anulacion', function () 
     // Y la venta no se toco.
     $fila = DB::table('sales')->where('id', $venta->id)->first();
 
-    expect($fila->void_requested_at)->toBeNull()
-        ->and((string) $fila->status)->toBe('cancelled');
+    expect((string) $fila->status)->toBe('cancelled')
+        ->and(DB::table('sale_void_requests')->where('sale_id', $venta->id)->count())->toBe(0);
 });
 
 /**
@@ -163,9 +166,90 @@ test('test_una_venta_con_solicitud_pendiente_no_admite_otra_solicitud', function
         ->assertJsonStructure(['errorMsg']);
 
     // Y el motivo del PRIMERO sigue siendo el que explica la anulacion.
-    $fila = DB::table('sales')->where('id', $venta->id)->first();
+    $solicitud = DB::table('sale_void_requests')->where('sale_id', $venta->id)->first();
 
-    expect((string) $fila->void_request_reason)->toBe('Primer motivo');
+    expect((string) $solicitud->reason)->toBe('Primer motivo')
+        ->and(DB::table('sale_void_requests')->where('sale_id', $venta->id)->count())->toBe(1);
+});
+
+/**
+ * Una venta cuya solicitud fue RECHAZADA admite una solicitud NUEVA.
+ *
+ * REGLA que fija: *el cajero puede tener razon la segunda vez*. Una
+ * peticion rechazada esta CERRADA, no vigente: la venta puede pedir otra
+ * anulacion, con un motivo nuevo.
+ *
+ * Y EL HISTORIAL SE CONSERVA: la peticion rechazada sigue existiendo, con su
+ * motivo y con su rechazo. El historial es el modelo, y una peticion
+ * reescrita es una peticion que nadie puede defender despues.
+ */
+test('test_la_venta_una_solicitud_rechazada_admite_una_solicitud_nueva', function () {
+    $contexto = VoidRequestFixture::escenario();
+
+    $venta = VoidRequestFixture::venta($contexto['store_id'], 'SOL-0010');
+
+    $this->actingAs($contexto['cajero'])
+        ->postJson('/ventas/'.$venta->id.'/solicitud-anulacion', ['reason' => 'Primer motivo'])
+        ->assertCreated();
+
+    $this->actingAs($contexto['contador'])
+        ->postJson('/ventas/'.$venta->id.'/solicitud-anulacion/rechazo', ['reason' => 'La venta no se puede anular'])
+        ->assertOk();
+
+    // Y ahora la peticion se puede hacer OTRA VEZ, con un motivo nuevo.
+    $this->actingAs($contexto['cajero'])
+        ->postJson('/ventas/'.$venta->id.'/solicitud-anulacion', ['reason' => 'Segundo motivo'])
+        ->assertCreated()
+        ->assertJsonPath('status', 'pending')
+        ->assertJsonPath('reason', 'Segundo motivo');
+
+    // Y EL HISTORIAL SE CONSERVA: las dos solicitudes existen.
+    $solicitudes = DB::table('sale_void_requests')
+        ->where('sale_id', $venta->id)
+        ->orderBy('id')
+        ->get();
+
+    expect($solicitudes)->toHaveCount(2)
+        ->and((string) $solicitudes[0]->status)->toBe('rejected')
+        ->and((string) $solicitudes[0]->reason)->toBe('Primer motivo')
+        ->and((string) $solicitudes[0]->rejection_reason)->toBe('La venta no se puede anular')
+        ->and((string) $solicitudes[1]->status)->toBe('pending')
+        ->and((string) $solicitudes[1]->reason)->toBe('Segundo motivo');
+});
+
+/**
+ * Una venta cuya solicitud fue CANCELADA admite una solicitud NUEVA.
+ *
+ * REGLA que fija: *retirar una peticion no cierra la venta*. El cajero se
+ * lo pense, la retiro, y despues puede pedirla otra vez: con un motivo
+ * nuevo, y sin perder la peticion que retiro.
+ */
+test('test_la_venta_una_solicitud_cancelada_admite_una_solicitud_nueva', function () {
+    $contexto = VoidRequestFixture::escenario();
+
+    $venta = VoidRequestFixture::venta($contexto['store_id'], 'SOL-0011');
+
+    $this->actingAs($contexto['cajero'])
+        ->postJson('/ventas/'.$venta->id.'/solicitud-anulacion', ['reason' => 'Primer motivo'])
+        ->assertCreated();
+
+    $this->actingAs($contexto['cajero'])
+        ->postJson('/ventas/'.$venta->id.'/solicitud-anulacion/cancelacion', ['reason' => 'El cliente se lo pense'])
+        ->assertOk();
+
+    $this->actingAs($contexto['cajero'])
+        ->postJson('/ventas/'.$venta->id.'/solicitud-anulacion', ['reason' => 'Segundo motivo'])
+        ->assertCreated()
+        ->assertJsonPath('status', 'pending');
+
+    $solicitudes = DB::table('sale_void_requests')
+        ->where('sale_id', $venta->id)
+        ->orderBy('id')
+        ->get();
+
+    expect($solicitudes)->toHaveCount(2)
+        ->and((string) $solicitudes[0]->status)->toBe('cancelled')
+        ->and((string) $solicitudes[1]->status)->toBe('pending');
 });
 
 /**
@@ -187,8 +271,8 @@ test('test_la_solicitud_de_anulacion_de_una_venta_de_otra_tienda_es_un_404', fun
     // Y la venta ajena no se toco.
     $fila = DB::table('sales')->where('id', $ventaAjena->id)->first();
 
-    expect($fila->void_requested_at)->toBeNull()
-        ->and((string) $fila->status)->toBe('paid');
+    expect((string) $fila->status)->toBe('paid')
+        ->and(DB::table('sale_void_requests')->where('sale_id', $ventaAjena->id)->count())->toBe(0);
 });
 
 /**
@@ -231,7 +315,7 @@ test('test_quien_no_tiene_el_permiso_de_pedir_la_anulacion_no_puede_registrarla'
         ->postJson('/ventas/'.$venta->id.'/solicitud-anulacion', ['reason' => 'Error en el monto'])
         ->assertForbidden();
 
-    expect(DB::table('sales')->where('id', $venta->id)->value('void_requested_at'))->toBeNull();
+    expect(DB::table('sale_void_requests')->where('sale_id', $venta->id)->count())->toBe(0);
 });
 
 /**
@@ -331,7 +415,7 @@ test('test_la_anulacion_de_una_venta_de_un_dia_cerrado_falla_y_exige_reabrir_el_
     $venta = VoidRequestFixture::venta($contexto['store_id'], 'SOL-0007');
 
     // El dia se CIERRA: el cierre sella el Z, y el Z es el cierre hecho.
-    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id'], now()->format('Y-m-d'));
+    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id']);
 
     VoidRequestFixture::cierraLaCaja((int) $caja->id, '0.0000', (int) $contexto['contador']->id);
 
@@ -375,7 +459,7 @@ test('test_la_anulacion_de_una_venta_de_un_dia_reabierto_pasa', function () {
 
     $venta = VoidRequestFixture::venta($contexto['store_id'], 'SOL-0008');
 
-    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id'], now()->format('Y-m-d'));
+    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id']);
 
     VoidRequestFixture::cierraLaCaja((int) $caja->id, '0.0000', (int) $contexto['contador']->id);
 
@@ -415,7 +499,7 @@ test('test_la_solicitud_de_anulacion_de_una_venta_de_un_dia_cerrado_se_registra_
 
     $venta = VoidRequestFixture::venta($contexto['store_id'], 'SOL-0009');
 
-    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id'], now()->format('Y-m-d'));
+    $caja = VoidRequestFixture::cajaDelDia($contexto['store_id']);
 
     VoidRequestFixture::cierraLaCaja((int) $caja->id, '0.0000', (int) $contexto['contador']->id);
 

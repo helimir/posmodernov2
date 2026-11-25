@@ -83,6 +83,30 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('permission:sales.void_request')
         ->name('ventas.solicitud-anulacion');
 
+    // El RECHAZO de una solicitud de anulacion, con su motivo.
+    //
+    // ES UNA SUPERVISION, y por eso lleva el permiso de quien ANULA
+    // (`sales.void`): rechazar es el "no lo hago", y es la misma persona
+    // que puede hacer el "lo hago".
+    //
+    // Y EL RECHAZO NO ANULA: la venta sigue en pie, sin nota de credito y sin
+    // tocar su estado. Son hechos distintos, con estados distintos.
+    Route::post('ventas/{sale}/solicitud-anulacion/rechazo', [SaleVoidRequestController::class, 'rechazar'])
+        ->whereNumber('sale')
+        ->middleware('permission:sales.void')
+        ->name('ventas.solicitud-anulacion.rechazar');
+
+    // La CANCELACION de una solicitud de anulacion, con su motivo.
+    //
+    // ES DE QUIEN PIDIO, y por eso lleva el permiso de PEDIR
+    // (`sales.void_request`): retirar la peticion es parte de pedirla. Y
+    // ADEMAS el servidor comprueba que la peticion es SUYA: el permiso
+    // abre la puerta, la fila dice de quien es.
+    Route::post('ventas/{sale}/solicitud-anulacion/cancelacion', [SaleVoidRequestController::class, 'cancelar'])
+        ->whereNumber('sale')
+        ->middleware('permission:sales.void_request')
+        ->name('ventas.solicitud-anulacion.cancelar');
+
     // El REINTENTO de la emision fiscal de una venta.
     //
     // ES UNA ESCRITURA, y por eso no vive en el controlador de las ventas
