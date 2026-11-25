@@ -35,6 +35,13 @@ use Inertia\Response;
  * Los importes viajan como TEXTO decimal: las columnas son `numeric(25,4)` y
  * un `float` no es un dinero. La pagina los enseña tal y como estan, sin
  * redondearlos otra vez.
+ *
+ * Y LA LISTA Y LA FICHA ESTAN ACOTADAS AL AMBITO DEL ROL, y el filtro NO esta
+ * aqui: esta en el ALCANCE POR DEFECTO de la tabla de ventas (el scope global
+ * `StoreScope`, sobre `Sale`). Por eso las dos paginas se filtran con el
+ * MISMO criterio y no pueden separarse, y por eso una pantalla nueva no
+ * puede olvidarse del filtro: una venta de otra tienda no existe para quien
+ * pregunta, y su ficha es un 404. Ver `App\Support\Pos\StoreScope`.
  */
 class SalesController extends Controller
 {
