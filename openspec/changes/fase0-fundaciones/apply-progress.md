@@ -1913,6 +1913,34 @@ De los **siete** tipos de asiento, solo se escribian **tres** (`sale`, `sale_pay
 - ⚠️ **El rol `liability` es opcional, asi que la deuda de F3-03 SOLO se cierra si la tienda lo tiene asignado**: sin pasivo no se escribe la reversa, la anulacion **no falla** (responde con un `warning` y `reversal_written: false` en la auditoria) y los dos libros siguen difiriendo. **Decision pendiente del mantenedor.**
 - La ficha de la venta no enseña la reversa (F3-08 o una unidad de la ficha).
 - No hay cuentas de demostracion separadas para "credito a favor" y "deuda a proveedor".
+### F3-08 — El motor de reportes (PR #167)
+
+Diez reportes: ventas por periodo, por producto y por cajero · IVA por alicuota · PyG · libro de caja · aging de clientes · inventario valorado · arqueo · Z por periodo · exportacion.
+
+**EL MOTOR ES UNA CAPA DE SOLO LECTURA** (`app/Domain/Reports/`), verificado con un grep de escrituras: **cero**.
+
+**CADA REPORTE DICE DE DONDE SALE SU DATO**, porque dos de ellos parecen lo mismo y **no lo son**:
+- **Ventas por periodo** (de `sales`) y **Z por periodo** (de `cash_closes`) **no son lo mismo**: las ventas son **hechos vivos** (corregir una venta cambia el reporte) y el Z es un **hecho sellado** (corregir una venta **no** cambia el Z de ayer, y el arqueo avisa si alguien lo toco);
+- **IVA por alicuota** (de los **documentos**) y **PyG** (del **libro**) **no son lo mismo**: el IVA va al impuesto por pagar (pasivo) y **no es un ingreso**.
+
+**El IVA sale de los documentos, nunca de las ventas.** Y las ventas sin comprobante **no se escapan ni se inventan**: el reporte fiscal trae su propio bloque `without_document` con **cuantas** son y **cuanto** valen; cuentan en el reporte de ventas y **no** en el fiscal, y el hueco se dice en voz alta.
+
+**Los ingresos se separan POR CUENTA, nunca por `entry_type`**: el ingreso comparte `bank_movement` con el traspaso, y lo unico que los distingue es la contrapartida.
+
+**La exportacion no anade dependencias**: el **CSV se escribe a mano** (RFC 4180) y el **"PDF" es imprimir desde el navegador** (el mecanismo del Z y el comprobante, sin duplicar diez tablas en un blade). El escritor **neutraliza la inyeccion de formula** (`=`, `+`, `-`, `@`) con un apostrofo, mirando el primer caracter no blanco; y los **importes NO se neutralizan**, porque son decimales validados y neutralizar un importe negativo lo volveria texto y el reporte dejaria de poderse sumar en la hoja.
+
+**El ambito es UN criterio** (`scopeIds()`, el ambito del rol): las ventas se leen por el modelo, que ya lleva su alcance global, y el resto aplica el mismo criterio — dos filtros del mismo criterio son dos filtros que se pueden desincronizar. Y **los totales se calculan en memoria desde las filas**, asi que el agregado y las filas cuentan lo mismo **por construccion**.
+
+**Permiso nuevo `report.export`**, aparte de `report.read`: leer un reporte es mirar una pantalla, exportarlo es **sacar los datos**, y el fichero se queda en el equipo de quien lo pide. Va al contador; el cajero no recibe ni `report.read` ni `report.export` (el mostrador cobra, no lleva la contabilidad).
+
+**Suite**: 938 tests / 12 832 assertions, en verde.
+
+### Lo que queda abierto, con nombre
+
+- ⚠️ **Monedas mezcladas si el ambito cruza paises**: los totales suman y la moneda que se ensena es la de la **tienda activa**. Hoy el v2 es Venezuela-default, asi que no pasa, pero es una **suposicion, no una garantia**.
+- **Sin paginacion** (a proposito: un agregado sobre una pagina no contaria lo mismo que las filas), asi que el payload puede dispararse con una cartera grande y el CSV se materializa entero en memoria.
+- **Los tramos del aging no existen** (no hay regla escrita ni aqui ni en el legacy): el reporte da la antiguedad en dias y las cargas abiertas una a una.
+- **El invento valorado es una foto** (no hay historico de valoraciones) y **las tres columnas comparativas del legacy no estan** (anclarlas a "ahora" seria mentir sobre el periodo pedido).
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).

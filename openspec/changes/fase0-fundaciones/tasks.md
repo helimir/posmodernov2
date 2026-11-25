@@ -892,7 +892,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       seria una mentira.
     - El P0 #8 del legacy (el gasto que suma a `total_deposit` en vez de `total_withdraw`) **esta
       resuelto por el diseno**: los saldos se derivan de los asientos.
-- [ ] **F3-08** **El motor de reportes.** **Depende de F3-07**: sin gastos, "ingresos y gastos" daria
+- [x] **F3-08** **El motor de reportes.** **Depende de F3-07**: sin gastos, "ingresos y gastos" daria
   ceros. Ventas por periodo, producto y cajero; IVA por alicuota; PyG; libro de caja; aging de
   clientes; inventario valorado; arqueo; Z por periodo; y la **exportacion**, que hoy **no existe**.
   Dep: F3-07, F2-10, F2-11
@@ -1071,6 +1071,25 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       `liability` es uno y la demostracion lo apunta a `2100000`. La deuda a proveedor la escribira
       F3-04, que puede apuntar el rol a la cuenta que use.
     - **No hay pantalla de libro mayor ni de saldos de cuentas bancarias**: son reportes de F3-08.
+    - ⚠️ **MONEDAS MEZCLADAS SI EL AMBITO CRUZA PAISES**: los totales suman y la moneda que se ensena es
+      la de la **tienda activa**. Hoy el v2 es Venezuela-default, asi que no pasa, pero es una
+      **suposicion y no una garantia**: una tienda con otra moneda (Bs. y USD) en el mismo ambito
+      sumaria monies distintas. Es un agujero de los reportes.
+    - **SIN PAGINACION, Y POR ESO EL PAYLOAD PUEDE DISPARARSE**: el inventario valorado manda **una capa
+      por lote**, las ventas por producto **todas** las filas y el aging **todos** los movimientos de
+      todos los clientes del ambito (un saldo es acumulado: no se puede filtrar por fecha sin mentir).
+      Con una cartera grande, el Inertia es pesado. Y el CSV se materializa entero en memoria.
+    - **LOS TRAMOS DEL AGING NO EXISTEN** (`0-30`, `31-60`, ...): ni el repo ni el legacy tienen esa
+      regla escrita, asi que el reporte da la **antiguedad en dias** y las cargas abiertas una a una
+      (con cobertura FIFO). Quien quiera los tramos, los agrupa: es una regla de negocio.
+    - **EL INVENTARIO VALORADO ES UNA FOTO**: no hay historico de valoraciones, asi que el reporte no
+      tiene periodo.
+    - **LAS TRES COLUMNAS COMPARATIVAS DEL LEGACY** (`este mes` / `este ano` / `acumulado`) **no estan**:
+      el filtro de periodo cubre cada ventana por separado, pero **no en la misma pantalla**, porque
+      reproducirlas tal cual las ancla a "ahora" y no al periodo pedido. Es una pantalla comparativa
+      aparte, no el PyG.
+    - **El "PDF" es la pagina Inertia imprimida** (boton Print + `@media print`), no una vista blade
+      duplicada: duplicar diez tablas en blade es crear una segunda verdad.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |
