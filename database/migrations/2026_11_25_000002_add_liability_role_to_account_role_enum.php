@@ -18,9 +18,11 @@ use Illuminate\Support\Facades\DB;
  * cerrado que ya usan 'cash', 'receivable', 'revenue', 'tax_payable' y
  * 'equity'.
  *
- * Y ES UN ROL OPCIONAL, como el del capital: su ausencia NO es un plan
- * incompleto, porque el plan completo son los cuatro roles que el cobro
- * exige. Lo que no se puede es ASIGNARLO a una cuenta que no sea de pasivo:
+ * Y EL ROL ES OBLIGATORIO DEL PLAN COMPLETO (y no del COBRO): el plan
+ * completo son CINCO roles, y el pasivo es el que declara lo que la tienda
+ * DEBE. Su ausencia NO impide cobrar (la decision de la F2-13b: ninguna
+ * tienda deja de cobrar), y lo que impide es deshacer una venta cobrada por
+ * error. Lo que no se puede es ASIGNARLO a una cuenta que no sea de pasivo:
  * esa invariante la cumple `ChartOfAccounts::assign`, y el enum es la parte
  * del esquema que la hace posible (un rol que no existe en el conjunto
  * cerrado no se puede ni escribir).

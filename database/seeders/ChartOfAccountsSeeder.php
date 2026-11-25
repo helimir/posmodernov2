@@ -32,8 +32,9 @@ use RuntimeException;
  * la clave natural del plan. Sembrar dos veces no duplica ni una cuenta ni un
  * vinculo.
  *
- * Y NO HAY PLAN POR DEFECTO: si a una tienda le falta un rol, el cobro
- * falla con un mensaje util. Esta tienda es la unica que tiene plan.
+ * Y NO HAY PLAN POR DEFECTO: si a una tienda le falta un rol DEL COBRO, el
+ * cobro falla con un mensaje util. Esta tienda es la unica que tiene plan, y
+ * lo tiene COMPLETO: los cinco roles del plan, con el pasivo incluido.
  */
 class ChartOfAccountsSeeder extends Seeder
 {
@@ -75,8 +76,8 @@ class ChartOfAccountsSeeder extends Seeder
         // El PASIVO: lo que la tienda debe. Es UN rol para las dos cosas
         // (el credito a favor del cliente y las deudas a proveedores), porque
         // las cuentas concretas son DATOS: la tienda decide en que cuenta lo
-        // asienta. Y es OPCIONAL: el plan completo son los cuatro roles que
-        // el cobro exige.
+        // asienta. Y es OBLIGATORIO del plan completo: sin el, la tienda
+        // cobra igual, pero no puede deshacer una venta cobrada por error.
         'liability' => '2100000',
         // El CAPITAL: la contrapartida del saldo de partida de la caja. Sin
         // el, al abrir la caja el saldo de partida no tiene donde abonarse.

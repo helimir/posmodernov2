@@ -5,6 +5,8 @@ namespace App\Domain\Accounting;
 use App\Domain\Accounting\Enums\AccountRole;
 use DateTimeImmutable;
 use Illuminate\Database\Connection;
+use Illuminate\Support\Collection;
+use RuntimeException;
 
 /**
  * La REVERSA de una venta anulada: el espejo de su asiento, con el efectivo
@@ -35,11 +37,16 @@ use Illuminate\Database\Connection;
  * cliente tinha un credito a favor que el libro contable no conocia, y los dos
  * libros decian cosas distintas.
  *
- * Y LA REVERSA NECESITA LA CUENTA DE PASIVO, que es un ROL DEL PLAN (y el
- * rol es OPCIONAL): una tienda que no lo tiene NO escribe la reversa, y su
- * libro del cliente y su libro contable siguen difiriendo. Por eso este
- * metodo devuelve `null` en ese caso, en vez de fallar: la anulacion de la
- * venta es un hecho fiscal que no depende del plan de cuentas.
+ * Y LA REVERSA NECESITA LA CUENTA DE PASIVO SOLO CUANDO EL CLIENTE ENTREGO
+ * DINERO: la reversa devuelve lo que el cliente entrego, y si no entrego
+ * nada, no hay pasivo que devolver. Una venta a CREDITO tiene su "debe" en la
+ * cuenta `receivable` (que es obligatoria), y su reversa la cancela sin tocar
+ * el pasivo. Y el pasivo es un rol OBLIGATORIO del plan completo: cuando la
+ * reversa lo necesita y la tienda no lo tiene, la anulacion FALLA con un
+ * 422 que dice que cuenta falta y que hay que hacer. Una anulacion a medias
+ * (sin su reversa) es una venta que nadie sabe lo que es, y el cajero se
+ * queda bloqueado con un error que nadie puede corregir: eso es PEOR que no
+ * poder cobrar.
  */
 final readonly class SaleReversal
 {
@@ -56,9 +63,11 @@ final readonly class SaleReversal
      * @param  string|null  $invoiceNo  El comprobante de la venta, para la
      *                                  descripcion del asiento.
      * @param  int|null  $actorId  Quien anulo la venta.
-     * @return int|null El id del asiento de la reversa, o `null` si la tienda
-     *                  no tiene cuenta de pasivo (y entonces los dos libros
-     *                  siguen difiriendo).
+     * @return int|null El id del asiento de la reversa, o `null` si la venta
+     *                  NO tiene asiento que espejar.
+     *
+     * @throws RuntimeException Cuando la reversa necesita la cuenta de pasivo
+     *                          y la tienda no la tiene.
      */
     public function write(
         int $saleId,
@@ -67,39 +76,21 @@ final readonly class SaleReversal
         ?string $invoiceNo = null,
         ?int $actorId = null,
     ): ?int {
-        $roles = (new ChartOfAccounts($this->connection))->roles($storeId);
-
-        // La cuenta de PASIVO: donde vive el credito a favor del cliente. Sin
-        // ella no hay donde asentar la deuda, y la anulacion sigue siendo
-        // valida: es un hecho fiscal, no una cuenta.
-        $pasivo = trim((string) ($roles[AccountRole::Liability->value] ?? ''));
-
-        if ($pasivo === '') {
-            return null;
-        }
-
-        $efectivo = trim((string) ($roles[AccountRole::Cash->value] ?? ''));
-
         // El ASIENTO ORIGINAL de la venta: la reversa es su espejo.
-        $asiento = $this->connection->table('ledger_entries')
-            ->where('reference_type', 'sale')
-            ->where('reference_id', $saleId)
-            ->where('store_id', $storeId)
-            ->orderBy('id')
-            ->first(['id']);
-
-        if ($asiento === null) {
-            return null;
-        }
-
-        $lineas = $this->connection->table('ledger_lines')
-            ->where('ledger_entry_id', (int) $asiento->id)
-            ->orderBy('id')
-            ->get(['account_code', 'debit', 'credit']);
+        $lineas = $this->lineasDelAsiento($saleId, $storeId);
 
         if ($lineas->isEmpty()) {
             return null;
         }
+
+        $efectivo = $this->cuentaDeRol($storeId, AccountRole::Cash);
+        $pasivo = $this->cuentaDeRol($storeId, AccountRole::Liability);
+
+        // EL INVIARIANTE: si el espejo sustituye el efectivo por el pasivo,
+        // el pasivo TIENE que existir. Y esto se comprueba ANTES de
+        // escribir: una reversa a medias es una venta que nadie sabe lo que
+        // es.
+        $this->exigeElPasivoDelEspejo($lineas, $efectivo, $pasivo, $storeId);
 
         $espejo = [];
 
@@ -143,16 +134,158 @@ final readonly class SaleReversal
     }
 
     /**
+     * ¿La REVERSA de esta venta necesita la cuenta de PASIVO?
+     *
+     * REGLA que fija este metodo: *la reversa necesita el pasivo SOLO cuando
+     * el cliente entrego dinero*. La reversa devuelve lo que el cliente
+     * entrego: si no entrego nada, no hay pasivo que devolver, y el "debe" de
+     * una venta a credito esta en la cuenta `receivable`, que es obligatoria.
+     *
+     * Y COMO SE SABE QUE ENTREGO DINERO: el espejo sustituye la linea del
+     * EFECTIVO por la del pasivo, y el efectivo solo aparece en el asiento de
+     * la venta cuando el cliente entrego algo.
+     */
+    public function necesitaPasivo(int $saleId, int $storeId): bool
+    {
+        $lineas = $this->lineasDelAsiento($saleId, $storeId);
+
+        if ($lineas->isEmpty()) {
+            return false;
+        }
+
+        return $this->sustituyeElEfectivo($lineas, $this->cuentaDeRol($storeId, AccountRole::Cash));
+    }
+
+    /**
+     * EXIGE la cuenta de PASIVO cuando la reversa la necesita.
+     *
+     * REGLA que fija este metodo: *el pasivo es obligatorio para la
+     * anulacion de una venta COBRADA, y su ausencia es un FALLO con un
+     * mensaje que dice que hacer*. El rol `liability` es obligatorio del plan
+     * completo, y una tienda sin el no puede deshacer una venta cobrada por
+     * error.
+     *
+     * @throws RuntimeException Cuando la reversa necesita el pasivo y la
+     *                          tienda no lo tiene.
+     */
+    public function exigePasivo(int $saleId, int $storeId): void
+    {
+        $lineas = $this->lineasDelAsiento($saleId, $storeId);
+
+        $efectivo = $this->cuentaDeRol($storeId, AccountRole::Cash);
+        $pasivo = $this->cuentaDeRol($storeId, AccountRole::Liability);
+
+        $this->exigeElPasivoDelEspejo($lineas, $efectivo, $pasivo, $storeId);
+    }
+
+    /**
+     * EXIGE el pasivo cuando el ESPEJO lo necesita.
+     *
+     * Es la regla en UN solo sitio: el espejo sustituye el efectivo por el
+     * pasivo, y si lo sustituye, el pasivo tiene que existir.
+     *
+     * @param  Collection<int, object>  $lineas
+     *
+     * @throws RuntimeException Cuando el espejo necesita el pasivo y la
+     *                          tienda no lo tiene.
+     */
+    private function exigeElPasivoDelEspejo(Collection $lineas, string $efectivo, string $pasivo, int $storeId): void
+    {
+        if (! $this->sustituyeElEfectivo($lineas, $efectivo)) {
+            return;
+        }
+
+        if ($pasivo !== '') {
+            return;
+        }
+
+        throw new RuntimeException($this->mensajeSinPasivo($storeId));
+    }
+
+    /**
      * ¿La tienda tiene cuenta de PASIVO?
      *
-     * Es la pregunta que decide si la reversa se escribe, y por eso es
+     * Es la pregunta que decide si la reversa se puede escribir, y por eso es
      * PUBLICA: la pantalla y la auditoria tienen que poder decir si los dos
      * libros del cliente y el contable coinciden.
      */
     public function tienePasivo(int $storeId): bool
     {
+        return $this->cuentaDeRol($storeId, AccountRole::Liability) !== '';
+    }
+
+    /**
+     * El MENSAJE de la anulacion que no se puede escribir: que cuenta falta y
+     * que hay que hacer.
+     *
+     * El texto es de PANTALLA, y por eso esta en ingles: lo que el dominio
+     * decide es QUE falta, y COMO se dice es de la costura. Y dice la via:
+     * el rol se asigna a una cuenta EXISTENTE de tipo pasivo desde el plan de
+     * cuentas.
+     */
+    private function mensajeSinPasivo(int $storeId): string
+    {
+        return "The store {$storeId} has no liability account and this sale cannot be voided: the reversal needs it, "
+            .'because the customer delivered money and the store owes it back as a credit. '
+            ."Assign the role 'liability' to an account of type liability in the chart of accounts and try again.";
+    }
+
+    /**
+     * Las LINEAS del asiento de la venta: el espejo se lee de lo que se
+     * escribio.
+     *
+     * @return Collection<int, object>
+     */
+    private function lineasDelAsiento(int $saleId, int $storeId): Collection
+    {
+        $asiento = $this->connection->table('ledger_entries')
+            ->where('reference_type', 'sale')
+            ->where('reference_id', $saleId)
+            ->where('store_id', $storeId)
+            ->orderBy('id')
+            ->first(['id']);
+
+        if ($asiento === null) {
+            return collect();
+        }
+
+        return $this->connection->table('ledger_lines')
+            ->where('ledger_entry_id', (int) $asiento->id)
+            ->orderBy('id')
+            ->get(['account_code', 'debit', 'credit']);
+    }
+
+    /**
+     * ¿El espejo SUSTITUYE el efectivo por el pasivo?
+     *
+     * Es lo que decide si la reversa necesita la cuenta de pasivo: si el
+     * asiento de la venta no tiene linea de efectivo, el cliente no entrego
+     * dinero y no hay pasivo que devolver.
+     *
+     * @param  Collection<int, object>  $lineas
+     */
+    private function sustituyeElEfectivo(Collection $lineas, string $efectivo): bool
+    {
+        if ($efectivo === '') {
+            return false;
+        }
+
+        foreach ($lineas as $linea) {
+            if ((string) $linea->account_code === $efectivo) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * La CUENTA que cumple un rol en la tienda, o `''` si no la cumple.
+     */
+    private function cuentaDeRol(int $storeId, AccountRole $rol): string
+    {
         $roles = (new ChartOfAccounts($this->connection))->roles($storeId);
 
-        return trim((string) ($roles[AccountRole::Liability->value] ?? '')) !== '';
+        return trim((string) ($roles[$rol->value] ?? ''));
     }
 }

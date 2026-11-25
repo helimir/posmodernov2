@@ -32,11 +32,17 @@ export interface ChartAccount {
 
 /**
  * A role of the plan, with the account type it demands.
+ *
+ * `required_for_charge` says whether the CHARGE needs the role: without the
+ * four roles of the charge the till cannot charge, and without the rest it
+ * charges perfectly. The screen does not keep that list by hand: the backend
+ * sends it with the role.
  */
 export interface ChartRole {
     value: string;
     label: string;
     required_type: string;
+    required_for_charge: boolean;
 }
 
 /**
@@ -55,6 +61,7 @@ export interface ChartOfAccountsProps {
     roles: ChartRole[];
     types: ChartAccountType[];
     missing_roles: string[];
+    missing_charge_roles: string[];
     store: { id: number; name: string; code_name: string | null };
 }
 
@@ -82,7 +89,14 @@ type PendingAction = 'deactivate' | 'activate' | 'delete';
  * The CHART OF ACCOUNTS of the active store: the catalogue of accounts and
  * the role each one plays in this store.
  */
-export default function ChartOfAccounts({ accounts, roles, types, missing_roles, store }: ChartOfAccountsProps) {
+export default function ChartOfAccounts({
+    accounts,
+    roles,
+    types,
+    missing_roles,
+    missing_charge_roles,
+    store,
+}: ChartOfAccountsProps) {
     const { can } = usePermissions();
     const [error, setError] = useState<string | null>(null);
     const [warnings, setWarnings] = useState<string[]>([]);
@@ -103,7 +117,7 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
         try {
             await putJson(`/api/contabilidad/cuentas/${account.id}/rol`, { role: role === NONE ? null : role });
 
-            router.reload({ only: ['accounts', 'missing_roles'] });
+            router.reload({ only: ['accounts', 'missing_roles', 'missing_charge_roles'] });
         } catch (fallo) {
             setError(fallo instanceof Error ? fallo.message : 'The role could not be saved.');
         } finally {
@@ -129,7 +143,7 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
 
             setCreating(false);
             setDraft({ code: '', name: '', type: types[0]?.value ?? '' });
-            router.reload({ only: ['accounts', 'missing_roles'] });
+            router.reload({ only: ['accounts', 'missing_roles', 'missing_charge_roles'] });
         } catch (fallo) {
             setError(fallo instanceof Error ? fallo.message : 'The account could not be created.');
         } finally {
@@ -155,7 +169,7 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
             );
 
             setWarnings(respuesta.warnings ?? []);
-            router.reload({ only: ['accounts', 'missing_roles'] });
+            router.reload({ only: ['accounts', 'missing_roles', 'missing_charge_roles'] });
         } catch (fallo) {
             setError(fallo instanceof Error ? fallo.message : 'The account could not be saved.');
         } finally {
@@ -176,7 +190,7 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
         try {
             await deleteJson(`/api/contabilidad/cuentas/${account.id}`);
 
-            router.reload({ only: ['accounts', 'missing_roles'] });
+            router.reload({ only: ['accounts', 'missing_roles', 'missing_charge_roles'] });
         } catch (fallo) {
             setError(fallo instanceof Error ? fallo.message : 'The account could not be deleted.');
         } finally {
@@ -248,8 +262,12 @@ export default function ChartOfAccounts({ accounts, roles, types, missing_roles,
                                 The plan of this store is incomplete
                             </CardTitle>
                             <CardDescription>
-                                The till cannot charge without these roles: {missing_roles.map((rol) => etiquetaDe(rol)).join(', ')}.
-                                Assign them before the next sale.
+                                Missing roles: {missing_roles.map((rol) => etiquetaDe(rol)).join(', ')}.
+                                {missing_charge_roles.length > 0
+                                    ? ` The till cannot charge without ${missing_charge_roles
+                                          .map((rol) => etiquetaDe(rol))
+                                          .join(', ')}: assign them before the next sale.`
+                                    : ' The till can still charge, but a collected sale cannot be voided without them: assign them before voiding a sale.'}
                             </CardDescription>
                         </CardHeader>
                     </Card>

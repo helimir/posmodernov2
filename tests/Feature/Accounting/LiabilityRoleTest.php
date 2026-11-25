@@ -14,7 +14,12 @@ use Tests\Fixtures\PosFixture;
  * Reglas que fija:
  *
  *  - el rol `liability` EXISTE y es un rol VALIDO: se puede asignar, y su
- *    ausencia NO es un plan incompleto (el pasivo no hace falta para cobrar);
+ *    ausencia NO impide COBRAR (la decision de la F2-13b: ninguna tienda deja
+ *    de cobrar). Lo que no puede la tienda sin pasivo es DESHACER una venta
+ *    cobrada por error, y eso es peor que no poder cobrar;
+ *  - el rol `liability` es OBLIGATORIO del plan COMPLETO: el plan completo
+ *    son CINCO roles (la caja, la cartera, los ingresos, el impuesto por pagar
+ *    y el pasivo), y el capital sigue siendo opcional;
  *  - el rol EXIGE SU TIPO: una cuenta de pasivo, y solo una. Una cuenta de
  *    activo (la caja) no puede cumplir el rol de pasivo, porque el balance no
  *    cuadra y nadie se entera hasta que cuadra mal. Y la comprobacion es AL
@@ -65,12 +70,19 @@ test('test_el_rol_de_pasivo_exige_una_cuenta_de_tipo_pasivo', function () {
 });
 
 /**
- * El rol de pasivo es OPCIONAL: su ausencia no es un plan incompleto.
+ * El rol de pasivo es OBLIGATORIO del plan COMPLETO, y su ausencia NO impide
+ * cobrar.
+ *
+ * REGLA que fija este test: *el plan completo son CINCO roles, y el pasivo es
+ * uno de ellos, pero una tienda sin pasivo sigue cobrando*. "Obligatorio"
+ * quiere decir que el plan lo declara, NO que sin el rol la tienda no cobra:
+ * el pasivo es lo que la tienda DEBE (el credito a favor del cliente de una
+ * venta anulada), y su ausencia se ve en el plan, no en el cobro.
  */
-test('test_el_rol_de_pasivo_es_opcional_y_su_ausencia_no_impide_cobrar', function () {
+test('test_el_rol_de_pasivo_es_obligatorio_del_plan_completo_y_su_ausencia_no_impide_cobrar', function () {
     $tienda = Store::create(['name' => 'Tienda con plan sin pasivo']);
 
-    // Los CUATRO roles obligatorios, y ninguno mas.
+    // Los CUATRO roles del COBRO, y ninguno mas.
     $cuentas = [
         ['1100000', 'Efectivo y caja', 'asset', 'cash'],
         ['1200000', 'Cuentas por cobrar', 'asset', 'receivable'],
@@ -105,13 +117,68 @@ test('test_el_rol_de_pasivo_es_opcional_y_su_ausencia_no_impide_cobrar', functio
 
     $plan = new ChartOfAccounts(DB::connection());
 
-    // El plan NO le falta ningun rol: el pasivo no impide cobrar.
-    expect($plan->missingRoles((int) $tienda->id))->toBe([])
-        ->and($plan->plan((int) $tienda->id))->not->toHaveKey('liability');
+    // El plan DECLARA el hueco: el pasivo falta, y el hueco se ve.
+    expect($plan->missingRoles((int) $tienda->id))->toBe(['liability']);
 
-    // Y el rol sigue siendo VALIDO y ASIGNABLE: es un rol, no un rol prohibido.
-    expect(AccountRole::Liability->esObligatorio())->toBeFalse()
-        ->and(AccountRole::obligatorios())->toHaveCount(4);
+    // Y el plan RESUELVE igual: una tienda sin pasivo NO deja de cobrar.
+    expect($plan->plan((int) $tienda->id))->not->toHaveKey('liability')
+        ->and($plan->plan((int) $tienda->id))->toHaveKey('cash')
+        ->and($plan->plan((int) $tienda->id))->toHaveKey('tax_payable');
+
+    // Y el pasivo es OBLIGATORIO del plan COMPLETO: son CINCO roles, y el
+    // capital sigue siendo opcional.
+    expect(AccountRole::Liability->esObligatorio())->toBeTrue()
+        ->and(AccountRole::Equity->esObligatorio())->toBeFalse()
+        ->and(AccountRole::obligatorios())->toHaveCount(5);
+});
+
+/**
+ * Una tienda SIN cuenta de pasivo SIGUE COBRANDO.
+ *
+ * REGLA que fija este test: *ninguna tienda deja de cobrar* (la decision de la
+ * F2-13b). El pasivo es obligatorio del plan COMPLETO, no del COBRO: la
+ * tienda cobra, y lo que no puede es deshacer una venta cobrada por error.
+ */
+test('test_una_tienda_sin_cuenta_de_pasivo_sigue_cobrando', function () {
+    config(['fiscal.emission_enabled' => false]);
+
+    $escenario = PosFixture::escenario();
+    $usuario = PosFixture::usuario($escenario['store_id']);
+
+    // La tienda se queda SIN cuenta de pasivo: el hueco se ve en el plan.
+    DB::table('store_accounts')
+        ->where('store_id', $escenario['store_id'])
+        ->where('role', 'liability')
+        ->delete();
+
+    $plan = new ChartOfAccounts(DB::connection());
+
+    expect($plan->missingRoles((int) $escenario['store_id']))->toBe(['liability']);
+
+    // Y COBRA: la venta se escribe con su asiento y con su numero.
+    $this->actingAs($usuario)
+        ->postJson('/caja/cobrar', [
+            'lines' => [
+                [
+                    'product_id' => $escenario['product_id'],
+                    'quantity' => '2',
+                    'unit_price' => '25.0000',
+                ],
+            ],
+            'payments' => [
+                [
+                    'payment_method_id' => $escenario['payment_method_id'],
+                    'amount' => '58.0000',
+                ],
+            ],
+        ])
+        ->assertCreated()
+        ->assertJsonPath('grand_total', '58.0000');
+
+    // Y la caja del dia tiene el importe: el cobro no se vio afectado.
+    expect((string) DB::table('ledger_lines')
+        ->where('account_code', '1100000')
+        ->value('debit'))->toBe('58.0000');
 });
 
 /**

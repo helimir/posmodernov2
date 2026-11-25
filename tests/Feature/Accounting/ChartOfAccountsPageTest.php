@@ -58,7 +58,17 @@ test('test_el_listado_del_plan_de_cuentas_responde_con_su_contrato_de_props', fu
                 // Y el PASIVO: lo que la tienda debe, y tambien una cuenta
                 // de tipo pasivo.
                 && collect($roles)->firstWhere('value', 'liability')['required_type'] === 'liability'
-                && collect($roles)->firstWhere('value', 'revenue')['required_type'] === 'income')
+                && collect($roles)->firstWhere('value', 'revenue')['required_type'] === 'income'
+                // Y QUE ROL EXIGE EL COBRO: la caja, la cartera, los ingresos
+                // y el impuesto por pagar. El pasivo NO: sin el la tienda
+                // cobra igual, y lo que no puede es deshacer una venta
+                // cobrada.
+                && collect($roles)->firstWhere('value', 'cash')['required_for_charge'] === true
+                && collect($roles)->firstWhere('value', 'receivable')['required_for_charge'] === true
+                && collect($roles)->firstWhere('value', 'revenue')['required_for_charge'] === true
+                && collect($roles)->firstWhere('value', 'tax_payable')['required_for_charge'] === true
+                && collect($roles)->firstWhere('value', 'liability')['required_for_charge'] === false
+                && collect($roles)->firstWhere('value', 'equity')['required_for_charge'] === false)
             // Los CINCO tipos de cuenta: el ALTA ofrece el conjunto cerrado del
             // dominio, y no una lista escrita a mano en la pantalla.
             ->has('types', 5)
@@ -71,6 +81,8 @@ test('test_el_listado_del_plan_de_cuentas_responde_con_su_contrato_de_props', fu
             ])
             // El plan esta COMPLETO: no falta ningun rol.
             ->where('missing_roles', [])
+            // Y el COBRO no exige nada mas.
+            ->where('missing_charge_roles', [])
             // Y la tienda del contexto.
             ->where('store.id', $escenario['store_id'])
             ->etc());
@@ -143,8 +155,41 @@ test('test_la_pagina_avisa_cuando_al_plan_le_falta_un_rol', function () {
             ->component('accounting/accounts')
             // El hueco se ve: el sistema no podra cobrar.
             ->where('missing_roles', ['revenue'])
+            // Y el COBRO lo exige: sin ingresos no hay asiento de venta.
+            ->where('missing_charge_roles', ['revenue'])
             // Y la cuenta que lo tenia ya no cumple ningun rol.
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '4010000')['role'] === null)
+            ->etc());
+});
+
+/**
+ * La pagina AVISA del pasivo que falta, y NO dice que la tienda no puede
+ * cobrar.
+ *
+ * REGLA que fija este test: *el pasivo falta para deshacer una venta cobrada,
+ * no para cobrar*. Los roles que le faltan al plan y los que el COBRO exige
+ * son DOS conjuntos, y la pantalla los dice por separado: sin el pasivo la
+ * caja cobra, y lo que no puede es deshacer una venta cobrada por error.
+ */
+test('test_la_pagina_distingue_el_hueco_del_pasivo_del_hueco_del_cobro', function () {
+    $escenario = PosFixture::escenario();
+    $usuario = PosFixture::usuario($escenario['store_id']);
+
+    // La tienda se queda SIN cuenta de pasivo.
+    DB::table('store_accounts')
+        ->where('store_id', $escenario['store_id'])
+        ->where('role', 'liability')
+        ->delete();
+
+    $this->actingAs($usuario)
+        ->get('/contabilidad/cuentas')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page): AssertableInertia => $page
+            ->component('accounting/accounts')
+            // El plan DECLARA el hueco...
+            ->where('missing_roles', ['liability'])
+            // ...y el COBRO no lo exige: la tienda cobra igual.
+            ->where('missing_charge_roles', [])
             ->etc());
 });
 

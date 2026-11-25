@@ -63,11 +63,16 @@ class ChartOfAccountsController extends Controller
      *
      *  - `accounts`: lista de `{ id, code, name, type, is_active, role }`. El
      *    `role` es el que la cuenta cumple en la tienda activa, o `null`.
-     *  - `roles`: los cuatro roles, con `{ value, label, required_type }`: el
-     *    tipo que cada rol exige.
+     *  - `roles`: los seis roles, con `{ value, label, required_type }`: el
+     *    tipo que cada rol exige, y `required_for_charge`: si el COBRO lo
+     *    exige (sin el, la tienda no cobra).
      *  - `types`: los CINCO tipos de cuenta, con `{ value, label }`: el
      *    conjunto cerrado del dominio, que es lo que el ALTA ofrece.
-     *  - `missing_roles`: los roles que le faltan al plan de la tienda.
+     *  - `missing_roles`: los roles que le faltan al plan COMPLETO de la
+     *    tienda.
+     *  - `missing_charge_roles`: los que le faltan Y QUE EL COBRO EXIGE: la
+     *    diferencia es lo que separa "el plan esta incompleto" de "la tienda
+     *    no puede cobrar".
      *  - `store`: `{ id, name, code_name }`, la tienda activa.
      */
     public function index(Request $request): Response
@@ -79,6 +84,7 @@ class ChartOfAccountsController extends Controller
             'roles' => $this->roles(),
             'types' => $this->types(),
             'missing_roles' => $this->chart->missingRoles((int) $escenario['store']->id),
+            'missing_charge_roles' => $this->chart->missingRolesForCharge((int) $escenario['store']->id),
             'store' => $this->storeProps($escenario['store']),
         ]);
     }
@@ -123,6 +129,7 @@ class ChartOfAccountsController extends Controller
             'role' => $this->chart->roleOf((int) $store->id, (int) $account->id),
             'roles' => $this->chart->roles((int) $store->id),
             'missing_roles' => $this->chart->missingRoles((int) $store->id),
+            'missing_charge_roles' => $this->chart->missingRolesForCharge((int) $store->id),
         ]);
     }
 
@@ -259,6 +266,7 @@ class ChartOfAccountsController extends Controller
             'is_active' => (bool) $account->is_active,
             'roles' => $this->chart->roles((int) $store->id),
             'missing_roles' => $this->chart->missingRoles((int) $store->id),
+            'missing_charge_roles' => $this->chart->missingRolesForCharge((int) $store->id),
             'warnings' => $avisos,
         ]);
     }
@@ -269,6 +277,10 @@ class ChartOfAccountsController extends Controller
      *
      * El texto es de PANTALLA, y por eso esta en ingles: lo que el dominio
      * decide es QUE roles cambian, y como se dice es de la costura.
+     *
+     * Y EL AVISO DICE LA CONSECUENCIA REAL del rol que se apago: los roles
+     * del COBRO detienen la caja, y el resto no. Apagar la cuenta de pasivo
+     * no impide cobrar: impide deshacer una venta cobrada por error.
      *
      * @param  array<int, string>  $roles  Id de tienda => rol.
      * @return list<string>
@@ -282,12 +294,31 @@ class ChartOfAccountsController extends Controller
 
             $etiqueta = $this->etiquetaDelRol($rol);
 
+            $consecuencia = $this->esRolDelCobro($rol)
+                ? 'The plan of that store may now be incomplete: the till cannot charge without every role. '
+                : 'The plan of that store may now be incomplete: the till can still charge, but a collected sale '
+                    .'cannot be voided without that role. ';
+
             $avisos[] = "The account {$codigo} has left the plan: it no longer fulfils the role '{$etiqueta}' in {$nombre}. "
-                .'The plan of that store may now be incomplete: the till cannot charge without every role. '
+                .$consecuencia
                 .'Assign the role to another account to complete it.';
         }
 
         return $avisos;
+    }
+
+    /**
+     * ¿Este rol lo exige el COBRO?
+     *
+     * Es lo que separa "la caja no puede cobrar" de "la caja cobra, pero no
+     * puede deshacer una venta cobrada": el dominio lo dice (`AccountRole`),
+     * y aqui solo se traduce.
+     */
+    private function esRolDelCobro(string $rol): bool
+    {
+        $encontrado = AccountRole::tryFrom($rol);
+
+        return $encontrado !== null && $encontrado->esDelCobro();
     }
 
     /**
@@ -431,7 +462,12 @@ class ChartOfAccountsController extends Controller
     /**
      * Los roles del plan, con el tipo que cada uno exige.
      *
-     * @return list<array{value: string, label: string, required_type: string}>
+     * Y CON CADA UNO, SI EL COBRO LO EXIGE: sin los cuatro del cobro la
+     * tienda no cobra, y con el resto cobra igual (la decision de la
+     * F2-13b). La pantalla lo dice con estos datos y no con una lista escrita
+     * a mano: una lista escrita a mano es una lista que se queda vieja.
+     *
+     * @return list<array{value: string, label: string, required_type: string, required_for_charge: bool}>
      */
     private function roles(): array
     {
@@ -451,6 +487,7 @@ class ChartOfAccountsController extends Controller
                 'value' => $rol->value,
                 'label' => $etiquetas[$rol->value],
                 'required_type' => $rol->requiredType()->value,
+                'required_for_charge' => $rol->esDelCobro(),
             ];
         }
 
