@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { ArrowLeftRight, Banknote, BookOpen, Cpu, FileWarning, Folder, Hash, Landmark, LayoutGrid, ListChecks, Package, Plug, Printer, Radio, Receipt, ScanLine, ShieldCheck, Ticket, TriangleAlert, Users, Wallet } from 'lucide-react';
+import { ArrowLeftRight, Banknote, BookOpen, Calculator, ChartColumn, Cpu, FileText, FileWarning, Folder, Hash, Landmark, LayoutGrid, Layers, ListChecks, NotebookTabs, Package, PackageSearch, Plug, Printer, Radio, Receipt, ReceiptText, Scale, ScanLine, ShieldCheck, Ticket, TrendingUp, TriangleAlert, Users, Wallet } from 'lucide-react';
 import { usePermissions } from '@/lib/permissions';
 import AppLogo from './app-logo';
 
@@ -67,6 +67,66 @@ const mainNavItems: NavItem[] = [
         title: 'Low stock',
         url: '/reportes/stock',
         icon: TriangleAlert,
+        permission: 'report.read',
+    },
+    {
+        title: 'Sales by period',
+        url: '/reportes/ventas',
+        icon: ChartColumn,
+        permission: 'report.read',
+    },
+    {
+        title: 'Sales by product',
+        url: '/reportes/ventas/productos',
+        icon: Layers,
+        permission: 'report.read',
+    },
+    {
+        title: 'Sales by cashier',
+        url: '/reportes/ventas/cajeros',
+        icon: ReceiptText,
+        permission: 'report.read',
+    },
+    {
+        title: 'VAT by rate',
+        url: '/reportes/iva',
+        icon: FileText,
+        permission: 'report.read',
+    },
+    {
+        title: 'Profit and loss',
+        url: '/reportes/resultados',
+        icon: TrendingUp,
+        permission: 'report.read',
+    },
+    {
+        title: 'Cash book',
+        url: '/reportes/libro-caja',
+        icon: Wallet,
+        permission: 'report.read',
+    },
+    {
+        title: 'Customer aging',
+        url: '/reportes/clientes',
+        icon: NotebookTabs,
+        permission: 'report.read',
+    },
+    {
+        title: 'Valued inventory',
+        url: '/reportes/inventario',
+        icon: PackageSearch,
+        permission: 'report.read',
+    },
+    {
+        title: 'Cash count',
+        url: '/reportes/arqueo',
+        icon: Calculator,
+        permission: 'report.read',
+    },
+    {
+        title: 'Z by period',
+        url: '/reportes/z',
+        icon: Scale,
         permission: 'report.read',
     },
     {

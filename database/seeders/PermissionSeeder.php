@@ -232,6 +232,10 @@ class PermissionSeeder extends Seeder
                 Permission::CashDayReopen,
                 Permission::AccountingRead,
                 Permission::ReportRead,
+                // Y EXPORTA los reportes: el contador es quien responde de
+                // los ficheros que salen del sistema (la declaracion, el
+                // cierre del mes). El cajero no ve reportes ni los saca.
+                Permission::ReportExport,
                 Permission::AuditRead,
                 Permission::FiscalRead,
                 // El CONTADOR ANULA lo que el mostrador registro: el gasto y
