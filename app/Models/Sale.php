@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Pos\StoreScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -33,6 +34,23 @@ class Sale extends Model
             'fiscal_document_id' => 'integer',
             'created_by' => 'integer',
         ];
+    }
+
+    /**
+     * El ALCANCE POR DEFECTO de las ventas.
+     *
+     * REGLA que fija este metodo: *una venta de otra tienda no se puede
+     * leer*. El filtro NO es un `where` de cada pantalla: es el alcance de la
+     * propia tabla, y por eso la lista y la ficha no pueden separarse, y una
+     * pantalla nueva no puede olvidarlo.
+     *
+     * Y EL ALCANCE ES EL DEL ROL: el de `PosContext::scopeIds()`. Un rol sin
+     * ambito (el superusuario, el contador) ve todas las tiendas, y un rol
+     * con ambito ve las suyas y solo las suyas.
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new StoreScope);
     }
 
     public function store(): BelongsTo
