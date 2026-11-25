@@ -1090,6 +1090,18 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       aparte, no el PyG.
     - **El "PDF" es la pagina Inertia imprimida** (boton Print + `@media print`), no una vista blade
       duplicada: duplicar diez tablas en blade es crear una segunda verdad.
+    - **La UI no deshabilita el editor de ambito en un rol global**: el boton "Save stores" sigue ahi y
+      el servidor responde **422 con el motivo**, que la UI ya muestra. Ocultarlo exigiria un prop
+      `has_global_scope` en el show y los tipos TSX: es otra unidad, y lo que pedia el issue es que el
+      **422 diga por que**, no que el boton desaparezca.
+    - **`RoleAdministrationController` importa `Database\Seeders\PermissionSeeder`** (app → seeders):
+      es un acoplamiento raro, pero `Database\Seeders` esta en el autoload de composer (**no** dev), asi
+      que en `--no-dev` sigue disponible, y ya existe el mismo acoplamiento en `SmokeSaleCommand`.
+    - **La unica escritura de la API que responde con error Y cambia estado**: pedir el ambito de un rol
+      global responde 422 y **ademas limpia** las filas que tuviera. Es deliberado (esas filas son un
+      ambito invalido) y queda auditado, pero es un patron que hay que conocer.
+    - **El sembrador borra las filas de `role_store_scopes` de los roles globales**: repara el recorte
+      que dejo el agujero, pero cambia el estado de una base ya sembrada con `db:seed`.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |

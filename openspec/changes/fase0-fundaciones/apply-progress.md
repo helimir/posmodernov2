@@ -1941,6 +1941,17 @@ Diez reportes: ventas por periodo, por producto y por cajero · IVA por alicuota
 - **Sin paginacion** (a proposito: un agregado sobre una pagina no contaria lo mismo que las filas), asi que el payload puede dispararse con una cartera grande y el CSV se materializa entero en memoria.
 - **Los tramos del aging no existen** (no hay regla escrita ni aqui ni en el legacy): el reporte da la antiguedad en dias y las cargas abiertas una a una.
 - **El invento valorado es una foto** (no hay historico de valoraciones) y **las tres columnas comparativas del legacy no estan** (anclarlas a "ahora" seria mentir sobre el periodo pedido).
+### El ambito de un rol de alcance global es un dato (PR #169, issue #163)
+
+`RoleAdministrationController::updateStores()` **no excludia a los roles de alcance global**. Su hermano `updatePermissions()` si lo exclulia. Y eso importa mas de lo que parece: **`scopeIds()` es el criterio de ambito del rol y lo consumen TODOS** (la caja, el POS, la cola de impresion, la cola de tickets del cajero y el scope global de `Sale`), asi que **acotar el superusuario acotaba el sistema entero**.
+
+**LA LISTA VIVE EN EL SEEDER, COMO CODIGO**: `PermissionSeeder::ROLES_DE_ALCANCE_GLOBAL` declara los dos (el superusuario y el contador: el catalogo sembrado dice que ninguno tiene ambito) y `esDeAlcanceGlobal()` consulta **ademas** el slug configurado de la instalacion (`auth.superuser_role_slug`), que puede ser otro, asi que una instalacion que renombre el superusuario sigue protegida. ⚠️ **Y el seeder es CODIGO, y el codigo no se edita en caliente**: nadie puede recortar la lista desde la aplicacion, asi que **la proteccion es por construccion**. Con un permiso o una tabla, quien tuviera `role.update` podria cambiarla y el recorte volveria.
+
+`updateStores()` **copia el patron que ya existia**: no anade filas, **limpia** las que el rol tuviera (el mismo reset que usa `updatePermissions()`), audita la limpieza y responde **422 con el motivo**. Un rol **normal** se acota igual que antes.
+
+**Y EL SEEDER TAMBIEN LIMPIA**: sin eso, un rol global con filas (el dano que dejo el agujero) seguiria recortado hasta que alguien abriera su pantalla — **el endpoint no es la unica via de escritura**.
+
+**Suite**: 942 tests / 12 857 assertions, en verde.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
