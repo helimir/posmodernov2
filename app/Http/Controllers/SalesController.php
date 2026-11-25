@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Fiscal\SaleFiscalStatus;
 use App\Domain\Sales\SalePayments;
+use App\Domain\Sales\SaleVoidRequests;
 use App\Models\LedgerEntry;
 use App\Models\PrintTarget;
 use App\Models\Sale;
@@ -48,6 +49,7 @@ class SalesController extends Controller
     public function __construct(
         private readonly SaleFiscalStatus $fiscal,
         private readonly SalePayments $payments,
+        private readonly SaleVoidRequests $requests,
         private readonly Connection $connection,
     ) {}
 
@@ -126,6 +128,10 @@ class SalesController extends Controller
 
         $estados = $this->fiscal->forSales([(int) $model->id]);
 
+        // El HISTORIAL de las peticiones de anulacion de esta venta: de la
+        // mas nueva a la mas vieja. La ULTIMA es la que explica que paso.
+        $historial = $this->requests->history((int) $model->id);
+
         // Los PAGOS, con sus TRES cifras, y el RESUMEN de la venta: lo
         // aplicado es la verdad, y su diferencia con el total es el hueco que
         // la pantalla tiene que enseñar.
@@ -181,7 +187,11 @@ class SalesController extends Controller
                 // La SOLICITUD de anulacion: la peticion que ha hecho el
                 // cajero para que le anulen la venta. Es `null` cuando no
                 // hay ninguna.
-                'void_request' => $this->solicitudDeAnulacion($model),
+                'void_request' => $this->solicitudDeAnulacion($historial),
+                // Y el HISTORIAL de las peticiones de esta venta, de la mas
+                // nueva a la mas vieja: una peticion rechazada no se pierde
+                // porque venga otra.
+                'void_request_history' => $historial,
                 'ledger' => $asiento === null ? null : [
                     'id' => (int) $asiento->id,
                     'entry_type' => (string) ($asiento->entryType?->code ?? ''),
@@ -354,40 +364,23 @@ class SalesController extends Controller
     /**
      * La SOLICITUD de anulacion de la venta, tal y como la ve la pantalla.
      *
-     * REGLA que fija este metodo: *la solicitud es un dato de la venta*, y
-     * por eso vive en su cabecera. La pantalla la ensea porque quien pide
-     * tiene que ver que su peticion esta viva, con quien la hizo y por que.
+     * REGLA que fija este metodo: *la pantalla ENSENA la ultima peticion y
+     * su HISTORIAL*. La ultima es la que explica que paso: la que espera, la
+     * que se rechazo o la que se retirio. Y el historial entero, porque una
+     * venta puede tener una peticion rechazada y otra nueva, y las dos
+     * existen.
      *
-     * Y SOLO HAY UNA SOLICITUD PENDIENTE: cuando la venta queda anulada, la
-     * solicitud ya no espera nada (el hecho esta hecho), y la pantalla lo
-     * dice con el estado `done`.
+     * Y EL ESTADO QUE SE ENSENA NO ES EL QUE SE GUARDA: una peticion
+     * pendiente de una venta anulada esta ATENDIDA, y eso lo dice la venta.
      *
-     * @return array{
-     *     status: string,
-     *     reason: string|null,
-     *     requested_at: string|null,
-     *     requested_by: array{id: int, name: string}|null
-     * }|null
+     * @param  list<array<string, mixed>>  $historial  Las peticiones de la
+     *                                                 venta, de la mas nueva a
+     *                                                 la mas vieja.
+     * @return array<string, mixed>|null
      */
-    private function solicitudDeAnulacion(Sale $model): ?array
+    private function solicitudDeAnulacion(array $historial): ?array
     {
-        $pedidaEl = $model->void_requested_at;
-
-        if ($pedidaEl === null) {
-            return null;
-        }
-
-        $solicitante = $model->voidRequestedBy;
-
-        return [
-            'status' => (string) $model->status === 'cancelled' ? 'done' : 'pending',
-            'reason' => $model->void_request_reason === null ? null : (string) $model->void_request_reason,
-            'requested_at' => $pedidaEl->toIso8601String(),
-            'requested_by' => $solicitante === null ? null : [
-                'id' => (int) $solicitante->id,
-                'name' => (string) $solicitante->name,
-            ],
-        ];
+        return $historial === [] ? null : $historial[0];
     }
 
     /**

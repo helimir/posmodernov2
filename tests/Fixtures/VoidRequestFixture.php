@@ -76,6 +76,80 @@ final class VoidRequestFixture
     }
 
     /**
+     * OTRO CAJERO: el mismo permiso de pedir, pero otra persona.
+     *
+     * REGLA que fija este metodo: *el permiso abre la puerta, la fila dice
+     * de quien es*. Para probar que solo quien pidio puede cancelar su
+     * peticion hace falta un segundo cajero con el MISMO permiso: si no, el
+     * fallo lo explicaria el permiso y no la pertenencia.
+     */
+    public static function otroCajero(int $storeId): User
+    {
+        $rol = PermissionFixture::rol('otro-cajero-solicitud-'.uniqid(), [
+            'sales.read',
+            'sales.void_request',
+        ]);
+
+        return PermissionFixture::usuario($rol, $storeId);
+    }
+
+    /**
+     * Una SOLICITUD de anulacion PENDIENTE, escrita directamente.
+     *
+     * REGLA que fija este metodo: *el escenario se monta con FILAS, no con
+     * peticiones*. Un test que necesita una solicitud de otra tienda no pide
+     * que se pida: escribe la fila, que es la que existe en la base.
+     *
+     * Y LA FILA ES LA DE LA TABLA: el historial es el modelo, y el estado
+     * vive en la fila, no en un derivado.
+     */
+    public static function solicitud(
+        int $saleId,
+        int $storeId,
+        string $reason,
+        ?int $requestedBy = null,
+    ): int {
+        return (int) DB::table('sale_void_requests')->insertGetId([
+            'sale_id' => $saleId,
+            'store_id' => $storeId,
+            'status' => 'pending',
+            'reason' => $reason,
+            'requested_by' => $requestedBy,
+            'requested_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * Una SOLICITUD de anulacion RECHAZADA, escrita directamente.
+     *
+     * Es la fila que deja el rechazo: con quien lo rechazo, cuando y por que.
+     */
+    public static function solicitudRechazada(
+        int $saleId,
+        int $storeId,
+        string $reason,
+        ?int $requestedBy = null,
+        ?int $rejectedBy = null,
+        string $rejectionReason = 'La venta no se puede anular',
+    ): int {
+        return (int) DB::table('sale_void_requests')->insertGetId([
+            'sale_id' => $saleId,
+            'store_id' => $storeId,
+            'status' => 'rejected',
+            'reason' => $reason,
+            'requested_by' => $requestedBy,
+            'requested_at' => now(),
+            'rejected_by' => $rejectedBy,
+            'rejected_at' => now(),
+            'rejection_reason' => $rejectionReason,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
      * La CAJA del dia de la tienda.
      *
      * Y LA FECHA LA RESUELVE EL FIXTURE, NO EL TEST: la caja esta abierta
