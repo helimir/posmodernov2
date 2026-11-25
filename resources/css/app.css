@@ -156,3 +156,33 @@
         @apply bg-background text-foreground;
     }
 }
+
+/*
+ * La IMPRESION de los reportes: el "PDF" de un reporte es el NAVEGADOR.
+ *
+ * REGLA que fija este bloque: *el repositorio no genera PDF*. El Z y el
+ * comprobante ya se imprimen como HTML con `@media print`, y los reportes
+ * hacen lo mismo: el papel sale del navegador, y el "PDF" es lo que el
+ * navegador guarde.
+ *
+ * Y EN EL PAPEL SOLO VA EL REPORTE: el menu lateral y la barra de la
+ * pantalla no se imprimen, porque un papel con el menu de al lado es un
+ * papel que nadie lee.
+ */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+
+    [data-sidebar='sidebar'] {
+        display: none !important;
+    }
+
+    [data-sidebar='header'] {
+        display: none !important;
+    }
+
+    body {
+        background: #ffffff;
+    }
+}

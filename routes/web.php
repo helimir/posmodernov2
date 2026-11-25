@@ -12,6 +12,10 @@ use App\Http\Controllers\FiscalIssuanceController;
 use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\Reports\AccountingReportController;
+use App\Http\Controllers\Reports\BalanceReportController;
+use App\Http\Controllers\Reports\ReportExportController;
+use App\Http\Controllers\Reports\SalesReportController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\SaleVoidController;
 use App\Http\Controllers\SaleVoidRequestController;
@@ -220,6 +224,67 @@ Route::middleware(['auth'])->group(function () {
     Route::get('reportes/stock', [StockReportController::class, 'index'])
         ->middleware('permission:report.read')
         ->name('reportes.stock');
+
+    // El MOTOR DE REPORTES: las pantallas de lectura.
+    //
+    // LAS PANTALLAS son Inertia y son de SOLO LECTURA: ningun reporte escribe
+    // nada, y el que necesita un dato que no existe lo dice en vez de
+    // inventarlo.
+    //
+    // Y EL PERIODO viaja en la peticion (`from` y `to`, en `Y-m-d`), y el
+    // que no lo pide ve el mes de la tienda. Los reportes de la CONTABILIDAD
+    // (el IVA, el PyG, el libro de caja) y los de los SALDOS (el aging, el
+    // inventario, el arqueo, el Z) se acotan al AMBITO DEL ROL, que es el
+    // mismo criterio que el alcance global de las ventas.
+    Route::get('reportes/ventas', [SalesReportController::class, 'period'])
+        ->middleware('permission:report.read')
+        ->name('reportes.ventas');
+
+    Route::get('reportes/ventas/productos', [SalesReportController::class, 'products'])
+        ->middleware('permission:report.read')
+        ->name('reportes.ventas.productos');
+
+    Route::get('reportes/ventas/cajeros', [SalesReportController::class, 'cashiers'])
+        ->middleware('permission:report.read')
+        ->name('reportes.ventas.cajeros');
+
+    Route::get('reportes/iva', [AccountingReportController::class, 'vat'])
+        ->middleware('permission:report.read')
+        ->name('reportes.iva');
+
+    Route::get('reportes/resultados', [AccountingReportController::class, 'profitAndLoss'])
+        ->middleware('permission:report.read')
+        ->name('reportes.resultados');
+
+    Route::get('reportes/libro-caja', [AccountingReportController::class, 'cashBook'])
+        ->middleware('permission:report.read')
+        ->name('reportes.libro-caja');
+
+    Route::get('reportes/clientes', [BalanceReportController::class, 'aging'])
+        ->middleware('permission:report.read')
+        ->name('reportes.clientes');
+
+    Route::get('reportes/inventario', [BalanceReportController::class, 'inventory'])
+        ->middleware('permission:report.read')
+        ->name('reportes.inventario');
+
+    Route::get('reportes/arqueo', [BalanceReportController::class, 'cashCount'])
+        ->middleware('permission:report.read')
+        ->name('reportes.arqueo');
+
+    Route::get('reportes/z', [BalanceReportController::class, 'periodZ'])
+        ->middleware('permission:report.read')
+        ->name('reportes.z');
+
+    // La EXPORTACION de los reportes: el fichero CSV que sale del sistema.
+    //
+    // Y EL CONJUNTO DE REPORTES ES CERRADO: la ruta declara los nombres que
+    // existen, y un nombre que no esta en la lista es un 404. La peticion
+    // nunca llega a una consulta.
+    Route::get('reportes/exportar/{reporte}', [ReportExportController::class, 'exportar'])
+        ->whereIn('reporte', array_keys(ReportExportController::reportes()))
+        ->middleware('permission:report.export')
+        ->name('reportes.exportar');
 
     // Los CLIENTES y su CREDITO: las PAGINAS y la API.
     //

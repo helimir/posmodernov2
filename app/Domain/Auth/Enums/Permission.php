@@ -152,6 +152,18 @@ enum Permission: string
     /** Ver los reportes. */
     case ReportRead = 'report.read';
 
+    /**
+     * EXPORTAR los reportes: sacar los datos del sistema en un fichero.
+     *
+     * Y ESTE PERMISO ES DISTINTO DE `report.read` A PROPOSITO: *leer un
+     * reporte es mirar una pantalla; exportarlo es SACAR los datos*. El
+     * archivo se queda en el equipo de quien lo pide, y ahi un nombre de
+     * cliente o un importe travelling no vuelve. Quien puede ver el reporte
+     * puede mirar la pantalla; quien puede sacarlo es quien responde de
+     * ese fichero.
+     */
+    case ReportExport = 'report.export';
+
     /** Ver la auditoria de negocio: quien hizo que, y desde donde. */
     case AuditRead = 'audit.read';
 
@@ -280,6 +292,7 @@ enum Permission: string
             self::BankingRead => 'View the bank movements',
             self::BankingCreate => 'Register bank movements',
             self::ReportRead => 'View reports',
+            self::ReportExport => 'Export the reports',
             self::AuditRead => 'View the business audit trail',
             self::UserRead => 'View users',
             self::UserUpdate => 'Assign user roles',
