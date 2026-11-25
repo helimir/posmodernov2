@@ -1952,6 +1952,21 @@ Diez reportes: ventas por periodo, por producto y por cajero · IVA por alicuota
 **Y EL SEEDER TAMBIEN LIMPIA**: sin eso, un rol global con filas (el dano que dejo el agujero) seguiria recortado hasta que alguien abriera su pantalla — **el endpoint no es la unica via de escritura**.
 
 **Suite**: 942 tests / 12 857 assertions, en verde.
+### El rol `liability` es obligatorio (PR #171)
+
+El plan **ya tenia** un pasivo obligatorio (`tax_payable`, el impuesto por pagar) y la cuenta del credito a favor (`2100000`) esta en el catalogo de la tienda sembrada. Y el argumento que mas pesa es **negativo**: **sin pasivo, una tienda COBRA PERFECTAMENTE pero NO PUEDE DESHACER una venta cobrada por error**, y eso es peor que no poder cobrar: el cajero se queda bloqueado con un error que nadie puede corregir.
+
+**"OBLIGATORIO" SIGNIFICA "EL PLAN COMPLETO LO DECLARA", NO "SIN EL ROL LA TIENDA NO COBRA"**: por eso los dos conjuntos estan separados (`obligatorios()` = cinco, `delCobro()` = cuatro) y el camino del cobro sigue exigiendo solo los cuatro. **La F2-13b ("ninguna tienda deja de cobrar") esta intacta**, y un test lo dice en voz alta: una tienda sin cuenta de pasivo **sigue cobrando**.
+
+**LA REVERSA NECESITA EL PASIVO CUANDO EL CLIENTE ENTREGO DINERO**, y la regla sale del **asiento**, no del medio de pago (la reversa sustituye la linea de efectivo). Pagada entera (58) **si**; pagada a medias (30 de 58) **si**, por los 30; **a credito (nada cobrado) NO** (su debe esta en la `receivable`, que es obligatoria); un pago de tipo `credit` **tampoco**. El 422 aplica solo a los casos que de verdad lo necesitan.
+
+**LA COMPROBACION VA ANTES DE LA TRANSACCION**: si esperase al final, la nota de credito ya habria salido, y con ella el numero. Asi el rechazo no toca nada: ni venta, ni nota, ni reversa, ni serie, ni stock, ni caja.
+
+**El mensaje dice COMO resolverlo**, y la via es real y probada: asignar el rol a una cuenta existente de tipo pasivo en el plan de cuentas (`2100000` ya esta ahi para todas las tiendas), y la anulacion sale.
+
+**Y LA PANTALLA DEL PLAN DISTINGUE LOS DOS HUECOS**: sin eso decia "la caja no puede cobrar sin estos roles: Liability", que es **mentira**.
+
+**Suite**: 949 tests / 12 936 assertions, en verde.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).

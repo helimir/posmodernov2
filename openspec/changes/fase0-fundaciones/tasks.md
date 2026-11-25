@@ -1102,6 +1102,21 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       ambito invalido) y queda auditado, pero es un patron que hay que conocer.
     - **El sembrador borra las filas de `role_store_scopes` de los roles globales**: repara el recorte
       que dejo el agujero, pero cambia el estado de una base ya sembrada con `db:seed`.
+    - ⚠️ **EL CRITERIO DEL "EFECTIVO" USA LA CUENTA `cash` ACTUAL DEL PLAN**: si una tienda cambia su
+      cuenta de caja **despues** de la venta, el espejo no sustituye la linea de la caja antigua. Es la
+      salvedad preexistente, pero **ahora tambien afecta a cuando se bloquea la anulacion** (una venta
+      cobrada con la caja de antes no se detectaria como "necesita pasivo").
+    - **DOS CONJUNTOS DE ROLES**: `obligatorios()` es el plan completo (**cinco**) y `delCobro()` es el
+      cobro (**cuatro**). ⚠️ **`obligatorio` significa "el plan completo lo declara", NO "sin el rol la
+      tienda no cobra"** → el camino del cobro (`ChartOfAccounts::plan()`) sigue exigiendo solo los
+      cuatro. Quien añada un rol a `obligatorios()` creyendo que bloquea el cobro se equivoca: por eso
+      la pantalla separa los dos huecos (`missing_roles` y `missing_charge_roles`).
+    - ⚠️ **PIE DE TIJERA EN EL CATALOGO SEMBRADO**: `2110000` (Impuesto por pagar) tambien es de tipo
+      pasivo, y **asignarle el rol `liability` cambia su rol** (un rol por cuenta) y deja el plan sin
+      `tax_payable` → **la tienda dejaria de cobrar**. La pantalla lo avisa, pero es real.
+    - **NUEVO MODO DE FALLO PARA EL CAJERO**: una tienda sin pasivo no puede anular una venta cobrada
+      hasta que alguien asigne el rol. Es la decision pedida, pero es un bloqueo visible para el
+      mostrador.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |
