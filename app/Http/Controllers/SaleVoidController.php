@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Accounting\CashRegisterService;
+use App\Domain\Accounting\SaleReversal;
 use App\Domain\Credit\CustomerBalanceService;
 use App\Domain\Fiscal\Contracts\ElectronicInvoiceProvider;
 use App\Domain\Fiscal\DerivedDocumentService;
@@ -225,12 +226,34 @@ final class SaleVoidController extends Controller
                 //    de la venta, y el reintegro es de SU propio tipo.
                 $this->compensaElCredito($venta, $notaId);
 
+                // 8 bis. LA REVERSA CONTABLE: el espejo del asiento de la
+                //      venta, con el efectivo hacia la cuenta de PASIVO (el
+                //      credito a favor del cliente). El dinero sigue en el
+                //      cajon, asi que la caja del dia NO se toca, y el pasivo
+                //      de la tienda queda con la deuda que la nota de
+                //      credito dejo: los dos libros dicen lo mismo.
+                //
+                //      Y SI LA TIENDA NO TIENE CUENTA DE PASIVO, la reversa
+                //      NO se escribe y la anulacion sigue adelante: la
+                //      anulacion de una venta es un HECHO FISCAL, y no
+                //      depende del plan de cuentas. El hueco se dice en la
+                //      respuesta y en la auditoria.
+                $reversaId = (new SaleReversal($this->connection))->write(
+                    (int) $venta->id,
+                    (int) $venta->store_id,
+                    new DateTimeImmutable((string) $venta->sale_date),
+                    (string) ($venta->invoice_no ?? ''),
+                    $actorId,
+                );
+
                 return [
                     'sale_id' => $sale,
                     'status' => 'cancelled',
                     'reason' => $motivo,
                     'voided_at' => $this->ahoraDeLaTienda((int) $venta->store_id)->format('Y-m-d H:i:s'),
                     'note' => $notaId === null ? null : $this->nota($notaId),
+                    'reversal_entry_id' => $reversaId,
+                    'reversal_written' => $reversaId !== null,
                 ];
             });
         } catch (RuntimeException $fallo) {
@@ -261,9 +284,22 @@ final class SaleVoidController extends Controller
                 'voided_by_reason' => $motivoDelCuerpo !== '' && $motivoDelCuerpo !== $motivo
                     ? $motivoDelCuerpo
                     : null,
+                // Y LA REVERSA: si se escribio, el libro del cliente y el
+                // contable dicen lo mismo. Si NO se escribio, es porque la
+                // tienda no tiene cuenta de pasivo, y el hueco se ve aqui.
+                'reversal_entry_id' => $resultado['reversal_entry_id'] ?? null,
+                'reversal_written' => $resultado['reversal_written'] ?? false,
             ],
             (int) $venta->store_id
         );
+
+        // Y EL AVISO: si la tienda no tiene cuenta de pasivo, la reversa NO
+        // se escribio y el libro del cliente y el contable siguen diciendo
+        // cosas distintas. El hueco se ve, no se esconde.
+        $resultado['warning'] = ($resultado['reversal_written'] ?? false)
+            ? null
+            : 'La tienda no tiene cuenta de pasivo: la reversa no se escribio y el libro del cliente y el contable '
+                .'siguen diciendo cosas distintas. Asigne el rol liability a una cuenta de tipo liability.';
 
         return response()->json($resultado);
     }

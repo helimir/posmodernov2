@@ -213,6 +213,51 @@ final class PermissionFixture
     }
 
     /**
+     * Un GASTO de la tienda.
+     *
+     * Es una fila minima: lo que las rutas necesitan es su id, porque la
+     * anulacion lo busca por el.
+     */
+    public static function gasto(int $storeId): int
+    {
+        return (int) DB::table('expenses')->insertGetId([
+            'store_id' => $storeId,
+            'expense_category_id' => null,
+            'amount' => '10.0000',
+            'description' => 'Gasto del escenario de permisos',
+            'reference' => null,
+            'business_date' => PosFixture::businessDate($storeId),
+            'incurred_at' => now(),
+            'payment_type' => 'cash',
+            'bank_account_id' => null,
+            'status' => 'recorded',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * Un INGRESO de la tienda.
+     */
+    public static function ingreso(int $storeId): int
+    {
+        return (int) DB::table('incomes')->insertGetId([
+            'store_id' => $storeId,
+            'income_source_id' => null,
+            'amount' => '10.0000',
+            'description' => 'Ingreso del escenario de permisos',
+            'reference' => null,
+            'business_date' => PosFixture::businessDate($storeId),
+            'incurred_at' => now(),
+            'payment_type' => 'cash',
+            'bank_account_id' => null,
+            'status' => 'recorded',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
      * Una CUENTA del catalogo contable.
      */
     public static function cuenta(): int

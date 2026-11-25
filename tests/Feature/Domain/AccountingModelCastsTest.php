@@ -8,6 +8,7 @@ use App\Models\CashRegister;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\FiscalDocument;
+use App\Models\Income;
 use App\Models\IncomeSource;
 use App\Models\OpeningBalance;
 use App\Models\PaymentMethodStore;
@@ -49,6 +50,7 @@ function modelos_contables(): array
         Expense::class,
         ExpenseCategory::class,
         FiscalDocument::class,
+        Income::class,
         IncomeSource::class,
         OpeningBalance::class,
         PaymentMethodStore::class,

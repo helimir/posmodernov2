@@ -118,6 +118,37 @@ enum Permission: string
     /** Borrar una cuenta del catalogo. */
     case AccountingDelete = 'accounting.delete';
 
+    /** Ver los gastos de la tienda y sus asientos. */
+    case ExpenseRead = 'expense.read';
+
+    /** Registrar un gasto: el gasto nace en `expenses` y su asiento se deriva. */
+    case ExpenseCreate = 'expense.create';
+
+    /**
+     * Anular un gasto.
+     *
+     * Y ESTE PERMISO ES DISTINTO DE `expense.create` A PROPOSITO: quien
+     * registra el gasto NO lo anula. El gasto se marca, no se borra, y anular
+     * sin motivo de quien lo registro seria una anulacion que nadie puede
+     * defender despues. Anula quien puede deshacer: el contador.
+     */
+    case ExpenseCancel = 'expense.cancel';
+
+    /** Ver los ingresos de la tienda y sus asientos. */
+    case IncomeRead = 'income.read';
+
+    /** Registrar un ingreso que no viene de una venta. */
+    case IncomeCreate = 'income.create';
+
+    /** Anular un ingreso: marcarlo, con su motivo. */
+    case IncomeCancel = 'income.cancel';
+
+    /** Ver los movimientos bancarios de la tienda. */
+    case BankingRead = 'banking.read';
+
+    /** Registrar un movimiento bancario: el dinero que se reparte la treasury. */
+    case BankingCreate = 'banking.create';
+
     /** Ver los reportes. */
     case ReportRead = 'report.read';
 
@@ -240,6 +271,14 @@ enum Permission: string
             self::AccountingCreate => 'Create accounts',
             self::AccountingUpdate => 'Update accounts',
             self::AccountingDelete => 'Delete accounts',
+            self::ExpenseRead => 'View expenses',
+            self::ExpenseCreate => 'Create expenses',
+            self::ExpenseCancel => 'Cancel expenses',
+            self::IncomeRead => 'View incomes',
+            self::IncomeCreate => 'Create incomes',
+            self::IncomeCancel => 'Cancel incomes',
+            self::BankingRead => 'View the bank movements',
+            self::BankingCreate => 'Register bank movements',
             self::ReportRead => 'View reports',
             self::AuditRead => 'View the business audit trail',
             self::UserRead => 'View users',

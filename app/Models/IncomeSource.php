@@ -17,6 +17,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * `is_active` es de INTERFAZ (permitir ocultar un origen), no un flag
  * contable.
+ *
+ * Y `account_code` es la CUENTA CONTABLE en la que se abona el ingreso: un
+ * DATO del negocio, como los roles del plan de cuentas.
  */
 class IncomeSource extends Model
 {
@@ -26,6 +29,7 @@ class IncomeSource extends Model
         'code',
         'name',
         'parent_id',
+        'account_code',
         'is_active',
     ];
 
@@ -35,6 +39,7 @@ class IncomeSource extends Model
             'code' => 'string',
             'name' => 'string',
             'parent_id' => 'integer',
+            'account_code' => 'string',
             'is_active' => 'boolean',
         ];
     }

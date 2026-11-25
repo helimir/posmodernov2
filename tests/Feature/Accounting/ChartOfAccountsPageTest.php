@@ -43,16 +43,21 @@ test('test_el_listado_del_plan_de_cuentas_responde_con_su_contrato_de_props', fu
                 && collect($cuentas)->firstWhere('code', '1200000')['role'] === 'receivable'
                 && collect($cuentas)->firstWhere('code', '4010000')['role'] === 'revenue'
                 && collect($cuentas)->firstWhere('code', '2110000')['role'] === 'tax_payable'
+                // Y el PASIVO: lo que la tienda debe.
+                && collect($cuentas)->firstWhere('code', '2100000')['role'] === 'liability'
                 // Y el CAPITAL: la contrapartida del saldo de partida de la caja.
                 && collect($cuentas)->firstWhere('code', '3100000')['role'] === 'equity')
             // Y una cuenta que NO cumple ningun rol: lo dice con `null`.
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1300000')['role'] === null)
             // El TIPO de cada cuenta, que es lo que el rol exige.
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '4010000')['type'] === 'income')
-            // Los CINCO roles, con el tipo que cada uno exige.
-            ->has('roles', 5)
+            // Los SEIS roles, con el tipo que cada uno exige.
+            ->has('roles', 6)
             ->where('roles', fn ($roles): bool => collect($roles)->firstWhere('value', 'cash')['required_type'] === 'asset'
                 && collect($roles)->firstWhere('value', 'tax_payable')['required_type'] === 'liability'
+                // Y el PASIVO: lo que la tienda debe, y tambien una cuenta
+                // de tipo pasivo.
+                && collect($roles)->firstWhere('value', 'liability')['required_type'] === 'liability'
                 && collect($roles)->firstWhere('value', 'revenue')['required_type'] === 'income')
             // Los CINCO tipos de cuenta: el ALTA ofrece el conjunto cerrado del
             // dominio, y no una lista escrita a mano en la pantalla.

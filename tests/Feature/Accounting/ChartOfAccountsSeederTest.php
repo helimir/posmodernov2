@@ -12,7 +12,7 @@ use Tests\Fixtures\PosFixture;
  *
  * Reglas que fija:
  *
- *  - el plan sembrado tiene los CINCO roles que el sistema necesita, y la
+ *  - el plan sembrado tiene los SEIS roles que el sistema necesita, y la
  *    tienda puede COBRAR con el: el plan sembrado no es un adorno, es el que
  *    resuelve el checkout;
  *  - sembrar dos veces NO DUPLICA ni una cuenta ni un vinculo: el sembrador
@@ -22,7 +22,7 @@ use Tests\Fixtures\PosFixture;
 /**
  * El plan sembrado tiene los cinco roles y la tienda puede cobrar.
  */
-test('test_el_plan_sembrado_tiene_los_cinco_roles_y_la_tienda_puede_cobrar', function () {
+test('test_el_plan_sembrado_tiene_los_seis_roles_y_la_tienda_puede_cobrar', function () {
     // La emision fiscal APAGADA: este test prueba el PLAN, no el canal
     // fiscal.
     config(['fiscal.emission_enabled' => false]);
@@ -30,19 +30,21 @@ test('test_el_plan_sembrado_tiene_los_cinco_roles_y_la_tienda_puede_cobrar', fun
     $escenario = PosFixture::escenario();
     $plan = new ChartOfAccounts(DB::connection());
 
-    // 1. Los CINCO roles, con el codigo de su cuenta.
+    // 1. Los SEIS roles, con el codigo de su cuenta.
     expect($plan->plan((int) $escenario['store_id']))->toBe([
         'cash' => '1100000',
         'receivable' => '1200000',
         'revenue' => '4010000',
         'tax_payable' => '2110000',
+        // El PASIVO: lo que la tienda debe.
+        'liability' => '2100000',
         // El CAPITAL: la contrapartida del saldo de partida de la caja.
         'equity' => '3100000',
     ]);
 
     expect($plan->missingRoles((int) $escenario['store_id']))->toBe([]);
 
-    // 2. Y el catalogo de cuentas tiene MAS que las cinco: un plan con solo
+    // 2. Y el catalogo de cuentas tiene MAS que las seis: un plan con solo
     //    lo que el sistema usa no es un plan.
     expect(DB::table('accounts')->count())->toBeGreaterThan(4);
 
@@ -91,7 +93,7 @@ test('test_sembrar_dos_veces_no_duplica_cuentas_ni_vinculos', function () {
     $vinculos = DB::table('store_accounts')->count();
 
     expect($cuentas)->toBeGreaterThan(0)
-        ->and($vinculos)->toBe(5);
+        ->and($vinculos)->toBe(6);
 
     // La segunda siembra.
     (new ChartOfAccountsSeeder)->run();
@@ -107,6 +109,8 @@ test('test_sembrar_dos_veces_no_duplica_cuentas_ni_vinculos', function () {
         'receivable' => '1200000',
         'revenue' => '4010000',
         'tax_payable' => '2110000',
+        // El PASIVO: lo que la tienda debe.
+        'liability' => '2100000',
         // El CAPITAL: la contrapartida del saldo de partida de la caja.
         'equity' => '3100000',
     ]);

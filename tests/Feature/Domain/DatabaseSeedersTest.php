@@ -139,8 +139,22 @@ test('test_la_semilla_siembra_el_perfil_fiscal_el_catalogo_la_tienda_y_los_saldo
         ->and(DB::table('countries')->where('id', $tienda->country_id)->value('iso_code'))->toBe('VE');
 
     expect(DB::table('store_settings')->where('store_id', $tienda->id)->value('timezone'))->not->toBeNull()
-        ->and(DB::table('bank_accounts')->count())->toBe(1)
-        ->and(DB::table('bank_account_stores')->where('store_id', $tienda->id)->count())->toBe(1);
+        // Las CUENTAS DE TESORERIA de la tienda: la CAJA (la que sostiene el
+        // saldo de apertura) y la cuenta BANCARIA (la que tiene su cuenta
+        // contable en el libro). Son dos, y las dos tienen su vinculo por
+        // tienda.
+        ->and(DB::table('bank_accounts')->count())->toBe(2)
+        ->and(DB::table('bank_account_stores')->where('store_id', $tienda->id)->count())->toBe(2);
+
+    // Y la cuenta bancaria declara su CUENTA CONTABLE: sin ella no hay donde
+    // asentar un movimiento de banco.
+    $contaContable = DB::table('bank_account_stores')
+        ->join('bank_accounts', 'bank_accounts.id', '=', 'bank_account_stores.bank_account_id')
+        ->where('bank_account_stores.store_id', $tienda->id)
+        ->whereNotNull('bank_account_stores.account_code')
+        ->value('bank_account_stores.account_code');
+
+    expect($contaContable)->toBe('1110000');
 
     // 6. `OpeningBalancesSeeder`: el saldo de caja de la tienda, SIN
     //    certificar (la certificacion es un acto humano).
@@ -162,6 +176,7 @@ test('test_sembrar_dos_veces_no_duplica_una_fila', function () {
         'fiscal_profile_fields', 'tax_categories', 'tax_rates', 'fiscal_series',
         'stores', 'store_settings', 'store_fiscal_registrations',
         'bank_accounts', 'bank_account_stores',
+        'expense_categories', 'income_sources',
         'opening_balances',
     ];
 

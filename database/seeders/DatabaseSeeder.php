@@ -36,6 +36,11 @@ class DatabaseSeeder extends Seeder
      *  7. `PaymentMethodSeeder`: el medio de pago de CREDITO y su vinculo por
      *     tienda. El vinculo es por tienda, asi que la tienda tiene que existir
      *     antes.
+     *  8. `AccountingCatalogSeeder`: los CATALOGOS del modulo de gastos,
+     *     ingresos y banca: las categorias de gasto, los origenes de ingreso y
+     *     la cuenta bancaria de la tienda. Depende del PLAN DE CUENTAS: las
+     *     cuentas que declara son las del catalogo (`accounts`), asi que sin el
+     *     plan no hay donde cargar un gasto.
      *  8. `FiscalProfileSeeder`: el perfil fiscal de cada pais, con sus tipos
      *     de documento, su vocabulario de estados, su catalogo de claves, sus
      *     categorias de IVA con sus tasas y sus dos series.
@@ -77,6 +82,7 @@ class DatabaseSeeder extends Seeder
             PermissionSeeder::class,
             ChartOfAccountsSeeder::class,
             PaymentMethodSeeder::class,
+            AccountingCatalogSeeder::class,
             FiscalProfileSeeder::class,
             DemoCatalogSeeder::class,
             FiscalProviderSeeder::class,
