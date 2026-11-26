@@ -20,12 +20,17 @@ use Illuminate\Support\Facades\DB;
  * Los SIETE tipos base son conceptos universales: no dependen del pais ni del
  * regimen fiscal, asi que son datos, no codigo.
  *
- * M18 tambien deja estos siete en la migracion, y el motivo es que hay
- * pruebas que se apoyan en el catalogo SIN sembrar (`RefreshDatabase` migra
- * pero no siembra): el 0.7.1-T comprueba que el catalogo esta sembrado
- * despues de migrar. El seeder es la lista AUTORITATIVA y hace `upsert` de
- * los mismos siete: siembra y migracion no pueden discrepar, y volver a
- * sembrar no duplica nada.
+ * Y EL TIPO DE LA COMPRA (`purchase`) es el OCTAVO, y es de la misma clase: una
+ * compra es un concepto universal, y NO es ninguno de los otros siete (no es
+ * un gasto, no es un movimiento de dinero, no es un ajuste y no es una
+ * devolucion). Por eso vive en el mismo catalogo y se siembra desde aqui.
+ *
+ * M18 tambien deja los siete base en la migracion, y la M45 deja el de la
+ * compra, y el motivo es que hay pruebas que se apoyan en el catalogo SIN
+ * sembrar (`RefreshDatabase` migra pero no siembra): el 0.7.1-T comprueba que
+ * el catalogo esta sembrado despues de migrar. El seeder es la lista
+ * AUTORITATIVA y hace `upsert` de los mismos ocho: siembra y migracion no
+ * pueden discrepar, y volver a sembrar no duplica nada.
  */
 class LedgerEntryTypeSeeder extends Seeder
 {
@@ -59,7 +64,7 @@ class LedgerEntryTypeSeeder extends Seeder
     }
 
     /**
-     * Los SIETE tipos base: `code` y `name`.
+     * Los OCHO tipos base: `code` y `name`.
      *
      * @return list<array{0: string, 1: string}>
      */
@@ -73,6 +78,7 @@ class LedgerEntryTypeSeeder extends Seeder
             ['refund', 'Devolucion'],
             ['adjustment', 'Ajuste'],
             ['opening_balance', 'Saldo de apertura'],
+            ['purchase', 'Compra'],
         ];
     }
 }

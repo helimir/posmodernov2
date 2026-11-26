@@ -88,6 +88,8 @@ test('test_la_resolucion_devuelve_el_mapa_de_rol_a_codigo_de_la_tienda', functio
         'liability' => '2100000',
         // El CAPITAL: la contrapartida del saldo de partida de la caja.
         'equity' => '3100000',
+        // El INVENTARIO: donde se asienta el stock de la tienda.
+        'inventory' => '1300000',
     ]);
 });
 

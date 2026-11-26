@@ -16,6 +16,19 @@ namespace App\Domain\Accounting\Enums;
  * efectivo y se abona a la de capital. Sin el, el saldo de partida no tiene
  * donde abonarse, y una caja sin cuenta donde asentar no es una caja.
  *
+ * EL ROL DEL INVENTARIO ('inventory') es donde se asienta el STOCK de la
+ * tienda: es la contrapartida del DEBE de una compra, que no es un gasto sino
+ * existencias que entran. El catalogo de cuentas YA traia la cuenta
+ * `1300000 Inventario de mercaderia` (tipo `asset`), pero SIN rol: sin rol,
+ * ninguna tienda puede decir "mi stock se asienta aqui", y el asiento de la
+ * compra no tendria donde cargar las existencias.
+ *
+ * Y EL ROL DEL INVENTARIO ES OPCIONAL, como el del capital: no va al conjunto
+ * de los roles OBLIGATORIOS del plan completo (que siguen siendo CINCO) ni al
+ * del COBRO (que siguen siendo CUATRO). Y su ausencia NO bloquea la compra:
+ * el HECHO (la mercaderia entra y la deuda se registra) se escribe igual, y lo
+ * que se avisa es la contabilidad, que es el criterio de la F3-07.
+ *
  * EL ROL DEL PASIVO ('liability') es la CONTRAPARTIDA de lo que la tienda
  * debe: el credito a favor del cliente (la reversa de una venta anulada deja
  * al cliente con un saldo a favor, y ese saldo es una deuda de la tienda) y
@@ -48,6 +61,7 @@ enum AccountRole: string
     case TaxPayable = 'tax_payable';
     case Liability = 'liability';
     case Equity = 'equity';
+    case Inventory = 'inventory';
 
     /**
      * El TIPO de cuenta que el rol exige.
@@ -61,7 +75,7 @@ enum AccountRole: string
     public function requiredType(): AccountType
     {
         return match ($this) {
-            self::Cash, self::Receivable => AccountType::Asset,
+            self::Cash, self::Receivable, self::Inventory => AccountType::Asset,
             self::TaxPayable, self::Liability => AccountType::Liability,
             self::Revenue => AccountType::Income,
             self::Equity => AccountType::Equity,
@@ -94,6 +108,12 @@ enum AccountRole: string
      * Y POR QUE NO SE QUITA NINGUN ROL DEL CATALOGO: el rol `equity` sigue
      * siendo un rol VALIDO y ASIGNABLE (una cuenta de capital mas en el
      * plan), lo que cambia es que su ausencia ya no impide cobrar.
+     *
+     * Y EL ROL DEL INVENTARIO (`inventory`) TAMPOCO entra aqui: es un rol
+     * VALIDO y ASIGNABLE, y su ausencia no hace el plan incompleto. Es la
+     * contrapartida del DEBE de una compra, y una tienda sin el puede COMPRAR
+     * igual: lo que no puede es asentar la compra, y eso se avisa (el
+     * criterio de la F3-07: el hecho no se bloquea, la contabilidad se avisa).
      *
      * @return list<self>
      */

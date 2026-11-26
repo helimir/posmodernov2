@@ -95,8 +95,9 @@ test('test_la_semilla_completa_el_esquema_y_los_catalogos_sin_banderas_contables
     }
 
     // 4. Y los catalogos que la semilla completa estan SEMBRADOS: el catalogo
-    //    de tipos de asiento y el de categorias de IVA.
-    expect(DB::table('ledger_entry_types')->count())->toBe(7);
+    //    de tipos de asiento (los OCHO base: los siete de siempre y el de la
+    //    compra) y el de categorias de IVA.
+    expect(DB::table('ledger_entry_types')->count())->toBe(8);
 
     $categorias = DB::table('tax_categories')->orderBy('code')->pluck('code')->all();
 

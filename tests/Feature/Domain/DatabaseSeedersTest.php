@@ -50,7 +50,7 @@ test('test_la_semilla_deja_el_catalogo_de_tipos_de_asiento_y_el_mapa_de_traducci
     // 1. El FLUJO: migraciones y seeders, en ese orden.
     Artisan::call('migrate:fresh', ['--seed' => true]);
 
-    // 2. El CATALOGO de tipos de asiento: los SIETE base, todos activos.
+    // 2. El CATALOGO de tipos de asiento: los OCHO base, todos activos.
     $tipos = DB::table('ledger_entry_types')->orderBy('code')->get();
 
     expect($tipos->pluck('code')->all())->toBe([
@@ -58,6 +58,7 @@ test('test_la_semilla_deja_el_catalogo_de_tipos_de_asiento_y_el_mapa_de_traducci
         'bank_movement',
         'expense',
         'opening_balance',
+        'purchase',
         'refund',
         'sale',
         'sale_payment',

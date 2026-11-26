@@ -48,11 +48,11 @@ test('test_el_listado_del_plan_de_cuentas_responde_con_su_contrato_de_props', fu
                 // Y el CAPITAL: la contrapartida del saldo de partida de la caja.
                 && collect($cuentas)->firstWhere('code', '3100000')['role'] === 'equity')
             // Y una cuenta que NO cumple ningun rol: lo dice con `null`.
-            ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1300000')['role'] === null)
+            ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '1110000')['role'] === null)
             // El TIPO de cada cuenta, que es lo que el rol exige.
             ->where('accounts', fn ($cuentas): bool => collect($cuentas)->firstWhere('code', '4010000')['type'] === 'income')
-            // Los SEIS roles, con el tipo que cada uno exige.
-            ->has('roles', 6)
+            // Los SIETE roles, con el tipo que cada uno exige.
+            ->has('roles', 7)
             ->where('roles', fn ($roles): bool => collect($roles)->firstWhere('value', 'cash')['required_type'] === 'asset'
                 && collect($roles)->firstWhere('value', 'tax_payable')['required_type'] === 'liability'
                 // Y el PASIVO: lo que la tienda debe, y tambien una cuenta
