@@ -62,6 +62,13 @@ final readonly class InstallmentService
      * @param  int  $count  El numero de cuotas.
      * @param  DateTimeImmutable  $firstDueDate  La primera fecha de vencimiento.
      * @param  string|null  $referenceNo  El comprobante del credito.
+     * @param  int|null  $saleId  La VENTA que el plan financia. El plan es el
+     *                            calendario de una venta a credito, y sin la
+     *                            venta no se sabe de quien es la deuda: por
+     *                            eso la columna existe (el diseno la pide:
+     *                            `exploration.md` §3.2) y por eso es
+     *                            opcional, porque un plan puede existir sin
+     *                            venta.
      *
      * @throws RuntimeException Cuando el numero de cuotas no es valido.
      */
@@ -73,6 +80,7 @@ final readonly class InstallmentService
         int $count,
         DateTimeImmutable $firstDueDate,
         ?string $referenceNo = null,
+        ?int $saleId = null,
     ): int {
         if ($count < 1) {
             throw new RuntimeException(
@@ -104,11 +112,15 @@ final readonly class InstallmentService
             $total,
             $nominal,
             $firstDueDate,
-            $referenceNo
+            $referenceNo,
+            $saleId
         ): int {
             $planId = (int) $this->connection->table('installment_plans')->insertGetId([
                 'store_id' => $storeId,
                 'customer_id' => $customerId,
+                // La VENTA que el plan financia: el plan es el calendario de
+                // una venta a credito.
+                'sale_id' => $saleId,
                 'reference_no' => $referenceNo,
                 'principal' => (string) $payable->toScale(self::SCALE, RoundingMode::HALF_UP),
                 'interest_percentage' => (string) $porcentaje->toScale(self::SCALE, RoundingMode::HALF_UP),

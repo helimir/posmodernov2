@@ -330,6 +330,55 @@ final readonly class CustomerBalanceService
     }
 
     /**
+     * Registra un AJUSTE del credito del cliente y devuelve el id del
+     * movimiento.
+     *
+     * REGLA que fija este metodo: *un ajuste AUMENTA lo que el cliente debe*.
+     *
+     *  1. El importe es POSITIVO: un ajuste lo que hace es SUMAR a la deuda
+     *     (el interes de un plan de cuotas, por ejemplo). Lo que REDUCE la
+     *     deuda es un cobro (`registerPayment`) o un reintegro
+     *     (`registerReturn`), y cada uno con su tipo. Un ajuste con signo
+     *     negativo seria una segunda forma de Cobrar, y el libro tiene una
+     *     sola forma de cobrar.
+     *  2. El TIPO es `adjustment`, el PROPIO: un ajuste no es una venta ni un
+     *     cobro, y registrarlo con el tipo de otro seria una traza que
+     *     miente sobre lo que paso.
+     *  3. El `balance_after` es el saldo DERIVADO tras el movimiento, y el
+     *     cache se refresca en la MISMA transaccion del movimiento.
+     *
+     * @param  string  $amount  El importe que se suma a la deuda, como texto
+     *                          decimal.
+     * @param  string  $referenceNo  El comprobante del ajuste.
+     * @param  DateTimeImmutable  $entryDate  La fecha del movimiento.
+     * @param  int|null  $saleId  La venta a la que se imputa el movimiento.
+     *
+     * @throws RuntimeException Cuando el cliente no tiene ficha en la tienda.
+     */
+    public function registerAdjustment(
+        int $customerId,
+        int $storeId,
+        string $amount,
+        string $referenceNo,
+        DateTimeImmutable $entryDate,
+        ?int $saleId = null,
+    ): int {
+        $importe = BigDecimal::of($this->decimal($amount))
+            ->abs()
+            ->toScale(self::SCALE, RoundingMode::HALF_UP);
+
+        return $this->registraMovimiento(
+            customerId: $customerId,
+            storeId: $storeId,
+            type: 'adjustment',
+            amount: (string) $importe,
+            referenceNo: $referenceNo,
+            entryDate: $entryDate,
+            saleId: $saleId,
+        );
+    }
+
+    /**
      * La invariante del cache: coincide con el saldo DERIVADO.
      *
      * El cache puede desfasarse (un movimiento escrito fuera del servicio no
