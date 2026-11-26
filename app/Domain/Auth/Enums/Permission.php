@@ -253,6 +253,27 @@ enum Permission: string
     /** Registrar una devolucion de mercaderia: la que repone el lote exacto. */
     case SaleReturnCreate = 'sale_return.create';
 
+    /** Ver los planes de cuotas y el estado de cada cuota. */
+    case InstallmentRead = 'installment.read';
+
+    /**
+     * Acordar el plan de cuotas de una venta a credito.
+     *
+     * Y ESTE PERMISO ES DISTINTO DE `installment.collect` A PROPOSITO: acordar
+     * el plan es DECIDIR como se paga, y cobrar la cuota es RECOGER el dinero.
+     */
+    case InstallmentCreate = 'installment.create';
+
+    /**
+     * Cobrar una cuota: el dinero entra a la caja y la cuota se marca.
+     *
+     * Y ESTE PERMISO ES DISTINTO DE `customer.payment` A PROPOSITO: el cobro de
+     * una cuota es un cobro MAS (ademas del cobro suelto del cliente), y el
+     * que cobra una cuota toca el PLAN y el CALENDARIO, que son cosas que el
+     * cobro suelto no toca.
+     */
+    case InstallmentCollect = 'installment.collect';
+
     /**
      * El MODULO del permiso: la parte del slug antes del punto.
      *
@@ -349,6 +370,9 @@ enum Permission: string
             self::SupplierCreate => 'Create suppliers',
             self::SaleReturnRead => 'View the merchandise returns',
             self::SaleReturnCreate => 'Register a merchandise return',
+            self::InstallmentRead => 'View the installment plans and their quotas',
+            self::InstallmentCreate => 'Agree the installment plan of a credit sale',
+            self::InstallmentCollect => 'Collect an installment',
         };
     }
 

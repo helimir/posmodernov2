@@ -254,6 +254,14 @@ class PermissionSeeder extends Seeder
                 Permission::SupplierCreate,
                 Permission::SaleReturnRead,
                 Permission::SaleReturnCreate,
+                // Y LAS CUOTAS: el mostrador es quien hace la venta a credito
+                // y quien recoge el dinero de sus cuotas, asi que acuerda el
+                // plan y cobra la cuota. El contador lo SUPERVISA (lo ve),
+                // pero no cobra: cobrar es una operacion del dia, no una
+                // correccion de supervision.
+                Permission::InstallmentRead,
+                Permission::InstallmentCreate,
+                Permission::InstallmentCollect,
             ],
 
             // EL CONTADOR: lee. Las ventas y los clientes en lectura, la
@@ -310,6 +318,12 @@ class PermissionSeeder extends Seeder
                 Permission::PurchaseCancel,
                 Permission::SupplierRead,
                 Permission::SaleReturnRead,
+                // Y LAS CUOTAS, EN LECTURA: el contador ve los planes de
+                // cuotas de la tienda (el dinero que el mostrador va a
+                // cobrar y con que plan) porque es lo que tiene que
+                // supervisar. Lo que NO hace es cobrar una cuota: cobrar es
+                // una operacion del mostrador.
+                Permission::InstallmentRead,
             ],
         ];
     }
