@@ -1986,6 +1986,33 @@ El dominio estaba **huerfano**: `TransferService` y `LotReturner` existian, esta
 ### La deuda mas grande del repo, encontrada y NO inventada
 
 **El repo NO dice como se reconoce el coste de las existencias**: el asiento de una venta **no tiene linea de coste** y el plan no tenia rol donde la venta acreditara el inventario. **La cuenta de inventario solo crece con compras y NO CUADRA con el stock**: la devolucion al cliente repone el lote pero no acredita las existencias. El **informe de inventario valorado (F3-08) mide el stock, no la cuenta**. Cerrarlo necesita una regla: **que cuenta se acredita al vender y cual se debita al reponer**.
+### F3-05 — El cobro de cuotas (PR #175)
+
+El dominio estaba **huerfano**: `InstallmentService` ya calculaba el plan de cuotas con el redondeo correcto y **solo lo invocaban los tests**. Y aqui se cierran **los tres P0 mas graves que quedaban del legacy**.
+
+**UNA CUOTA SE COBRA COMO CUALQUIER COBRO**: no se reimplementa, se llama a `CustomerPaymentService::collect()`, el camino de siempre → el libro del cliente escribe su movimiento `payment` negativo con su `balance_after` y su cache refrescado, y el asiento es el **`sale_payment`** de la F2-01 (DEBE la cuenta de efectivo / HABER la cartera), en la tienda del cobro y con su fecha de negocio. **La venta a credito ya existe** (el checkout cobra con un medio de pago de tipo `credit`: eso es deuda, no dinero) → el plan **solo la calendariza**.
+
+**LOS TRES P0, UNO POR UNO**:
+- **#2** (el `UPDATE` sin `WHERE invoice_id` que actualizaba todas las filas): el cobro marca **una** cuota (`WHERE id = ? AND installment_plan_id = ?`) y **un** plan (`WHERE id = ? AND store_id = ?`); un test con dos planes de dos clientes comprueba que las demas cuotas siguen `pending`.
+- **#3** (el `UPDATE` sin `store_id`): la cuota se localiza por su plan y el plan por la tienda del contexto → una cuota de otra tienda responde **422** y no escribe nada.
+- **#4** (la cascada sobre 8 tablas sin transaccion): las seis escrituras van en **una transaccion**, y un test que la rompe a mitad comprueba que no queda ni la cuota cobrada ni el saldo descuadrado.
+
+**El dinero de la cuota entra a la caja**, asi que el saldo en curso del dia sube por su importe, y **en efectivo exige caja ABIERTA** (el criterio de F3-07).
+
+**El interes se reconoce AL CREAR EL PLAN** (un `adjustment` en el libro del cliente: el interes es ingreso de la tienda y deuda del cliente), que es la regla del legacy y la unica que deja **los dos libros de acuerdo**: sin ese asiento, al pagar las cuotas el cliente quedaria con un **credito a favor** por el interes que pago.
+
+**Una venta, un plan** (el dominio lo comprueba y el esquema lo prohibe con un indice UNIQUE) y el estado **vencido se DERIVA al leer** (una fecha), no se escribe para mantenerlo al dia.
+
+**Suite**: 980 tests, en verde (la CI la corrio **entera en una tirada**).
+
+### Lo que queda abierto, con nombre
+
+- ⚠️ **El plan NO comprueba el limite de credito**: el cobro no puede bloquearlo (baja la deuda), pero **el alta del plan no lo comprueba** y **el interes puede dejar al cliente por encima de su limite**. Decision declarada, a revisar.
+- **El interes va a la cuenta de ingresos** (no hay rol de ingreso financiero) y **el cobro de cuota es EN EFECTIVO** (el tipo `sale_payment` debita la caja): sin tarjeta ni banco.
+- ⚠️ **La asimetria del cobro**: el cobro **suelto** del cliente no exige caja abierta, el de cuota **si**.
+- ⚠️ **`adjustment` significa ahora dos cosas** (el espejo de F3-07 y el interes de aqui): los distingue el `reference_type`, pero la regla de F3-07 ya no se cumple en todos los casos.
+- **No hay pago parcial** ni anulacion de un plan, ni la devolucion de la mercaderia de una venta a plazos.
+- ⚠️ **`CatalogHttpJourneyTest` depende de `token_csrf_de()` de otro fichero**: dependencia preexistente entre tests que rompe cualquier troceado.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).

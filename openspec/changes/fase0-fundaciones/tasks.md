@@ -868,7 +868,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
     - El P0 #9 del legacy (borrar una compra revierte el stock de **un solo producto**) **se evita
       aqui**: la devolucion repone el **lote exacto** y la compra se revierte **completa**.
     - Sin compras **no hay costo real**: el inventario valorado no tiene contra que valorar.
-- [ ] **F3-05** **El cobro de cuotas.** `InstallmentService` **ya calcula el plan con el redondeo
+- [x] **F3-05** **El cobro de cuotas.** `InstallmentService` **ya calcula el plan con el redondeo
   correcto** y **solo lo llama un test**. Los P0 **#2, #3 y #4** del legacy estan aqui, y **son los
   mas graves que quedan**. Dep: 0.6.7, 0.6.8, 1.4
     - El legacy actualizaba `installment_orders` y `selling_price` **sin `WHERE`**, y la cascada de
@@ -1143,6 +1143,33 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
     - **SE ACTUALIZARON 6 TESTS DE OTRAS UNIDADES** (4 contaban roles: 6 → 7, y 2 contaban tipos de
       asiento: 7 → 8). **Las reglas de negocio no cambian** (los cinco roles obligatorios y los cuatro del
       cobro son los mismos), pero es el punto del diff mas conviene revisar.
+    - ⚠️ **EL PLAN DE CUOTAS NO COMPRUEBA EL LIMITE DE CREDITO (decision a revisar)**: el cobro **no** puede
+      bloquearlo (un cobro **baja** la deuda, y el limite bloquea lo que la **aumenta**), pero **el ALTA del
+      plan no lo comprueba**, asi que **el interes puede dejar al cliente por encima de su limite** sin que
+      nadie lo bloquee. El razon para no bloquearlo es que el plan **no es una venta**: es el calendario de
+      una deuda que ya existe, y bloquearlo dejaria a un cliente que ya debe mas de su limite **sin poder
+      acordar como pagar**. **Una linea si el negocio lo decide al reves.**
+    - **El interes va a la cuenta de INGRESOS** de la tienda: el repositorio **no tiene rol de ingreso
+      financiero** y anadirlo tocaria un conjunto cerrado. Si el negocio quiere una cuenta propia para los
+      intereses, hace falta un rol nuevo.
+    - ⚠️ **EL COBRO DE CUOTA ES EN EFECTIVO**: el tipo `sale_payment` debita la **cuenta de efectivo** y ahi
+      no cabe otra cuenta sin cambiar el tipo de asiento (conjunto cerrado). Un cobro por tarjeta o desde el
+      banco **no existe**.
+    - ⚠️ **LA ASIMETRIA DEL COBRO**: el **cobro suelto** del cliente (`CustomerController::cobro`) **NO exige
+      caja abierta**, y el de cuota **si**. Es un hueco del cobro suelto, no de las cuotas.
+    - **NO HAY PAGO PARCIAL NI COBRO DE VARIAS CUOTAS A LA VEZ**: no hay regla escrita y no se invento.
+      `paid_amount` queda preparado para un futuro pago parcial.
+    - ⚠️ **`adjustment` SIGNIFICA AHORA DOS COSAS**: el **espejo** de la anulacion (F3-07) y el **interes** de
+      las cuotas (aqui). Los distingue el `reference_type`, pero la regla de F3-07 ("el ajuste es el espejo
+      del asiento original") **ya no se cumple en todos los casos**.
+    - ⚠️ **`CatalogHttpJourneyTest` USA `token_csrf_de()`, QUE ESTA DEFINIDA EN OTRO FICHERO**
+      (`PosHttpJourneyTest`): una dependencia **preexistente** entre ficheros de test que **rompe cualquier
+      troceado** que separe esos dos. No se ha tocado (es de otra unidad).
+    - **NO HAY ANULACION NI BORRADO DE UN PLAN**: el legacy tenia un DELETE en cascada sobre 8 tablas; un plan
+      se marca, no se borra, y **no hay regla escrita** de cancelacion ni de devolucion del interes ya
+      reconocido.
+    - **La devolucion de la mercaderia de una venta a plazos** y su efecto en el plan: es el modulo de
+      devoluciones (F3-04) y las reglas de interaccion no estan escritas.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |
