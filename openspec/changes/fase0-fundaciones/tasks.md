@@ -860,7 +860,7 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
       es el P0 #15 del legacy en su forma correcta, no la venta historizada con importes viejos.
     - El numero **anulado no vuelve**: es la regla del correlativo (SNAT/2026/00093 arts. 8.2, 21,
       27).
-- [ ] **F3-04** **Las compras, los proveedores y las devoluciones de mercaderia.** `TransferService`
+- [x] **F3-04** **Las compras, los proveedores y las devoluciones de mercaderia.** `TransferService`
   y `LotReturner` son **dominio huerfano con test verde**: existen, funcionan y **el negocio no
   puede usarlos**. El ciclo de compras (alta con sus lotes, que es como entra el stock), los
   proveedores con su deuda y la devolucion de mercaderia son el hueco que queda.
@@ -1117,6 +1117,32 @@ Fase 0 es **proyecto verde**: no hay datos de producción que migrar ⇒ el roll
     - **NUEVO MODO DE FALLO PARA EL CAJERO**: una tienda sin pasivo no puede anular una venta cobrada
       hasta que alguien asigne el rol. Es la decision pedida, pero es un bloqueo visible para el
       mostrador.
+    - ⚠️⚠️ **EL COSTE DE LAS EXISTENCIAS NO ESTA ESCRITO EN NINGUN SITIO (la deuda mas grande del repo)**:
+      el asiento de una **venta no tiene linea de coste** y el plan no tenia ningun rol donde la venta
+      acreditara el inventario. **La cuenta de inventario solo crece con compras y NO CUADRA con el
+      stock**: la devolucion al cliente repone el lote (el stock vuelve) pero **no acredita las
+      existencias** (la cuenta no). El **informe de inventario valorado (F3-08) mide el stock, no la
+      cuenta**. Cerrarlo necesita una regla: **que cuenta se acredita al vender y cual se debita al
+      reponer**.
+    - ⚠️ **EL IMPUESTO DE LA COMPRA NO TIENE DONDE IR**: el motor de impuestos es el de los **documentos**
+      y una compra todavia no tiene documento fiscal, y el plan no tiene rol para un **IVA descontable**.
+      Los campos de impuesto quedan **en cero y declarados**, en vez de calcular una cifra sin destino.
+    - ⚠️ **LAS TRANSFERENCIAS ENTRE TIENDAS SIGUEN SIENDO DOMINIO HUERFANO** (`TransferService`, con
+      test verde y solo lo invocan los tests): no cabian en la unidad. Falta la pantalla, el **asiento**
+      de la transferencia (no hay rol ni regla para el stock en transito) y el wiring.
+    - **LOS PAGOS AL PROVEEDOR NO ESTAN ESCRITOS**: el esquema **no tiene libro de proveedores** (el
+      mini-libro es de clientes) y no se invento. La **formula del saldo ya resta** `purchase_payments`,
+      asi que hoy es un cero: falta el metodo que escribe el pago, su asiento (DEBE pasivo / HABER caja o
+      banco) y la **regla de la caja** (pagar en efectivo sale de una caja ABIERTA).
+    - ⚠️ **`LotReturner` USA `(float)` PARA LA CANTIDAD** (heredado de la Fase 0.5.5): un `float` en una
+      ruta de dinero, con riesgo de redondeo en cantidades fraccionarias.
+    - **`quantity_consumed` ES EL UNICO CONTADOR DE SALIDA DE UN LOTE**: la anulacion y la devolucion al
+      proveedor lo suben tambien. La aritmetica es correcta, **el nombre del contador miente**.
+    - **LA COMPRA NO ACTUALIZA `product_stores.purchase_price`**: si el negocio espera que el ultimo precio
+      de compra actualice el catalogo, es un hueco.
+    - **SE ACTUALIZARON 6 TESTS DE OTRAS UNIDADES** (4 contaban roles: 6 → 7, y 2 contaban tipos de
+      asiento: 7 → 8). **Las reglas de negocio no cambian** (los cinco roles obligatorios y los cuatro del
+      cobro son los mismos), pero es el punto del diff mas conviene revisar.
 | Fuera | Por que |
 |---|---|
 | El **adaptador del Portal del SENIAT** (~2 000 l) | **BLOQUEADO** por el **Manual Tecnico del art. 41** y la **API del SENIAT**: el Manual puede cambiar el payload de raiz, asi que **no se escribe ni una linea** del adaptador antes de tenerlo en la mano |

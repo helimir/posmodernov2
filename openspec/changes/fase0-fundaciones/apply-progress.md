@@ -1967,6 +1967,25 @@ El plan **ya tenia** un pasivo obligatorio (`tax_payable`, el impuesto por pagar
 
 **Suite**: 949 tests / 12 936 assertions, en verde.
 - **RESUELTO (2026-11-25): el rol `liability` es OBLIGATORIO** del plan completo, y la anulacion de una venta **cobrada** falla con **422** si la tienda no tiene cuenta de pasivo (la unidad "El rol liability es obligatorio", PR #171). El `warning` desaparecio: **una anulacion no se hace a medias**. Y la regla sale del **asiento**, no del medio de pago: la reversa sustituye la linea de efectivo, asi que hace falta pasivo cuando el cliente **entrego** dinero, y no cuando solo **debe**.
+### F3-04 — Las compras, los proveedores y las devoluciones de mercaderia (PR #173)
+
+El dominio estaba **huerfano**: `TransferService` y `LotReturner` existian, estaban probados y **solo los invocaban los tests**. Y las tablas ya estaban (`purchases`, `purchase_items`, `suppliers`, `supplier_stores`).
+
+**UNA COMPRA NO ES UN GASTO**: su asiento es existencias contra deuda (DEBE inventario, HABER cuentas a pagar) y **no tiene ninguna linea de gasto** (un test lo comprueba). Cargarle un gasto seria mercaderia consumida el mismo dia que llega. Dos conjuntos cerrados nuevos: el rol **`inventory`** (el catalogo ya tenia `1300000 Inventario de mercaderia` **sin rol**, asi que ninguna tienda podia decir donde se asienta su stock) y el tipo de asiento **`purchase`**.
+
+**LA DEUDA AL PROVEEDOR VIVE EN EL BRIDGE** (`supplier_stores.balance`), **derivada** de sus hechos, y el bridge es su cache. **El esquema no tiene libro de proveedores** (el mini-libro es de clientes) y **no se invento ninguno**.
+
+**SIN PASIVO LA COMPRA NO SE BLOQUEA**: se escribe entera, el stock entra, la deuda se registra, y **lo que se avisa es la contabilidad** (`entry_written: false` + el aviso en la respuesta y en la auditoria). Es exactamente el criterio de F3-07, y la F2-13b esta intacta.
+
+**LA DEVOLUCION AL CLIENTE REPONE EL LOTE EXACTO** (`LotReturner`, sin reimplementar: la mercaderia que vuelve es la misma que salio, y si volviera a otro lote el coste del stock dejaria de ser el coste real) y compensa el libro del cliente con el reintegro (su tipo propio, no un cobro). **El valor devuelto cancela primero la DEUDA (cartera) y el resto es credito a favor (pasivo)**: devolver 50 sobre una deuda de 40 deja 10 de credito; sin cliente, el dinero vuelve a la caja.
+
+**El P0 #9 del legacy queda cerrado**: una compra **no se borra**, se anula (marcada, con su motivo y su responsable) o se devuelve, y la anulacion revierte el stock de **todas** sus lineas.
+
+**Suite**: 927 tests / 12 949 assertions, en verde (la CI la corrio **entera en una tirada**).
+
+### La deuda mas grande del repo, encontrada y NO inventada
+
+**El repo NO dice como se reconoce el coste de las existencias**: el asiento de una venta **no tiene linea de coste** y el plan no tenia rol donde la venta acreditara el inventario. **La cuenta de inventario solo crece con compras y NO CUADRA con el stock**: la devolucion al cliente repone el lote pero no acredita las existencias. El **informe de inventario valorado (F3-08) mide el stock, no la cuenta**. Cerrarlo necesita una regla: **que cuenta se acredita al vender y cual se debita al reponer**.
 ### Deuda que queda
 
 - **La pantalla no tiene boton de revocar/restaurar** un agente (la revocacion existe por API).
