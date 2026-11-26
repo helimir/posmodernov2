@@ -222,6 +222,37 @@ enum Permission: string
     /** Editar una serie, un perfil o un proveedor fiscal. */
     case FiscalUpdate = 'fiscal.update';
 
+    /** Ver las compras de la tienda, sus lotes y su asiento. */
+    case PurchaseRead = 'purchase.read';
+
+    /**
+     * Registrar una compra: la mercaderia entra con sus lotes.
+     *
+     * Y ESTE PERMISO ES DISTINTO DE `purchase.cancel` A PROPOSITO: quien
+     * registra la compra NO la anula. La compra se marca, no se borra, y
+     * anular sin motivo de quien la registro seria una anulacion que nadie
+     * puede defender despues.
+     */
+    case PurchaseCreate = 'purchase.create';
+
+    /** Anular una compra: marcarla, con su motivo. */
+    case PurchaseCancel = 'purchase.cancel';
+
+    /** Devolver mercaderia al proveedor: la compra que vuelve. */
+    case PurchaseReturn = 'purchase.return';
+
+    /** Ver los proveedores de la tienda y su saldo. */
+    case SupplierRead = 'supplier.read';
+
+    /** Dar de alta un proveedor. */
+    case SupplierCreate = 'supplier.create';
+
+    /** Ver las devoluciones de mercaderia a los clientes. */
+    case SaleReturnRead = 'sale_return.read';
+
+    /** Registrar una devolucion de mercaderia: la que repone el lote exacto. */
+    case SaleReturnCreate = 'sale_return.create';
+
     /**
      * El MODULO del permiso: la parte del slug antes del punto.
      *
@@ -310,6 +341,14 @@ enum Permission: string
             self::FiscalRead => 'View the fiscal administration',
             self::FiscalCreate => 'Create fiscal series, profiles and providers',
             self::FiscalUpdate => 'Update fiscal series, profiles and providers',
+            self::PurchaseRead => 'View the purchases',
+            self::PurchaseCreate => 'Register purchases',
+            self::PurchaseCancel => 'Cancel purchases',
+            self::PurchaseReturn => 'Return merchandise to the supplier',
+            self::SupplierRead => 'View the suppliers and their balance',
+            self::SupplierCreate => 'Create suppliers',
+            self::SaleReturnRead => 'View the merchandise returns',
+            self::SaleReturnCreate => 'Register a merchandise return',
         };
     }
 

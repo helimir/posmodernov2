@@ -241,6 +241,19 @@ class PermissionSeeder extends Seeder
                 Permission::IncomeCreate,
                 Permission::BankingRead,
                 Permission::BankingCreate,
+                // Y LAS COMPRAS Y LA MERCADERIA: el mostrador es quien
+                // recibe el genero (y por eso quien registra la compra, que
+                // hace entrar el stock por sus lotes), quien lo devuelve al
+                // proveedor y quien lo recibe de vuelta del cliente. NO
+                // anula la compra: esa es una supervision, como anular un
+                // gasto.
+                Permission::PurchaseRead,
+                Permission::PurchaseCreate,
+                Permission::PurchaseReturn,
+                Permission::SupplierRead,
+                Permission::SupplierCreate,
+                Permission::SaleReturnRead,
+                Permission::SaleReturnCreate,
             ],
 
             // EL CONTADOR: lee. Las ventas y los clientes en lectura, la
@@ -286,6 +299,17 @@ class PermissionSeeder extends Seeder
                 Permission::IncomeRead,
                 Permission::IncomeCancel,
                 Permission::BankingRead,
+                // Y LAS COMPRAS, EN LECTURA Y EN SUPERVISION: el contador ve
+                // lo que el mostrador compro (la compra trae el stock por
+                // sus lotes y la deuda con el proveedor) y puede ANULARLA,
+                // porque anular es una correccion de supervision: la compra se
+                // marca, no se borra, y el que la registro no es quien la
+                // deshace. Lo que NO hace es devolver mercaderia al
+                // proveedor: eso es una operacion fisica del mostrador.
+                Permission::PurchaseRead,
+                Permission::PurchaseCancel,
+                Permission::SupplierRead,
+                Permission::SaleReturnRead,
             ],
         ];
     }

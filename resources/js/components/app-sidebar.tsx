@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { ArrowLeftRight, Banknote, BookOpen, Calculator, ChartColumn, Cpu, FileText, FileWarning, Folder, Hash, Landmark, LayoutGrid, Layers, ListChecks, NotebookTabs, Package, PackageSearch, Plug, Printer, Radio, Receipt, ReceiptText, Scale, ScanLine, ShieldCheck, Ticket, TrendingUp, TriangleAlert, Users, Wallet } from 'lucide-react';
+import { ArrowLeftRight, Banknote, BookOpen, Calculator, ChartColumn, Cpu, FileText, FileWarning, Folder, Hash, Landmark, LayoutGrid, Layers, ListChecks, NotebookTabs, Package, PackageSearch, Plug, Printer, Radio, Receipt, ReceiptText, Scale, ScanLine, ShieldCheck, Ticket, TrendingUp, TriangleAlert, Truck, Users, Wallet } from 'lucide-react';
 import { usePermissions } from '@/lib/permissions';
 import AppLogo from './app-logo';
 
@@ -38,6 +38,24 @@ const mainNavItems: NavItem[] = [
         url: '/clientes',
         icon: Users,
         permission: 'customer.read',
+    },
+    {
+        title: 'Returns',
+        url: '/ventas/devoluciones',
+        icon: ArrowLeftRight,
+        permission: 'sale_return.read',
+    },
+    {
+        title: 'Purchases',
+        url: '/compras',
+        icon: NotebookTabs,
+        permission: 'purchase.read',
+    },
+    {
+        title: 'Suppliers',
+        url: '/proveedores',
+        icon: Truck,
+        permission: 'supplier.read',
     },
     {
         title: 'Cash day',

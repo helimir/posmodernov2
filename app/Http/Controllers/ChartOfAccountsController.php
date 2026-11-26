@@ -478,6 +478,7 @@ class ChartOfAccountsController extends Controller
             AccountRole::TaxPayable->value => 'Tax payable',
             AccountRole::Liability->value => 'Liability',
             AccountRole::Equity->value => 'Equity',
+            AccountRole::Inventory->value => 'Inventory',
         ];
 
         $roles = [];

@@ -33,8 +33,9 @@ use RuntimeException;
  * vinculo.
  *
  * Y NO HAY PLAN POR DEFECTO: si a una tienda le falta un rol DEL COBRO, el
- * cobro falla con un mensaje util. Esta tienda es la unica que tiene plan, y
- * lo tiene COMPLETO: los cinco roles del plan, con el pasivo incluido.
+ * cobro falla con un mensaje util. Esta tienda es la unica que tiene plan, y lo
+ * tiene COMPLETO: los cinco roles del plan, con el pasivo incluido, y ademas
+ * los dos roles OPCIONALES (el capital y el inventario).
  */
 class ChartOfAccountsSeeder extends Seeder
 {
@@ -82,6 +83,11 @@ class ChartOfAccountsSeeder extends Seeder
         // El CAPITAL: la contrapartida del saldo de partida de la caja. Sin
         // el, al abrir la caja el saldo de partida no tiene donde abonarse.
         'equity' => '3100000',
+        // El INVENTARIO: donde se asienta el STOCK de la tienda. Es el DEBE
+        // de la compra (que no es un gasto, sino existencias que entran) y el
+        // rol es OPCIONAL: una tienda sin el puede comprar igual, y lo que se
+        // avisa es la contabilidad, no el hecho.
+        'inventory' => '1300000',
     ];
 
     /**
